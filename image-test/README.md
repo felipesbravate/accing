@@ -32,6 +32,9 @@ npm run image-test
 - Each run picks the outfit with a random seed and prints it; `--seed=<number>` repeats the same outfit.
 - `--looks=4` makes up to 4 different looks from your garments (new combinations first, spreading the garments), one
   image each with `--runs=1`. Fewer come back if your photos cannot make that many.
+  Same face, pose and shadow in every look: look 1 is generated from your face photos and must pass the face check
+  (up to 3 tries, `--anchor-tries=N`); looks 2+ are edits of that image where only the clothes change
+  (prompt in `scripts/image-edit-prompt.txt`). `--no-anchor` generates every look from scratch instead.
 - `--size=2K` gives the face more detail in the output (Gemini models; 512, 1K, 2K or 4K).
 - `--detail=max` (default) makes Gemini read the face photos at its highest detail and the other photos at high detail;
   `--detail=default` leaves it to Gemini (which reads them at low detail). Check "Input tokens" in the report.

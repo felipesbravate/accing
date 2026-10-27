@@ -14,6 +14,7 @@ const ROOT = resolve(import.meta.dirname, '..');
 const INPUTS = join(ROOT, 'image-test', 'inputs');
 const RESULTS = join(ROOT, 'image-test', 'results');
 const PROMPT_FILE = join(ROOT, 'scripts', 'image-test-prompt.txt');
+const EDIT_PROMPT_FILE = join(ROOT, 'scripts', 'image-edit-prompt.txt');
 
 // Models compared. Edit freely.
 const MODELS = [
@@ -41,7 +42,7 @@ const OPENAI_BASE = process.env.OPENAI_BASE_URL || 'https://api.openai.com';
 const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
 
 function args() {
-  const out = { runs: 3, looks: 1, only: null, dryRun: false, check: true, minIdentity: MIN_IDENTITY, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
+  const out = { runs: 3, looks: 1, anchor: true, anchorTries: 3, only: null, dryRun: false, check: true, minIdentity: MIN_IDENTITY, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
     expression: 'relaxed and neutral, the same natural expression as in the face photos (no smile they do not have)', occasion: 'an office day', weather: 'sunny 24°C', time: 'Monday morning',
     shoes: 'plain white leather low-top sneakers with white soles and white laces',
     pose: 'relaxed standing pose: body turned about 15 degrees so their left shoulder is slightly closer to the camera, head turned back to face the camera, chin level, eyes looking into the lens; weight on the back (right) leg, front (left) knee slightly relaxed, feet about hip-width apart; both arms hanging loosely at the sides, elbows very slightly bent, hands open and relaxed beside the thighs, never in pockets; shoulders relaxed and level' };
@@ -52,6 +53,8 @@ function args() {
     else if (k === 'looks') out.looks = Math.max(1, Math.min(8, parseInt(v, 10) || 1));
     else if (k === 'dry-run') out.dryRun = true;
     else if (k === 'no-check') out.check = false;
+    else if (k === 'no-anchor') out.anchor = false;
+    else if (k === 'anchor-tries') out.anchorTries = Math.max(1, Math.min(5, parseInt(v, 10) || 3));
     else if (k === 'min-identity') { out.minIdentity = Number(v); if (!(out.minIdentity > 0 && out.minIdentity < 1)) throw new Error('--min-identity must be between 0 and 1'); }
     else if (k === 'seed') out.seed = parseInt(v, 10) || 1;
     else if (k === 'reader-model') out.reader = v;
@@ -187,6 +190,19 @@ function imageLabel(faces, outfit, i) {
   return take.length ? `this person head to toe; take only the ${take.join(' and the ')} from this photo` : 'this person head to toe, for body and hair only';
 }
 
+/** Look 2+ in anchor mode: image 1 is the accepted first look; the other images are only the photos this look takes
+ *  garments from. Everything but the clothes is kept from image 1, so face, pose and shadow are the same in every look. */
+function buildEdit(template, outfits, look, anchor) {
+  const used = [...new Set(look.items.map((x) => x.photo))].sort((a, b) => a - b);
+  const pos = (photo) => used.indexOf(photo) + 2;
+  const lines = look.items.map((x) => `  - the ${x.description} (${x.category}) from image ${pos(x.photo)}`);
+  if (!look.items.some((x) => x.category === 'shoes')) lines.push('  - shoes: keep the shoes from image 1 exactly as they are');
+  const images = [anchor, ...used.map((p) => outfits[p])];
+  const label = (i) => (i === 0 ? 'the finished photo to edit: keep everything except the clothes'
+    : `take only the ${look.items.filter((x) => x.photo === used[i - 1]).map((x) => x.description).join(' and the ')} from this photo`);
+  return { prompt: template.replace('{{GARMENTS}}', lines.join('\n')), images, label };
+}
+
 async function callGemini(m, images, prompt, label, opts) {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error('GEMINI_API_KEY is not set in .env.local');
@@ -319,25 +335,64 @@ async function main() {
   await writeFile(join(out, 'wardrobe.json'), JSON.stringify({ seed, readerModel: opts.reader, faces: faces.map((x) => x.file), readings: readings.map((r, i) => ({ file: outfits[i].file, ...r })), looks: looks.map(({ prompt, label, ...l }) => l) }, null, 2));
 
   const rows = [];
-  for (const look of looks) for (const m of models) {
-    for (let run = 1; run <= opts.runs; run++) {
-      process.stdout.write(`${looks.length > 1 ? `look ${look.n} · ` : ''}${m.key} run ${run}… `);
-      const t0 = performance.now();
-      try {
-        const r = await (m.provider === 'gemini' ? callGemini : callOpenAI)(m, images, look.prompt, look.label, opts);
-        const seconds = (performance.now() - t0) / 1000;
-        const file = looks.length > 1 ? `${m.key}-look${look.n}-${run}.png` : `${m.key}-${run}.png`;
-        await writeFile(join(out, file), r.image);
-        if (r.usage) await writeFile(join(out, file.replace(/\.png$/, '.usage.json')), JSON.stringify(r.usage, null, 2));
-        rows.push({ m, look, run, seconds, file, ...r });
-        console.log(`${seconds.toFixed(1)}s, ~$${fmt(r.cost)}`);
-      } catch (e) {
-        const seconds = (performance.now() - t0) / 1000;
-        rows.push({ m, look, run, seconds, error: e.message });
-        console.log(`FAILED after ${seconds.toFixed(1)}s: ${e.message}`);
+  const call = (m, imgs, prompt, label, o) => (m.provider === 'gemini' ? callGemini : callOpenAI)(m, imgs, prompt, label, o);
+  const generate = async (m, look, run, file, imgs, prompt, label, o) => {
+    process.stdout.write(`${looks.length > 1 ? `look ${look.n} · ` : ''}${m.key} ${file.includes('rejected') ? 'retry' : 'run ' + run}… `);
+    const t0 = performance.now();
+    try {
+      const r = await call(m, imgs, prompt, label, o);
+      const seconds = (performance.now() - t0) / 1000;
+      await writeFile(join(out, file), r.image);
+      if (r.usage) await writeFile(join(out, file.replace(/\.png$/, '.usage.json')), JSON.stringify(r.usage, null, 2));
+      console.log(`${seconds.toFixed(1)}s, ~$${fmt(r.cost)}`);
+      return { m, look, run, seconds, file, ...r };
+    } catch (e) {
+      const seconds = (performance.now() - t0) / 1000;
+      console.log(`FAILED after ${seconds.toFixed(1)}s: ${e.message}`);
+      return { m, look, run, seconds, error: e.message };
+    }
+  };
+  const name = (m, look, run) => (looks.length > 1 ? `${m.key}-look${look.n}-${run}.png` : `${m.key}-${run}.png`);
+  const anchorMode = opts.anchor && looks.length > 1;
+  const rejected = [];
+  if (anchorMode) {
+    // Look 1 is generated from the face photos and checked; looks 2+ edit only the clothes of that accepted image,
+    // so face, pose, framing and shadow stay the same in every look.
+    const editTemplate = await readFile(EDIT_PROMPT_FILE, 'utf8');
+    for (const m of models) {
+      let anchor = null;
+      for (let attempt = 1; attempt <= opts.anchorTries && !anchor; attempt++) {
+        const last = attempt === opts.anchorTries;
+        const file = name(m, looks[0], 1);
+        const r = await generate(m, looks[0], 1, file, images, looks[0].prompt, looks[0].label, opts);
+        if (r.error) { if (last) rows.push(r); continue; }
+        if (!opts.check || last) { anchor = r; break; }
+        const c = (await checkFaces({ faces, lookRefs: images, images: [{ file: r.file, bytes: r.image, mime: 'image/png' }], minIdentity: opts.minIdentity, log: () => {} })).results[0];
+        if (c.pass) { anchor = r; break; }
+        const rej = r.file.replace(/\.png$/, `-rejected-${attempt}.png`);
+        await writeFile(join(out, rej), r.image);
+        rejected.push({ file: rej, reasons: c.reasons, cost: r.cost });
+        console.log(`  first look rejected (${c.reasons.join('; ')}), generating it again…`);
+      }
+      if (!anchor) continue;
+      if (opts.check && rejected.length && anchor) console.log(`  first look accepted.`);
+      rows.push(anchor);
+      const anchorImg = { file: anchor.file, bytes: anchor.image, mime: 'image/png' };
+      for (const look of looks.slice(1)) {
+        const edit = buildEdit(editTemplate, outfits, look, anchorImg);
+        look.editPrompt = edit.prompt;
+        for (let run = 1; run <= opts.runs; run++) {
+          rows.push(await generate(m, look, run, name(m, look, run), edit.images, edit.prompt, edit.label, { ...opts, faceCount: 1 }));
+        }
       }
     }
+  } else {
+    for (const look of looks) for (const m of models) {
+      for (let run = 1; run <= opts.runs; run++) rows.push(await generate(m, look, run, name(m, look, run), images, look.prompt, look.label, opts));
+    }
   }
+
+  if (anchorMode) await writeFile(join(out, 'prompt.txt'), [`=== Look 1 (generated from the face photos) ===\n${looks[0].prompt}`, ...looks.slice(1).filter((l) => l.editPrompt).map((l) => `=== Look ${l.n} (edit of look 1: only the clothes change) ===\n${l.editPrompt}`)].join('\n\n'));
 
   // Two-layer face check: identity gate (ArcFace) + look check (hair, age, invented tattoos/logos).
   const done = rows.filter((r) => !r.error);
@@ -352,14 +407,17 @@ async function main() {
   const lines = ['# Image test ' + stamp, '', `Occasion: ${opts.occasion} · Weather: ${opts.weather} · Time: ${opts.time}`, '', `Pose: ${opts.pose}`, '', `Seed: ${seed} (repeat with --seed=${seed}) · Gemini size: ${opts.size} · Photo detail: ${opts.detail}`, '',
     '## Garments read', '', ...readings.map((r, i) => `- Photo ${i + 1} (${outfits[i].file}): ${r.items.map((x) => `${x.description} [${x.category}]`).join('; ') || 'nothing recognised'}`), '',
     '## Looks asked for', '', ...looks.map((l) => `- Look ${l.n}: ${l.items.map((x) => `${x.description} (${x.category}, photo ${x.photo + 1})`).join(' + ')}`), '',
-    `Reading cost: ~$${readCost.toFixed(4)}`, '', '## Results', '',
+    `Reading cost: ~$${readCost.toFixed(4)}`, '',
+    ...(anchorMode ? [`Same face, pose and shadow: look 1 was generated from the face photos${opts.check ? ' and had to pass the face check' : ''}; looks 2–${looks.length} are edits of it where only the clothes change.`,
+      ...(rejected.length ? ['', `Look 1 attempts rejected before one passed (${rejected.length}, ~$${fmt(rejected.reduce((s, r) => s + (r.cost || 0), 0))}):`, ...rejected.map((r) => `- ${r.file}: ${r.reasons.join('; ')}`)] : []), ''] : []),
+    '## Results', '',
     '| Look | Model | Run | Seconds | Input tokens | Output tokens | Est. cost (USD) | Result |', '|---|---|---|---|---|---|---|---|'];
   for (const r of rows) lines.push(`| ${r.look.n} | ${r.m.key} | ${r.run} | ${r.seconds.toFixed(1)} | ${fmt(r.tokens?.input, 0)} | ${fmt(r.tokens?.output, 0)} | ${fmt(r.cost)} | ${r.error ? 'FAILED: ' + r.error.replace(/\|/g, '/') : r.file} |`);
   lines.push('', '## Averages (successful runs)', '', '| Model | Runs OK | Avg seconds | Avg cost (USD) |', '|---|---|---|---|');
   for (const m of models) {
     const ok = rows.filter((r) => r.m === m && !r.error);
     const avg = (f) => (ok.length ? ok.reduce((s, r) => s + (f(r) || 0), 0) / ok.length : null);
-    lines.push(`| ${m.key} | ${ok.length}/${opts.runs * looks.length} | ${fmt(avg((r) => r.seconds), 1)} | ${fmt(avg((r) => r.cost))} |`);
+    lines.push(`| ${m.key} | ${ok.length}/${anchorMode ? 1 + opts.runs * (looks.length - 1) : opts.runs * looks.length} | ${fmt(avg((r) => r.seconds), 1)} | ${fmt(avg((r) => r.cost))} |`);
   }
   if (check) {
     lines.push('', '## Face check', '', `Identity: ArcFace similarity to the average face photo; below ${opts.minIdentity} = a different person. It only gates: it does not rank likeness.`,
