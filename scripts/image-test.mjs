@@ -235,7 +235,8 @@ async function callGemini(m, images, prompt, label, opts) {
   const p = PRICES[m.key];
   // Some responses omit promptTokenCount; fall back to the per-modality breakdown, and keep the raw usage for checking.
   const fromDetails = Array.isArray(u.promptTokensDetails) ? u.promptTokensDetails.reduce((n, d) => n + (d.tokenCount || 0), 0) : null;
-  const inputTokens = u.promptTokenCount ?? (fromDetails || null);
+  const fromTotal = u.totalTokenCount && u.candidatesTokenCount ? u.totalTokenCount - u.candidatesTokenCount - (u.thoughtsTokenCount || 0) : null;
+  const inputTokens = u.promptTokenCount ?? (fromDetails || fromTotal || null);
   return {
     usage: u,
     image: Buffer.from(data, 'base64'),
