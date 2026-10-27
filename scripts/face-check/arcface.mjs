@@ -167,3 +167,24 @@ export async function embedFace(model, input) {
   const out = await model.rec.run({ [model.rec.inputNames[0]]: new model.ort.Tensor('float32', align(base, face.landmarks), [1, 3, 112, 112]) });
   return { embedding: normalise(Array.from(out[model.rec.outputNames[0]].data)), faceWidth: Math.round(face.box[2] - face.box[0]), confidence: face.score };
 }
+
+/** Decodes an image and finds its largest face: { img: {data,width,height}, face: {box,landmarks,score} | null }.
+ *  Coordinates are in the image's own pixels (the white border used for selfies is taken off again). */
+export async function findFace(model, input) {
+  const img = await rgb(model, input);
+  let faces = await detect(model, img), dx = 0, dy = 0;
+  for (const ratio of [0.5, 1]) {
+    if (faces.length) break;
+    const p = pad(img, ratio);
+    faces = await detect(model, p.img); dx = p.dx; dy = p.dy;
+  }
+  if (!faces.length) return { img, face: null };
+  const f = faces.reduce((best, x) => ((x.box[2] - x.box[0]) > (best.box[2] - best.box[0]) ? x : best));
+  return { img, face: { score: f.score, box: [f.box[0] - dx, f.box[1] - dy, f.box[2] - dx, f.box[3] - dy], landmarks: f.landmarks.map(([x, y]) => [x - dx, y - dy]) } };
+}
+
+/** Embedding of a face already found by findFace (no second decode). */
+export async function embedAt(model, img, landmarks) {
+  const out = await model.rec.run({ [model.rec.inputNames[0]]: new model.ort.Tensor('float32', align(img, landmarks), [1, 3, 112, 112]) });
+  return normalise(Array.from(out[model.rec.outputNames[0]].data));
+}

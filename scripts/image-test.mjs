@@ -11,6 +11,10 @@ import { CATEGORIES, composeLooks, normaliseReading } from './image-test-lib.mjs
 import { checkFaces, checkTable, MIN_IDENTITY } from './face-check/index.mjs';
 import { poseCheck } from './face-check/look-check.mjs';
 import { cleanBackground, createCleaner } from './clean-background.mjs';
+import { facePass, faceLock, referenceFace } from './face-detail.mjs';
+import { createFaceModel } from './face-check/arcface.mjs';
+import { POSE_REFERENCE } from './make-pose-reference.mjs';
+import { MODELS_DIR as FACE_MODELS_DIR } from './face-check/index.mjs';
 import './net.mjs'; // retry requests whose connection fails
 
 const ROOT = resolve(import.meta.dirname, '..');
@@ -45,7 +49,7 @@ const OPENAI_BASE = process.env.OPENAI_BASE_URL || 'https://api.openai.com';
 const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
 
 function args() {
-  const out = { runs: 3, looks: 1, clean: true, anchor: true, anchorTries: 3, only: null, dryRun: false, check: true, minIdentity: MIN_IDENTITY, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
+  const out = { runs: 3, looks: 1, poseRef: true, facePasses: 2, faceLock: true, clean: true, anchor: true, anchorTries: 3, only: null, dryRun: false, check: true, minIdentity: MIN_IDENTITY, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
     expression: 'relaxed and neutral, the same natural expression as in the face photos (no smile they do not have)', occasion: 'an office day', weather: 'sunny 24°C', time: 'Monday morning',
     shoes: 'plain white leather low-top sneakers with white soles and white laces',
     pose: 'relaxed standing pose: body turned about 15 degrees so their left shoulder is slightly closer to the camera, head turned back to face the camera, chin level, eyes looking into the lens; weight on the back (right) leg, front (left) knee slightly relaxed, feet about hip-width apart; both arms hanging loosely at the sides, elbows very slightly bent, hands open and relaxed beside the thighs, never in pockets; shoulders relaxed and level' };
@@ -58,6 +62,9 @@ function args() {
     else if (k === 'no-check') out.check = false;
     else if (k === 'no-anchor') out.anchor = false;
     else if (k === 'no-clean') out.clean = false;
+    else if (k === 'no-face-lock') out.faceLock = false;
+    else if (k === 'no-pose-ref') out.poseRef = false;
+    else if (k === 'face-passes') out.facePasses = Math.max(0, Math.min(4, parseInt(v, 10) || 0));
     else if (k === 'anchor-tries') out.anchorTries = Math.max(1, Math.min(5, parseInt(v, 10) || 3));
     else if (k === 'min-identity') { out.minIdentity = Number(v); if (!(out.minIdentity > 0 && out.minIdentity < 1)) throw new Error('--min-identity must be between 0 and 1'); }
     else if (k === 'seed') out.seed = parseInt(v, 10) || 1;
@@ -183,7 +190,7 @@ function buildPrompt(template, faces, outfits, outfit, opts) {
   return template.replace('{{FACE_IMAGES}}', range(1, f)).replace('{{BODY_IMAGES}}', range(f + 1, f + outfits.length))
     .replace('{{GARMENTS}}', garments)
     .replace('{{OCCASION}}', opts.occasion).replace('{{WEATHER}}', opts.weather).replace('{{TIME}}', opts.time)
-    .replace('{{POSE}}', opts.pose).replace('{{EXPRESSION}}', opts.expression);
+    .replace('{{POSE}}', opts.poseImage ? `exactly the pose and framing of image ${opts.poseImage} (a faceless mannequin: copy only how it stands and where it is in the frame, never its look): ${opts.pose}` : opts.pose).replace('{{EXPRESSION}}', opts.expression);
 }
 
 /** What each image is for, sent next to the image (Gemini) or listed after the prompt (OpenAI). */
@@ -313,11 +320,16 @@ async function main() {
   const seed = opts.seed ?? (Date.now() % 100000);
   const looks = composeLooks(wardrobe, { count: opts.looks, seed });
   if (looks.length < opts.looks) console.warn(`Only ${looks.length} different look(s) are possible from these photos (asked for ${opts.looks}).`);
+  // Pose reference (npm run make-pose-reference): a mannequin in the house pose, sent with the first image of each look.
+  const poseRef = opts.poseRef && existsSync(POSE_REFERENCE) ? { file: 'pose-reference.png', bytes: await readFile(POSE_REFERENCE), mime: 'image/png' } : null;
+  const genImages = poseRef ? [...images, poseRef] : images;
+  if (poseRef) opts.poseImage = genImages.length;
+  else if (opts.poseRef) console.log('No pose reference yet (npm run make-pose-reference): the pose is described in words only.');
   const template = await readFile(PROMPT_FILE, 'utf8');
   looks.forEach((look, i) => {
     look.n = i + 1;
     look.prompt = buildPrompt(template, faces, outfits, look, opts);
-    look.label = (k) => imageLabel(faces, look, k);
+    look.label = (k) => (poseRef && k === images.length ? 'pose reference: a faceless mannequin; copy only its pose and framing' : imageLabel(faces, look, k));
     console.log(`Look ${look.n} (seed ${seed}${look.newCombination ? '' : ', NOT a new combination: add photos with other outfits'}):`);
     look.items.forEach((x) => console.log(`  - ${x.description} (${x.category}) from photo ${x.photo + 1} (${outfits[x.photo].file})`));
   });
@@ -342,27 +354,50 @@ async function main() {
     try { cleaner = await createCleaner(join(ROOT, 'image-test', 'models')); }
     catch (e) { console.log(`Background cleaning skipped: ${e.message}`); }
   }
+  // Face fidelity: redraw the face of every first image at close-up size, and give every edited look that same face.
+  let faceModel = null, reference = null;
+  if (opts.facePasses || opts.faceLock) {
+    try { faceModel = await createFaceModel(FACE_MODELS_DIR); reference = await referenceFace(faceModel, faces); }
+    catch (e) { console.log(`Face detail pass and face lock skipped: ${e.message}`); faceModel = null; }
+  }
+  const redrawModel = MODELS.find((x) => x.key === 'gemini-nano-banana-2');
+  const withFacePass = (m) => (faceModel && opts.facePasses ? async (bytes) => {
+    const fp = await facePass({ model: faceModel, image: bytes, faces, reference, passes: opts.facePasses,
+      redraw: (imgs, prompt, label) => callGemini({ ...redrawModel, aspectRatio: '1:1' }, imgs, prompt, label, { ...opts, size: '1K', faceCount: imgs.length }),
+      log: (t) => console.log(t) });
+    return { bytes: fp.bytes, cost: fp.cost, face: { pass: true, before: fp.before, after: fp.after, kept: fp.kept } };
+  } : null);
   const rows = [];
   const call = (m, imgs, prompt, label, o) => (m.provider === 'gemini' ? callGemini : callOpenAI)(m, imgs, prompt, label, o);
-  const generate = async (m, look, run, file, imgs, prompt, label, o) => {
+  const generate = async (m, look, run, file, imgs, prompt, label, o, post = null) => {
     process.stdout.write(`${looks.length > 1 ? `look ${look.n} · ` : ''}${m.key} ${file.includes('rejected') ? 'retry' : 'run ' + run}… `);
     const t0 = performance.now();
     try {
       const r = await call(m, imgs, prompt, label, o);
       const seconds = (performance.now() - t0) / 1000;
+      const raw = r.image;
+      if (post) {
+        console.log(`${seconds.toFixed(1)}s generated`);
+        try {
+          const p = await post(r.image);
+          r.image = p.bytes; r.face = p.face;
+          if (p.cost) r.cost = (r.cost || 0) + p.cost;
+        } catch (e) { console.log(`  (face step skipped: ${e.message})`); }
+      }
       // Pure white background, shadow only under the feet. The model's own output is kept as *-raw.png.
       if (cleaner) {
         try {
           const t1 = performance.now();
           const cleaned = await cleanBackground(cleaner, r.image);
-          await writeFile(join(out, file.replace(/\.png$/, '-raw.png')), r.image);
+          await writeFile(join(out, file.replace(/\.png$/, '-raw.png')), raw);
           r.image = cleaned.bytes;
           r.clean = { before: cleaned.before, seconds: (performance.now() - t1) / 1000 };
         } catch (e) { console.log(`(background not cleaned: ${e.message})`); }
       }
       await writeFile(join(out, file), r.image);
       if (r.usage) await writeFile(join(out, file.replace(/\.png$/, '.usage.json')), JSON.stringify(r.usage, null, 2));
-      console.log(`${seconds.toFixed(1)}s, ~$${fmt(r.cost)}${r.clean ? `, background ${Math.round(r.clean.before)}→255 in ${r.clean.seconds.toFixed(1)}s` : ''}`);
+      const faceNote = r.face ? (r.face.pass ? `, face ${fmt(r.face.before)}→${fmt(r.face.after)} (${r.face.kept})` : r.face.locked ? `, face locked to look 1 ${fmt(r.face.before)}→${fmt(r.face.after)}` : `, face not locked: ${r.face.reason}`) : '';
+      console.log(`${post ? '  ' : ''}${seconds.toFixed(1)}s, ~$${fmt(r.cost)}${faceNote}${r.clean ? `, background ${Math.round(r.clean.before)}→255 in ${r.clean.seconds.toFixed(1)}s` : ''}`);
       return { m, look, run, seconds, file, ...r };
     } catch (e) {
       const seconds = (performance.now() - t0) / 1000;
@@ -382,7 +417,7 @@ async function main() {
       for (let attempt = 1; attempt <= opts.anchorTries && !anchor; attempt++) {
         const last = attempt === opts.anchorTries;
         const file = name(m, looks[0], 1);
-        const r = await generate(m, looks[0], 1, file, images, looks[0].prompt, looks[0].label, opts);
+        const r = await generate(m, looks[0], 1, file, genImages, looks[0].prompt, looks[0].label, opts, withFacePass(m));
         if (r.error) { if (last) rows.push(r); continue; }
         if (!opts.check || last) { anchor = r; break; }
         const c = (await checkFaces({ faces, lookRefs: images, images: [{ file: r.file, bytes: r.image, mime: 'image/png' }], minIdentity: opts.minIdentity, log: () => {} })).results[0];
@@ -402,7 +437,11 @@ async function main() {
         for (let run = 1; run <= opts.runs; run++) {
           // Each edit must keep look 1's pose and pass the face check; otherwise it is made again (same tries as look 1).
           for (let attempt = 1; attempt <= opts.anchorTries; attempt++) {
-            const r = await generate(m, look, run, name(m, look, run), edit.images, edit.prompt, edit.label, { ...opts, faceCount: 1 });
+            const lock = faceModel && opts.faceLock ? async (bytes) => {
+              const fl = await faceLock({ model: faceModel, source: anchorImg.bytes, target: bytes, reference });
+              return { bytes: fl.bytes, face: { locked: fl.locked, before: fl.before, after: fl.after, reason: fl.reason } };
+            } : null;
+            const r = await generate(m, look, run, name(m, look, run), edit.images, edit.prompt, edit.label, { ...opts, faceCount: 1 }, lock);
             const last = attempt === opts.anchorTries;
             if (r.error || !opts.check || last) { rows.push(r); break; }
             const img = { file: r.file, bytes: r.image, mime: 'image/png' };
@@ -422,7 +461,7 @@ async function main() {
     }
   } else {
     for (const look of looks) for (const m of models) {
-      for (let run = 1; run <= opts.runs; run++) rows.push(await generate(m, look, run, name(m, look, run), images, look.prompt, look.label, opts));
+      for (let run = 1; run <= opts.runs; run++) rows.push(await generate(m, look, run, name(m, look, run), genImages, look.prompt, look.label, opts, withFacePass(m)));
     }
   }
 
@@ -445,8 +484,9 @@ async function main() {
     ...(anchorMode ? [`Same face, pose and shadow: look 1 was generated from the face photos${opts.check ? ' and had to pass the face check' : ''}; looks 2–${looks.length} are edits of it where only the clothes change, each checked for the same pose as look 1 and remade if it differs.`,
       ...(rejected.length ? ['', `Attempts rejected before one passed (${rejected.length}, ~$${fmt(rejected.reduce((s, r) => s + (r.cost || 0), 0))}):`, ...rejected.map((r) => `- ${r.file}: ${r.reasons.join('; ')}`)] : []), ''] : []),
     '## Results', '',
-    '| Look | Model | Run | Seconds | Input tokens | Output tokens | Est. cost (USD) | Result |', '|---|---|---|---|---|---|---|---|'];
-  for (const r of rows) lines.push(`| ${r.look.n} | ${r.m.key} | ${r.run} | ${r.seconds.toFixed(1)} | ${fmt(r.tokens?.input, 0)} | ${fmt(r.tokens?.output, 0)} | ${fmt(r.cost)} | ${r.error ? 'FAILED: ' + r.error.replace(/\|/g, '/') : r.file} |`);
+    '| Look | Model | Run | Seconds | Input tokens | Output tokens | Est. cost (USD) | Face step | Result |', '|---|---|---|---|---|---|---|---|---|'];
+  const faceCell = (f) => (!f ? '–' : f.pass ? `redraw ${fmt(f.before)}→${fmt(f.after)} (${f.kept})` : f.locked ? `locked to look 1 ${fmt(f.before)}→${fmt(f.after)}` : `not locked: ${f.reason}`);
+  for (const r of rows) lines.push(`| ${r.look.n} | ${r.m.key} | ${r.run} | ${r.seconds.toFixed(1)} | ${fmt(r.tokens?.input, 0)} | ${fmt(r.tokens?.output, 0)} | ${fmt(r.cost)} | ${faceCell(r.face)} | ${r.error ? 'FAILED: ' + r.error.replace(/\|/g, '/') : r.file} |`);
   lines.push('', '## Averages (successful runs)', '', '| Model | Runs OK | Avg seconds | Avg cost (USD) |', '|---|---|---|---|');
   for (const m of models) {
     const ok = rows.filter((r) => r.m === m && !r.error);

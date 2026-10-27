@@ -1,0 +1,14 @@
+Image 1 is a close-up of the head from a full-body photo. Images {{FACE_IMAGES}} are real close-up photos of the person it must show.
+
+Redraw ONLY the face in image 1 so that anyone who knows this person recognises them instantly. Copy from images {{FACE_IMAGES}} with full fidelity:
+- face shape and width, jawline, chin and cheekbones
+- nose shape, width and length
+- eye shape, size, colour and spacing, eyelids, and the eyebrows' shape, thickness and colour
+- lips and mouth shape
+- skin tone and texture, including freckles, moles, lines and any marks
+- facial hair (shape, length, density and its grey) and glasses (frame shape, thickness and colour), only if they have them
+- their real age
+
+Keep exactly as in image 1: the head's position, size, angle and tilt, where the eyes look, the hairstyle, hair colour and where the hair falls, the ears and earrings, the lighting direction and softness, the background, and everything outside the face. Same square framing.
+Expression: relaxed and neutral, the same natural expression as in the real photos; no smile they do not have.
+Do not beautify, smooth the skin, slim the face, add makeup, or make them look younger or older.

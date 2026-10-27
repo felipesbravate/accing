@@ -62,6 +62,21 @@ is drawn under every look (a light pool around the shoes, slightly behind them, 
 a darker contact line under the soles; tune it in `SHADOW` in `scripts/clean-background.mjs`). The model's own output is kept as `*-raw.png`.
 Takes ~3–7 s per image; `--no-clean` skips it.
 
+## Face fidelity (automatic)
+In a full-body image the face is only ~190 px wide, and every clothes edit redraws it (identity fell from 0.62 on
+look 1 to 0.47–0.51 on its edits). Two steps fix that:
+- **Face detail pass** (first image of each look set): the head is cut out, enlarged to 1024 px, and the face is
+  redrawn from your face photos at that size (`--face-passes=2` tries in parallel, ~$0.07 each), then aligned back by
+  the facial landmarks, colour-matched and blended in. The version closest to your face photos is kept, including
+  the original if no redraw beats it. Prompt: `scripts/face-pass-prompt.txt`. `--face-passes=0` turns it off.
+- **Face lock** (looks 2+): look 1's face is put back onto every edited look, aligned by the landmarks, so all looks
+  have the very same face. Free, runs on your Mac. `--no-face-lock` turns it off.
+
+## Pose reference (once)
+The model ignored the pose in words, so it gets a picture: `npm run make-pose-reference` makes a faceless mannequin in
+the house pose (`scripts/assets/pose-reference.png`, ~$0.10). Open it; if the pose is right, commit it, otherwise run
+it again. From then on it is sent with the first image of each look set. `--no-pose-ref` leaves it out.
+
 ## 4. Face check (runs automatically after every image test)
 Two layers, because one number is not enough: on 2026-10-27 ArcFace ranked first the image friends liked least.
 1. **Identity gate (ArcFace).** Similarity between the generated face and your average face photo, computed on your Mac.
