@@ -13,7 +13,7 @@ import { poseCheck } from './face-check/look-check.mjs';
 import { cleanBackground, createCleaner } from './clean-background.mjs';
 import { facePass, faceLock, referenceFace } from './face-detail.mjs';
 import { createFaceModel } from './face-check/arcface.mjs';
-import { POSE_REFERENCE } from './make-pose-reference.mjs';
+import { feetFor, poseReferencePath } from './make-pose-reference.mjs';
 import { MODELS_DIR as FACE_MODELS_DIR } from './face-check/index.mjs';
 import './net.mjs'; // retry requests whose connection fails
 
@@ -49,7 +49,7 @@ const OPENAI_BASE = process.env.OPENAI_BASE_URL || 'https://api.openai.com';
 const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
 
 function args() {
-  const out = { runs: 3, looks: 1, background: '#F9F9FB', poseRef: true, facePasses: 2, faceLock: true, clean: true, anchor: true, anchorTries: 3, only: null, dryRun: false, check: true, minIdentity: MIN_IDENTITY, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
+  const out = { runs: 3, looks: 1, body: null, background: '#F9F9FB', poseRef: true, facePasses: 2, faceLock: true, clean: true, anchor: true, anchorTries: 3, only: null, dryRun: false, check: true, minIdentity: MIN_IDENTITY, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
     expression: 'relaxed and neutral, the same natural expression as in the face photos (no smile they do not have)', occasion: 'an office day', weather: 'sunny 24°C', time: 'Monday morning',
     shoes: 'plain white leather low-top sneakers with white soles and white laces',
     pose: 'relaxed standing pose: body turned about 15 degrees so their left shoulder is slightly closer to the camera, head turned back to face the camera, chin level, eyes looking into the lens; weight on the back (right) leg, front (left) knee slightly relaxed, feet about hip-width apart; both arms hanging loosely at the sides, elbows very slightly bent, hands open and relaxed beside the thighs, never in pockets; shoulders relaxed and level' };
@@ -65,6 +65,7 @@ function args() {
     else if (k === 'background') { if (!/^#[0-9a-f]{6}$/i.test(v)) throw new Error('--background must be a colour like #F9F9FB'); out.background = v; }
     else if (k === 'no-face-lock') out.faceLock = false;
     else if (k === 'no-pose-ref') out.poseRef = false;
+    else if (k === 'body') { if (!['female', 'male'].includes(v)) throw new Error('--body must be female or male'); out.body = v; }
     else if (k === 'face-passes') out.facePasses = Math.max(0, Math.min(4, parseInt(v, 10) || 0));
     else if (k === 'anchor-tries') out.anchorTries = Math.max(1, Math.min(5, parseInt(v, 10) || 3));
     else if (k === 'min-identity') { out.minIdentity = Number(v); if (!(out.minIdentity > 0 && out.minIdentity < 1)) throw new Error('--min-identity must be between 0 and 1'); }
@@ -132,13 +133,14 @@ For each item give:
 - category: one of ${CATEGORIES.join(', ')} (outerwear = jacket, blazer, coat; top = shirt, t-shirt, sweater, blouse; bottom = trousers, jeans, skirt, shorts)
 - description: 4 to 10 words with colour, pattern, material and cut, e.g. "brown houndstooth tweed single-breasted blazer"
 - visibility: "full" if the whole item is visible, "partial" if partly hidden or cropped, "hidden" if you can barely see it
-Also say whether the person is visible head to toe (full_body) and how many people are in the photo (people).`;
+Also say whether the person is visible head to toe (full_body), how many people are in the photo (people), and which mannequin build best matches their body, female or male (figure; used only to pick a pose reference).`;
 
 const READER_SCHEMA = {
   type: 'OBJECT',
   properties: {
     full_body: { type: 'BOOLEAN' },
     people: { type: 'INTEGER' },
+    figure: { type: 'STRING', enum: ['female', 'male'] },
     items: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
       category: { type: 'STRING', enum: CATEGORIES },
       description: { type: 'STRING' },
@@ -166,7 +168,7 @@ async function readPhoto(img, index, model) {
   try { parsed = JSON.parse(text); } catch { throw new Error(`Could not understand the reading of ${img.file}: ${text.slice(0, 200)}`); }
   const u = json.usageMetadata || {};
   const cost = ((u.promptTokenCount || 0) * 0.25 + (u.candidatesTokenCount || 0) * 1.5) / 1e6; // gemini-3.1-flash-lite list price
-  return { fullBody: parsed.full_body !== false, people: parsed.people ?? 1, items: normaliseReading(parsed, index), cost };
+  return { fullBody: parsed.full_body !== false, people: parsed.people ?? 1, figure: parsed.figure, items: normaliseReading(parsed, index), cost };
 }
 
 async function readWardrobe(images, model) {
@@ -321,19 +323,27 @@ async function main() {
   const seed = opts.seed ?? (Date.now() % 100000);
   const looks = composeLooks(wardrobe, { count: opts.looks, seed });
   if (looks.length < opts.looks) console.warn(`Only ${looks.length} different look(s) are possible from these photos (asked for ${opts.looks}).`);
-  // Pose reference (npm run make-pose-reference): a mannequin in the house pose, sent with the first image of each look.
-  const poseRef = opts.poseRef && existsSync(POSE_REFERENCE) ? { file: 'pose-reference.png', bytes: await readFile(POSE_REFERENCE), mime: 'image/png' } : null;
-  const genImages = poseRef ? [...images, poseRef] : images;
-  if (poseRef) opts.poseImage = genImages.length;
-  else if (opts.poseRef) console.log('No pose reference yet (npm run make-pose-reference): the pose is described in words only.');
+  // Pose reference (npm run make-pose-reference): a mannequin in the house pose, matching the body and the shoes of the
+  // look (heels raise the feet), sent with the first image of each look set.
+  const votes = readings.map((r) => r.figure).filter(Boolean);
+  const body = opts.body || (votes.filter((v) => v === 'male').length > votes.length / 2 ? 'male' : 'female');
+  const poseFor = async (look) => {
+    if (!opts.poseRef) return null;
+    const feet = feetFor(look.items), file = poseReferencePath(body, feet);
+    if (!existsSync(file)) { console.log(`No pose reference for ${body}, feet ${feet} (npm run make-pose-reference -- --body=${body} --feet=${feet}): pose in words only.`); return null; }
+    return { file: `pose-reference-${body}-${feet}.png`, bytes: await readFile(file), mime: 'image/png', body, feet };
+  };
+  console.log(`Body for the pose reference: ${body}${opts.body ? '' : ' (read from the photos; --body=female|male to set it)'}`);
   const template = await readFile(PROMPT_FILE, 'utf8');
-  looks.forEach((look, i) => {
+  for (const [i, look] of looks.entries()) {
     look.n = i + 1;
-    look.prompt = buildPrompt(template, faces, outfits, look, opts);
-    look.label = (k) => (poseRef && k === images.length ? 'pose reference: a faceless mannequin; copy only its pose and framing' : imageLabel(faces, look, k));
+    look.pose = await poseFor(look);
+    look.images = look.pose ? [...images, look.pose] : images;
+    look.prompt = buildPrompt(template, faces, outfits, look, { ...opts, poseImage: look.pose ? look.images.length : null });
+    look.label = (k) => (look.pose && k === images.length ? 'pose reference: a faceless mannequin; copy only its pose and framing' : imageLabel(faces, look, k));
     console.log(`Look ${look.n} (seed ${seed}${look.newCombination ? '' : ', NOT a new combination: add photos with other outfits'}):`);
     look.items.forEach((x) => console.log(`  - ${x.description} (${x.category}) from photo ${x.photo + 1} (${outfits[x.photo].file})`));
-  });
+  }
   console.log(`Reading cost: ~$${readCost.toFixed(4)}`);
   opts.faceCount = faces.length;
   const wanted = opts.only ? opts.only.split(',') : null;
@@ -418,7 +428,7 @@ async function main() {
       for (let attempt = 1; attempt <= opts.anchorTries && !anchor; attempt++) {
         const last = attempt === opts.anchorTries;
         const file = name(m, looks[0], 1);
-        const r = await generate(m, looks[0], 1, file, genImages, looks[0].prompt, looks[0].label, opts, withFacePass(m));
+        const r = await generate(m, looks[0], 1, file, looks[0].images, looks[0].prompt, looks[0].label, opts, withFacePass(m));
         if (r.error) { if (last) rows.push(r); continue; }
         if (!opts.check || last) { anchor = r; break; }
         const c = (await checkFaces({ faces, lookRefs: images, images: [{ file: r.file, bytes: r.image, mime: 'image/png' }], minIdentity: opts.minIdentity, background: opts.background, log: () => {} })).results[0];
@@ -462,7 +472,7 @@ async function main() {
     }
   } else {
     for (const look of looks) for (const m of models) {
-      for (let run = 1; run <= opts.runs; run++) rows.push(await generate(m, look, run, name(m, look, run), genImages, look.prompt, look.label, opts, withFacePass(m)));
+      for (let run = 1; run <= opts.runs; run++) rows.push(await generate(m, look, run, name(m, look, run), look.images, look.prompt, look.label, opts, withFacePass(m)));
     }
   }
 

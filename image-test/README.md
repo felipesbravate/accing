@@ -72,10 +72,13 @@ look 1 to 0.47–0.51 on its edits). Two steps fix that:
 - **Face lock** (looks 2+): look 1's face is put back onto every edited look, aligned by the landmarks, so all looks
   have the very same face. Free, runs on your Mac. `--no-face-lock` turns it off.
 
-## Pose reference (once)
-The model ignored the pose in words, so it gets a picture: `npm run make-pose-reference` makes a faceless mannequin in
-the house pose (`scripts/assets/pose-reference.png`, ~$0.10). Open it; if the pose is right, commit it, otherwise run
-it again. From then on it is sent with the first image of each look set. `--no-pose-ref` leaves it out.
+## Pose references (once)
+The model ignored the pose in words, so it gets a picture: a faceless mannequin in the house pose, one per body and
+feet (heels raise the feet, flats/sneakers/boots keep them down; the shoes of the look decide).
+`npm run make-pose-reference -- --all` makes the missing ones (female flat, female heels, male flat; ~$0.10 each) in
+`scripts/assets/`; `-- --body=male --feet=heels` makes one. Open them; commit the good ones, run again for any that are off.
+The body is read from your photos (`--body=female|male` sets it); `--no-pose-ref` leaves the reference out.
+Edited looks may change only the foot angle when the shoes change heel height.
 
 ## 4. Face check (runs automatically after every image test)
 Two layers, because one number is not enough: on 2026-10-27 ArcFace ranked first the image friends liked least.

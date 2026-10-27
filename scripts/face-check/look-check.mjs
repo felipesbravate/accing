@@ -66,6 +66,7 @@ export async function lookCheck(refs, image, { model = LOOK_MODEL, key = process
 // Seen 2026-10-27: asked to keep the pose, an edit turned the person to face the camera.
 const POSE_PROMPT = `Image 1 and image 2 must show the same person in exactly the same pose and camera framing; only the clothes may differ.
 Compare, ignoring the clothes: how far the body is turned from the camera, head angle, shoulder line, arm and hand positions, leg and foot positions (which foot is forward, how far apart), and the person's size and position in the frame.
+Ignore the angle of the feet and the heel height: they change with the shoes.
 same_pose is true only if someone flipping between the two images would notice nothing change except the clothes. Give a short note of any difference.`;
 const POSE_SCHEMA = { type: 'OBJECT', properties: { same_pose: { type: 'BOOLEAN' }, note: { type: 'STRING' } }, required: ['same_pose', 'note'] };
 
