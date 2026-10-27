@@ -54,8 +54,9 @@ Prices for the estimates are in `scripts/image-test.mjs` (`PRICES`) with their s
 ## Pure white background (automatic)
 Image models never return pure white (every image measured 232–244/255, some with window-light patterns), which shows
 as a grey box on the app's white screen. After each generation the person is cut out (ISNet, run on your Mac; model
-~180 MB downloaded once into `image-test/models/`), the background is made pure white, and only the real floor shadow
-under the feet is kept, fading out before the edges. The model's own output is kept as `*-raw.png`.
+~180 MB downloaded once into `image-test/models/`), the background is made pure white, and the same soft floor shadow
+is drawn under every look (a light pool around the shoes, slightly behind them, fading out well before the edges, and
+a darker contact line under the soles; tune it in `SHADOW` in `scripts/clean-background.mjs`). The model's own output is kept as `*-raw.png`.
 Takes ~3–7 s per image; `--no-clean` skips it.
 
 ## 4. Face check (runs automatically after every image test)
@@ -65,6 +66,7 @@ Two layers, because one number is not enough: on 2026-10-27 ArcFace ranked first
    It only gates; it does not say which image looks most like you.
 2. **Look check.** Gemini Flash-Lite (~$0.002 per image) compares the result with your real photos on what ArcFace
    cannot see: hair colour and grey, apparent age, beard, glasses, expression, and anything invented (tattoos, logos, watches).
+   It also fails any image with a hand in a pocket.
 
 Each image gets PASS or FAIL with reasons in `report.md` and `index.html`. A third, free check measures whether the
 background is pure white (edges ≥ 250/255; before the white-background prompt every image measured 232–244); it only warns.

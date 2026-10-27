@@ -1,4 +1,4 @@
-// Layer 2 of the face check: what ArcFace cannot see. ArcFace crops the face to 112×112 and ignores hair,
+// Layer 2 of the face check: what ArcFace cannot see (plus one pose rule: no hands in pockets). ArcFace crops the face to 112×112 and ignores hair,
 // apparent age and expression, which is how friends recognise someone. A cheap vision model compares the
 // generated photo with the real photos on exactly those points, and lists anything invented (tattoos, logos…).
 
@@ -13,6 +13,7 @@ Judge ONLY the person's identity cues, not the clothes, pose, background or ligh
 - expression: same natural expression? Note smiles, frowns or a stiff, tired or blank look that the real photos do not have.
 - facial_hair: same beard or moustache shape, length, density and grey?
 - glasses: same frame shape, thickness and colour, or none if they wear none?
+- hands_in_pockets: true if either hand is in a pocket, even partly (fingers or knuckles hidden in it). Both hands must be fully visible.
 - added: list anything on the person or their clothes that appears in NO real photo: tattoos, piercings, jewellery, watches, brand logos or wordmarks on clothes or shoes, printed text. Empty list if none.
 For each check give ok (true when a friend would not notice a difference) and a short note.`;
 
@@ -23,8 +24,9 @@ const SCHEMA = {
     hair: CHECK, facial_hair: CHECK, glasses: CHECK, expression: CHECK,
     age: { type: 'OBJECT', properties: { ok: { type: 'BOOLEAN' }, looks: { type: 'STRING', enum: ['younger', 'same', 'older'] }, note: { type: 'STRING' } }, required: ['ok', 'looks', 'note'] },
     added: { type: 'ARRAY', items: { type: 'STRING' } },
+    hands_in_pockets: { type: 'BOOLEAN' },
   },
-  required: ['hair', 'facial_hair', 'glasses', 'expression', 'age', 'added'],
+  required: ['hair', 'facial_hair', 'glasses', 'expression', 'age', 'added', 'hands_in_pockets'],
 };
 
 /** Which findings fail an image. Expression only warns: it is the cue friends forgive most and the model reads it least reliably. */
@@ -33,6 +35,7 @@ export function lookVerdict(r) {
   for (const k of ['hair', 'facial_hair', 'glasses']) if (!r[k].ok) fails.push(`${k.replace('_', ' ')}: ${r[k].note}`);
   if (!r.age.ok || r.age.looks !== 'same') fails.push(`looks ${r.age.looks}: ${r.age.note}`);
   if (r.added.length) fails.push(`added: ${r.added.join(', ')}`);
+  if (r.hands_in_pockets) fails.push('hand in a pocket');
   if (!r.expression.ok) warns.push(`expression: ${r.expression.note}`);
   return { pass: fails.length === 0, fails, warns };
 }

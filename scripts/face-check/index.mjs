@@ -66,10 +66,10 @@ export async function checkFaces({ faces, lookRefs, images, minIdentity = MIN_ID
 
 const fmt = (x) => (x == null ? '–' : x.toFixed(3));
 export function checkTable(results) {
-  return ['| Image | Identity (gate ≥ ' + MIN_IDENTITY + ') | Hair | Age | Facial hair | Glasses | Expression | Added | Background | Verdict |', '|---|---|---|---|---|---|---|---|---|---|',
+  return ['| Image | Identity (gate ≥ ' + MIN_IDENTITY + ') | Hair | Age | Facial hair | Glasses | Expression | Added | Hands | Background | Verdict |', '|---|---|---|---|---|---|---|---|---|---|---|',
     ...results.map((r) => {
       const l = r.look, c = (k) => (l ? (l[k].ok ? 'ok' : '✗ ' + l[k].note) : '–');
       const cell = (s) => String(s).replace(/\|/g, '/').replace(/\n/g, ' ');
-      return `| ${r.file} | ${fmt(r.identity)} | ${cell(c('hair'))} | ${cell(l ? (l.age.looks === 'same' && l.age.ok ? 'same' : '✗ ' + l.age.looks) : '–')} | ${cell(c('facial_hair'))} | ${cell(c('glasses'))} | ${cell(c('expression'))} | ${cell(l ? (l.added.length ? '✗ ' + l.added.join(', ') : 'none') : '–')} | ${r.background ? (r.background.white ? 'white' : '✗ ' + Math.round(r.background.mean) + '/255') : '–'} | ${r.pass ? 'PASS' : 'FAIL'} |`;
+      return `| ${r.file} | ${fmt(r.identity)} | ${cell(c('hair'))} | ${cell(l ? (l.age.looks === 'same' && l.age.ok ? 'same' : '✗ ' + l.age.looks) : '–')} | ${cell(c('facial_hair'))} | ${cell(c('glasses'))} | ${cell(c('expression'))} | ${cell(l ? (l.added.length ? '✗ ' + l.added.join(', ') : 'none') : '–')} | ${l ? (l.hands_in_pockets ? '✗ in pocket' : 'ok') : '–'} | ${r.background ? (r.background.white ? 'white' : '✗ ' + Math.round(r.background.mean) + '/255') : '–'} | ${r.pass ? 'PASS' : 'FAIL'} |`;
     })];
 }

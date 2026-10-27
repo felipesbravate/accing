@@ -20,7 +20,7 @@ test('average is unit length and cosine of a vector with itself is 1', () => {
 });
 
 const ok = { ok: true, note: 'same' };
-const base = { hair: ok, facial_hair: ok, glasses: ok, expression: ok, age: { ok: true, looks: 'same', note: '' }, added: [] };
+const base = { hair: ok, facial_hair: ok, glasses: ok, expression: ok, age: { ok: true, looks: 'same', note: '' }, added: [], hands_in_pockets: false };
 
 test('look verdict passes a clean result', () => {
   assert.deepEqual(lookVerdict(base), { pass: true, fails: [], warns: [] });
@@ -46,4 +46,10 @@ test('background check: pure white edges pass, light grey (like early runs) fail
   const grey = edgeStats(...make(236));
   assert.equal(grey.white, false);
   assert.equal(Math.round(grey.mean), 236);
+});
+
+test('a hand in a pocket fails the look check', () => {
+  const r = lookVerdict({ ...base, hands_in_pockets: true });
+  assert.equal(r.pass, false);
+  assert.deepEqual(r.fails, ['hand in a pocket']);
 });
