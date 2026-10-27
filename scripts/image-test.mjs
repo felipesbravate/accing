@@ -72,23 +72,22 @@ function args() {
 
 const MAX_PHOTOS = 10;
 
-// Phone photos are 4–11 MB. Models gain nothing above ~2048 px, and big uploads distort the timing and can exceed
-// request limits, so photos are resized like the app would (macOS sips; without it the original is sent).
+// Phone photos are 4–11 MB and often stored sideways with a rotation flag (EXIF orientation). Every photo is turned
+// upright and, if large, resized to max 2048 px like the app would. Seen 2026-10-27: macOS sips dropped the rotation
+// flag and the model received a sideways mirror selfie.
 const MAX_SIDE = 2048;
-let scratch = null;
+let scratch = null; // kept for the cleanup at exit
 async function shrink(img) {
-  if (img.bytes.length < 1_500_000) return img;
-  try {
-    scratch ??= await mkdtemp(join(tmpdir(), 'accing-image-test-'));
-    const src = join(scratch, 'in-' + img.file), out = join(scratch, img.file.replace(/\.[^.]+$/, '') + '.jpg');
-    await writeFile(src, img.bytes);
-    execFileSync('sips', ['-Z', String(MAX_SIDE), '-s', 'format', 'jpeg', '-s', 'formatOptions', '90', src, '--out', out], { stdio: 'ignore' });
-    const bytes = await readFile(out);
-    return { ...img, bytes, mime: 'image/jpeg', resized: `${(img.bytes.length / 1e6).toFixed(1)} MB → ${(bytes.length / 1e6).toFixed(1)} MB` };
-  } catch {
-    if (!shrink.warned) { console.warn(`Could not resize photos (sips not available); sending originals, which may be slow or too large.`); shrink.warned = true; }
+  let sharp;
+  try { sharp = (await import('sharp')).default; } catch {
+    if (!shrink.warned) { console.warn('Could not load sharp (npm install); sending photos as they are, which may be sideways, slow or too large.'); shrink.warned = true; }
     return img;
   }
+  const meta = await sharp(img.bytes).metadata();
+  const turned = (meta.orientation || 1) > 1, big = img.bytes.length > 1_500_000 || Math.max(meta.width, meta.height) > MAX_SIDE;
+  if (!turned && !big) return img;
+  const bytes = await sharp(img.bytes).rotate().resize(MAX_SIDE, MAX_SIDE, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 90 }).toBuffer();
+  return { ...img, bytes, mime: 'image/jpeg', resized: `${(img.bytes.length / 1e6).toFixed(1)} MB → ${(bytes.length / 1e6).toFixed(1)} MB${turned ? ', turned upright' : ''}` };
 }
 
 const FACE_LABELS = { 'face-front': 'face close-up, front', 'face-left': 'face close-up, left side', 'face-right': 'face close-up, right side' };
