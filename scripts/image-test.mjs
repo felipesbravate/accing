@@ -40,7 +40,7 @@ const OPENAI_BASE = process.env.OPENAI_BASE_URL || 'https://api.openai.com';
 const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
 
 function args() {
-  const out = { runs: 3, only: null, dryRun: false, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K',
+  const out = { runs: 3, only: null, dryRun: false, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
     expression: 'relaxed and neutral, the same natural expression as in the face photos (no smile they do not have)', occasion: 'an office day', weather: 'sunny 24°C', time: 'Monday morning',
     pose: 'a natural fashion lookbook pose: body turned about 15 degrees from the camera, weight on one leg with the other knee slightly bent, shoulders relaxed, one hand casually in a pocket or resting on the hip and the other loose at the side, chin level, eyes to the camera' };
   for (const a of process.argv.slice(2)) {
@@ -50,6 +50,7 @@ function args() {
     else if (k === 'dry-run') out.dryRun = true;
     else if (k === 'seed') out.seed = parseInt(v, 10) || 1;
     else if (k === 'reader-model') out.reader = v;
+    else if (k === 'detail') { if (!['default', 'max'].includes(v)) throw new Error('--detail must be max or default'); out.detail = v; }
     else if (k === 'size') { if (!['512', '1K', '2K', '4K'].includes(v)) throw new Error('--size must be 512, 1K, 2K or 4K'); out.size = v; }
     else if (k in out) out[k] = v;
     else throw new Error(`Unknown option --${k}`);
@@ -181,23 +182,41 @@ async function callGemini(m, images, prompt, label, opts) {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error('GEMINI_API_KEY is not set in .env.local');
   const parts = [];
-  images.forEach((img, i) => {
-    parts.push({ text: `Image ${i + 1} (${label(i)}):` });
-    parts.push({ inlineData: { mimeType: img.mime, data: img.bytes.toString('base64') } });
-  });
-  parts.push({ text: prompt });
-  const body = JSON.stringify({
-    contents: [{ role: 'user', parts }],
+  // How closely Gemini looks at each photo (per-part media resolution). Image models default to low detail
+  // (~280 tokens per photo in our runs); "max" asks for the most detail on faces and high detail on the rest.
+  const detail = (i) => (opts.detail !== 'max' ? null : { level: i < opts.faceCount ? 'MEDIA_RESOLUTION_ULTRA_HIGH' : 'MEDIA_RESOLUTION_HIGH' });
+  const build = (withDetail) => {
+    const parts = [];
+    images.forEach((img, i) => {
+      parts.push({ text: `Image ${i + 1} (${label(i)}):` });
+      const part = { inlineData: { mimeType: img.mime, data: img.bytes.toString('base64') } };
+      if (withDetail && detail(i)) part.mediaResolution = detail(i);
+      parts.push(part);
+    });
+    parts.push({ text: prompt });
+    return parts;
+  };
+  const makeBody = (withDetail) => JSON.stringify({
+    contents: [{ role: 'user', parts: build(withDetail) }],
     generationConfig: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: m.aspectRatio, imageSize: opts.size } },
   });
+  let body = makeBody(true);
   const post = (model) => fetch(`${GEMINI_BASE}/v1beta/models/${model}:generateContent`, {
     method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': key }, body,
   });
-  let res = await post(m.model);
+  let model = m.model;
+  let res = await post(model);
   if (res.status === 404) { // model ids move between "-preview" and stable names; try the other spelling once
-    const alt = m.model.endsWith('-preview') ? m.model.replace(/-preview$/, '') : m.model + '-preview';
+    const alt = model.endsWith('-preview') ? model.replace(/-preview$/, '') : model + '-preview';
     const retry = await post(alt);
-    if (retry.ok) { console.log(`(using ${alt})`); m.model = alt; res = retry; }
+    if (retry.status !== 404) { console.log(`(using ${alt})`); model = m.model = alt; res = retry; }
+  }
+  if (res.status === 400 && opts.detail === 'max') { // model may not accept per-photo detail: say so and retry without
+    const err = await res.clone().json().catch(() => ({}));
+    if (/media.?resolution/i.test(err.error?.message || '')) {
+      console.log(`(${model} does not accept per-photo detail; sending without it)`);
+      body = makeBody(false); res = await post(model);
+    }
   }
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(`Gemini ${res.status}: ${json.error?.message || JSON.stringify(json).slice(0, 300)}`);
@@ -266,11 +285,12 @@ async function main() {
   console.log(`Reading cost: ~$${readCost.toFixed(4)}`);
   const prompt = buildPrompt(await readFile(PROMPT_FILE, 'utf8'), faces, outfits, outfit, opts);
   const label = (i) => imageLabel(faces, outfit, i);
+  opts.faceCount = faces.length;
   const wanted = opts.only ? opts.only.split(',') : null;
   const models = MODELS.filter((m) => (wanted ? wanted.some((w) => w === m.key || (w === m.provider && !m.optIn)) : !m.optIn));
   if (!models.length) throw new Error(`--only=${opts.only} matches no model. Use gemini, openai or model keys: ${MODELS.map((m) => m.key).join(', ')}`);
 
-  console.log(`Models: ${models.map((m) => m.key).join(', ')} × ${opts.runs} run(s), Gemini size ${opts.size}`);
+  console.log(`Models: ${models.map((m) => m.key).join(', ')} × ${opts.runs} run(s), Gemini size ${opts.size}, photo detail ${opts.detail}`);
   if (opts.dryRun) { console.log('\n--- prompt ---\n' + prompt + '\n\nDry run: no images generated. Use the same --seed to generate this outfit.'); return; }
 
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
@@ -300,7 +320,7 @@ async function main() {
     }
   }
 
-  const lines = ['# Image test ' + stamp, '', `Occasion: ${opts.occasion} · Weather: ${opts.weather} · Time: ${opts.time}`, '', `Pose: ${opts.pose}`, '', `Seed: ${seed} (repeat with --seed=${seed}) · Gemini size: ${opts.size}`, '',
+  const lines = ['# Image test ' + stamp, '', `Occasion: ${opts.occasion} · Weather: ${opts.weather} · Time: ${opts.time}`, '', `Pose: ${opts.pose}`, '', `Seed: ${seed} (repeat with --seed=${seed}) · Gemini size: ${opts.size} · Photo detail: ${opts.detail}`, '',
     '## Garments read', '', ...readings.map((r, i) => `- Photo ${i + 1} (${outfits[i].file}): ${r.items.map((x) => `${x.description} [${x.category}]`).join('; ') || 'nothing recognised'}`), '',
     '## Outfit asked for', '', ...outfit.items.map((x) => `- ${x.description} (${x.category}) from photo ${x.photo + 1}`), '',
     `Reading cost: ~$${readCost.toFixed(4)}`, '', '## Results', '',
