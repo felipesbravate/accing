@@ -460,5 +460,5 @@ ${models.map((m) => `<h3>${esc(m.key)}</h3><div class="row">${rows.filter((r) =>
   console.log(`\nDone. Open ${join(out, 'index.html')} to compare, and ${join(out, 'report.md')} for the numbers.`);
 }
 
-main().catch((e) => { console.error('Error: ' + e.message); process.exitCode = 1; })
+main().catch((e) => { const c = e.cause; console.error('Error: ' + e.message + (c ? ` (${c.code || ''} ${c.message || c}`.trimEnd() + ')' : '') + (e.message === 'fetch failed' ? '\nNo answer from the server: check the internet connection, VPN or proxy, then run again.' : '')); process.exitCode = 1; })
   .finally(() => (scratch ? rm(scratch, { recursive: true, force: true }) : null));
