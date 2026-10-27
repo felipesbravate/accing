@@ -1,0 +1,19 @@
+Create a photorealistic, full-body fashion photo of the person in the reference images, wearing the outfit described below.
+
+IDENTITY (most important)
+{{IDENTITY}}
+- The result must be unmistakably the same person: same face shape, eyes, nose, mouth, skin tone, hairline, hair colour, length and texture, age, height and body proportions.
+- Do not beautify, slim, age, de-age or change makeup. If anything is unclear, stay closer to the references, never more "idealised".
+
+OUTFIT
+- Dress them only in the garments shown in these images:
+{{GARMENTS}}
+- Reproduce each garment exactly: colour, pattern, fabric texture, fit, length, buttons, seams and any logos.
+- Do not add, remove or swap any clothing, shoes, jewellery, bags or accessories that are not in the images.
+- Style it naturally for {{OCCASION}} on a {{WEATHER}} {{TIME}}. Styling may only change how items are worn (sleeves rolled, jacket open), never which items.
+
+PHOTO
+- Head-to-toe, full body visible including shoes, standing upright in a relaxed, natural pose, facing the camera at a slight angle, centred with space above the head and below the feet.
+- Plain seamless white studio background, soft even daylight-style lighting, realistic shadows on the floor, sharp focus, e-commerce lookbook style.
+- Portrait orientation, 2:3.
+- No text, watermarks, props, other people, mirrors or cropped limbs.

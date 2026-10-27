@@ -9,3 +9,7 @@ out/
 .DS_Store
 .vercel
 coverage/
+
+# Personal photos and generated images stay on this Mac
+image-test/inputs/
+image-test/results/
