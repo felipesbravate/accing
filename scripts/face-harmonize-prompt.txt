@@ -1,0 +1,5 @@
+Image 1 is a close-up of the head from a full-body photo. Its face was placed from a real photo of this person, so the edges of the face, the skin tone or the light may not match the rest of the head yet. Images {{FACE_IMAGES}} are real photos of the same person, for reference.
+
+Make image 1 look like one natural photo: blend the edges of the face into the head and hair, remove any seam, double contour or patch, and match skin tone, texture and light across forehead, cheeks, jaw, ears and neck.
+
+Do NOT change who they are: keep the eyes, eyebrows, nose, mouth, lips, face shape, skin details and the expression exactly as in image 1. Keep the head's position, size and angle, the hair, the earrings, the light direction, the background and the square framing.

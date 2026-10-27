@@ -11,7 +11,7 @@ import { CATEGORIES, composeLooks, normaliseReading } from './image-test-lib.mjs
 import { checkFaces, checkTable, MIN_IDENTITY } from './face-check/index.mjs';
 import { poseCheck } from './face-check/look-check.mjs';
 import { cleanBackground, createCleaner, measurePose } from './clean-background.mjs';
-import { facePass, faceLock, referenceFace } from './face-detail.mjs';
+import { facePass, faceLock, realFace, referenceFace, HARMONIZE_PROMPT_FILE } from './face-detail.mjs';
 import { createFaceModel } from './face-check/arcface.mjs';
 import { feetFor, poseReferencePath } from './make-pose-reference.mjs';
 import { MODELS_DIR as FACE_MODELS_DIR } from './face-check/index.mjs';
@@ -49,7 +49,7 @@ const OPENAI_BASE = process.env.OPENAI_BASE_URL || 'https://api.openai.com';
 const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
 
 function args() {
-  const out = { runs: 3, looks: 1, proFace: false, body: null, background: '#F9F9FB', poseRef: true, facePasses: 2, faceLock: true, clean: true, anchor: true, anchorTries: 3, only: null, dryRun: false, check: true, minIdentity: MIN_IDENTITY, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
+  const out = { runs: 3, looks: 1, realFace: true, proFace: false, body: null, background: '#F9F9FB', poseRef: true, facePasses: 2, faceLock: true, clean: true, anchor: true, anchorTries: 3, only: null, dryRun: false, check: true, minIdentity: MIN_IDENTITY, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
     expression: 'copy it exactly from the front face photo, including any slight smile; no smile or seriousness that photo does not have', occasion: 'an office day', weather: 'sunny 24°C', time: 'Monday morning',
     shoes: 'plain white leather low-top sneakers with white soles and white laces',
     pose: 'relaxed standing pose: body turned about 15 degrees so their left shoulder is slightly closer to the camera, head turned back to face the camera, chin level, eyes looking into the lens; weight on the back (right) leg, front (left) knee slightly relaxed, feet about hip-width apart; both arms hanging loosely at the sides, elbows very slightly bent, hands open and relaxed beside the thighs, never in pockets; shoulders relaxed and level' };
@@ -65,6 +65,7 @@ function args() {
     else if (k === 'background') { if (!/^#[0-9a-f]{6}$/i.test(v)) throw new Error('--background must be a colour like #F9F9FB'); out.background = v; }
     else if (k === 'no-face-lock') out.faceLock = false;
     else if (k === 'pro-face') out.proFace = true;
+    else if (k === 'no-real-face') out.realFace = false;
     else if (k === 'no-pose-ref') out.poseRef = false;
     else if (k === 'body') { if (!['female', 'male'].includes(v)) throw new Error('--body must be female or male'); out.body = v; }
     else if (k === 'face-passes') out.facePasses = Math.max(0, Math.min(4, parseInt(v, 10) || 0));
@@ -411,7 +412,21 @@ async function main() {
     catch (e) { console.log(`Face detail pass and face lock skipped: ${e.message}`); faceModel = null; }
   }
   const redrawModel = MODELS.find((x) => x.key === 'gemini-nano-banana-2');
-  const withFacePass = (m) => (faceModel && opts.facePasses ? async (bytes) => {
+  // Real face (default): her actual face from the best-matching face photo, aligned and relit to the generated light
+  // (identity 0.62 → 0.86 on 2026-10-27, where drawn faces plateaued), then a harmonize pass blends the edges; it is kept
+  // only if the identity stays at least 0.06 below the transplant's and above 0.75.
+  const withRealFace = () => async (bytes) => {
+    const rf = await realFace({ model: faceModel, target: bytes, faces, reference });
+    if (!rf.placed) { console.log(`  real face not placed: ${rf.reason}`); return { bytes, face: { pass: true, before: null, after: null, kept: 'original' } }; }
+    console.log(`  real face from ${rf.source}: identity ${rf.before.toFixed(3)} → ${rf.after.toFixed(3)}`);
+    if (!opts.facePasses) return { bytes: rf.bytes, face: { pass: true, before: rf.before, after: rf.after, kept: `real face (${rf.source})` } };
+    const hp = await facePass({ model: faceModel, image: rf.bytes, faces, reference, passes: opts.facePasses, promptFile: HARMONIZE_PROMPT_FILE, blendSize: 1.3,
+      minKeep: Math.max(0.75, rf.after - 0.06),
+      redraw: (imgs, prompt, label) => callGemini({ ...(opts.proFace ? MODELS.find((x) => x.key === 'gemini-nano-banana-pro') : redrawModel), aspectRatio: '1:1' }, imgs, prompt, label, { ...opts, size: '1K', faceCount: imgs.length }),
+      log: (t) => console.log(t.replace('face redraw', 'harmonize')) });
+    return { bytes: hp.bytes, cost: hp.cost, face: { pass: true, before: rf.before, after: hp.after, kept: hp.kept === 'original' ? `real face (${rf.source}), not harmonized` : `real face (${rf.source}) + harmonize ${hp.kept.replace('redraw ', '')}` } };
+  };
+  const withFacePass = (m) => (faceModel && opts.realFace ? withRealFace() : faceModel && opts.facePasses ? async (bytes) => {
     const fp = await facePass({ model: faceModel, image: bytes, faces, reference, passes: opts.facePasses,
       redraw: (imgs, prompt, label) => callGemini({ ...(opts.proFace ? MODELS.find((x) => x.key === 'gemini-nano-banana-pro') : redrawModel), aspectRatio: '1:1' }, imgs, prompt.replace('{{IDENTITY_CARD}}', opts.identityCard || 'see the face photos'), label, { ...opts, size: '1K', faceCount: imgs.length }),
       log: (t) => console.log(t) });
@@ -552,7 +567,7 @@ async function main() {
       ...(rejected.length ? ['', `Attempts rejected before one passed (${rejected.length}, ~$${fmt(rejected.reduce((s, r) => s + (r.cost || 0), 0))}):`, ...rejected.map((r) => `- ${r.file}: ${r.reasons.join('; ')}`)] : []), ''] : []),
     '## Results', '',
     '| Look | Model | Run | Seconds | Input tokens | Output tokens | Est. cost (USD) | Face step | Result |', '|---|---|---|---|---|---|---|---|---|'];
-  const faceCell = (f) => (!f ? '–' : f.pass ? `redraw ${fmt(f.before)}→${fmt(f.after)} (${f.kept})` : f.locked ? `locked to look 1 ${fmt(f.before)}→${fmt(f.after)}` : `not locked: ${f.reason}`);
+  const faceCell = (f) => (!f ? '–' : f.pass ? `face ${fmt(f.before)}→${fmt(f.after)} (${f.kept})` : f.locked ? `locked to look 1 ${fmt(f.before)}→${fmt(f.after)}` : `not locked: ${f.reason}`);
   for (const r of rows) lines.push(`| ${r.look.n} | ${r.m.key} | ${r.run} | ${r.seconds.toFixed(1)} | ${fmt(r.tokens?.input, 0)} | ${fmt(r.tokens?.output, 0)} | ${fmt(r.cost)} | ${faceCell(r.face)} | ${r.error ? 'FAILED: ' + r.error.replace(/\|/g, '/') : r.file} |`);
   lines.push('', '## Averages (successful runs)', '', '| Model | Runs OK | Avg seconds | Avg cost (USD) |', '|---|---|---|---|');
   for (const m of models) {

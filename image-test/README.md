@@ -62,6 +62,14 @@ is drawn under every look (a light pool around the shoes, slightly behind them, 
 a darker contact line under the soles; tune it in `SHADOW` in `scripts/clean-background.mjs`). The model's own output is kept as `*-raw.png`.
 Takes ~3–7 s per image; `--no-clean` skips it.
 
+## Real face (default)
+Drawn faces plateaued at the identity of an average real photo (~0.6) and still read as "not her". Now look 1 gets the
+person's REAL face: from the face photo whose head angle matches best, aligned by the landmarks and relit to the
+generated light (her features, the image's light; toward the face edges only skin is taken, never hair). Identity on
+2026-10-27: 0.62 → 0.86. Then a harmonize pass asks the image model to blend the edges without changing features; it is
+kept only if the identity stays above 0.75 and within 0.06 of the transplant. Looks 2+ get that face via the face lock.
+`--no-real-face` goes back to drawn faces. Works best with an evenly lit, front face photo with no hair over the cheeks.
+
 ## Face fidelity (automatic)
 In a full-body image the face is only ~190 px wide, and every clothes edit redraws it (identity fell from 0.62 on
 look 1 to 0.47–0.51 on its edits). Two steps fix that:
