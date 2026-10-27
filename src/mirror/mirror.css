@@ -30,3 +30,49 @@
 .outfit-image { display: block; object-fit: cover; background: var(--bg-primary); }
 .outfit.is-main .outfit-image { width: 400px; height: 600px; }
 .outfit.is-side .outfit-image { width: 360px; height: 540px; }
+
+/* Desktop details added for the shared markup. */
+.mirror-when { display: inline; }
+.mirror-dots { display: none; }
+.mirror-carousel { touch-action: pan-y; user-select: none; }
+
+/* Mobile (Figma "Daily Mirror 2 — Mobile", 390×844), below 1024px. */
+@media (max-width: 1023px) {
+  .mirror { padding-bottom: 88px; } /* room for the fixed avatar bar */
+
+  /* No logo header on mobile: the avatar sits in a bar fixed to the bottom right. */
+  .mirror-header { position: fixed; z-index: 20; left: 0; right: 0; bottom: 0; height: auto; justify-content: flex-end;
+    padding: var(--space-lg); padding-bottom: calc(var(--space-lg) + env(safe-area-inset-bottom)); background: var(--bg-primary); }
+  .mirror-logo { display: none; }
+  .mirror-account-menu { top: auto; bottom: calc(100% + var(--space-sm)); }
+
+  .mirror-content { margin-top: 0; padding: calc(40px + env(safe-area-inset-top)) 0 0; }
+  .mirror-top { flex-direction: column; align-items: stretch; gap: var(--space-xl); padding: 0 var(--space-lg); margin-bottom: 28px; }
+
+  /* Question first, then day, time and weather stacked. */
+  .mirror-greeting { padding-top: 0; }
+  .mirror-question { order: -1; }
+  .mirror-meta { flex-direction: column; align-items: flex-start; gap: 0; }
+  .mirror-when { display: flex; flex-direction: column; }
+  .mirror-sep { display: none; }
+
+  /* Occasions (Label/Large) above the season filters, which scroll sideways. */
+  .mirror-nav { order: 1; width: auto; align-items: flex-start; padding: 0 var(--space-sm); }
+  .mirror-nav .ds-toggle { display: none; } /* not in the mobile design */
+  .mirror-menu { flex-direction: row; align-items: center; gap: var(--space-lg); }
+  .mirror-menu .ds-menu-item { font-size: var(--fs-label-large); line-height: var(--lh-label-large); }
+  .mirror-filters { order: 2; margin: calc(var(--space-md) - var(--space-xl)) 0 0; padding: 0 var(--space-sm); overflow-x: auto; scrollbar-width: none; }
+  .mirror-filters::-webkit-scrollbar { display: none; }
+  .mirror-filters .ds-filter-item { flex: none; }
+
+  /* Carousel: main 280×420 centred, neighbours 220×330 peeking; swipe instead of arrows. */
+  .mirror-carousel { height: 460px; gap: var(--space-md); overflow: hidden; justify-content: center; }
+  .mirror-arrow { display: none; }
+  .outfit { flex: none; }
+  .outfit.is-main .outfit-image { width: 280px; height: 420px; }
+  .outfit.is-side .outfit-image { width: 220px; height: 330px; }
+
+  .mirror-dots { display: flex; justify-content: center; gap: 6px; margin-top: 2px; }
+  .mirror-dot { width: 6px; height: 6px; padding: 0; border: 0; border-radius: var(--radius-full); background: var(--border-default); }
+  .mirror-dot[aria-current="true"] { width: 16px; background: var(--bg-tertiary); }
+}

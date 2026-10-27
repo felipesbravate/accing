@@ -11,3 +11,10 @@ test('around returns previous, current and next', () => {
   assert.deepEqual(around(0, 3), [2, 0, 1]);
   assert.deepEqual(around(2, 3), [1, 2, 0]);
 });
+
+import { swipeStep } from '../src/mirror/carousel.js';
+test('swipeStep needs a real drag', () => {
+  assert.equal(swipeStep(-60), 1);
+  assert.equal(swipeStep(60), -1);
+  assert.equal(swipeStep(10), 0);
+});

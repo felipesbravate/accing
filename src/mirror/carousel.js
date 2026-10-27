@@ -10,3 +10,10 @@ export function wrap(index, length) {
 export function around(index, length) {
   return [wrap(index - 1, length), wrap(index, length), wrap(index + 1, length)];
 }
+
+/** A horizontal drag of more than `threshold` px moves one outfit: left = next (+1), right = previous (-1). */
+export function swipeStep(dx, threshold = 40) {
+  if (dx <= -threshold) return 1;
+  if (dx >= threshold) return -1;
+  return 0;
+}
