@@ -43,6 +43,7 @@ const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
 function args() {
   const out = { runs: 3, only: null, dryRun: false, check: true, minIdentity: MIN_IDENTITY, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
     expression: 'relaxed and neutral, the same natural expression as in the face photos (no smile they do not have)', occasion: 'an office day', weather: 'sunny 24°C', time: 'Monday morning',
+    shoes: 'plain white leather low-top sneakers with white soles and white laces',
     pose: 'a natural fashion lookbook pose: body turned about 15 degrees from the camera, weight on one leg with the other knee slightly bent, shoulders relaxed, one hand casually in a pocket or resting on the hip and the other loose at the side, chin level, eyes to the camera' };
   for (const a of process.argv.slice(2)) {
     const [k, ...rest] = a.replace(/^--/, '').split('='); const v = rest.join('=');
@@ -167,9 +168,9 @@ const range = (a, b) => (a === b ? `${a}` : b === a + 1 ? `${a} and ${b}` : `${a
 function buildPrompt(template, faces, outfits, outfit, opts) {
   const f = faces.length;
   const lines = outfit.items.map((x) => `  - the ${x.description} (${x.category}) from image ${f + x.photo + 1}`);
-  // The photo must show the feet, so without identified shoes the model may choose plain ones (the only free choice).
+  // The photo must show the feet. Without identified shoes we name exact plain ones: left free, the model invented brands (New Balance).
   if (!outfit.items.some((x) => x.category === 'shoes')) {
-    lines.push('  - shoes: none were identified in the photos, so add simple, neutral shoes that suit this outfit, plain with no logos or brand marks (the only item you may choose yourself)');
+    lines.push(`  - shoes: none were identified in the photos, so use exactly these: ${opts.shoes}. Nothing on them: no logo, stripe, emblem, tab or text`);
   }
   const garments = lines.join('\n');
   return template.replace('{{FACE_IMAGES}}', range(1, f)).replace('{{BODY_IMAGES}}', range(f + 1, f + outfits.length))

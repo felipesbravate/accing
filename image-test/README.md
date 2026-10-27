@@ -36,7 +36,8 @@ npm run image-test
 - `--only=` picks models: `gemini`, `openai`, or keys such as `gemini-nano-banana-pro` (Nano Banana Pro, only runs when named),
   comma-separated, e.g. `--only=gemini-nano-banana-2,gemini-nano-banana-pro`.
 - Other options: `--runs=1`, `--occasion="a dinner"`, `--weather="rainy 14°C"`,
-  `--time="Friday evening"`, `--pose="walking towards the camera mid-step"`, `--reader-model=<gemini model>`.
+  `--time="Friday evening"`, `--pose="walking towards the camera mid-step"`, `--reader-model=<gemini model>`,
+  `--shoes="black leather Chelsea boots"` (used only when no photo shows shoes; default plain white leather sneakers).
 
 Results land in `image-test/results/<date-time>/`: every image, `wardrobe.json` (what was read and chosen),
 `report.md` (seconds, tokens, estimated cost) and `index.html` (open it to compare everything side by side).
