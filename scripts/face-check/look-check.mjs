@@ -13,6 +13,7 @@ Judge ONLY the person's identity cues, not the clothes, pose, background or ligh
 - expression: same natural expression? Note smiles, frowns or a stiff, tired or blank look that the real photos do not have.
 - facial_hair: same beard or moustache shape, length, density and grey?
 - glasses: same frame shape, thickness and colour, or none if they wear none?
+- build: same body build as in the real full-body photos (weight, shoulder, waist and hip width, leg length and proportions)? Ignore clothes; say how it differs.
 - hands_in_pockets: true if either hand is in a pocket, even partly (fingers or knuckles hidden in it). Both hands must be fully visible.
 - added: list anything on the person or their clothes that appears in NO real photo: tattoos, piercings, jewellery, watches, brand logos or wordmarks on clothes or shoes, printed text. Empty list if none.
 For each check give ok (true when a friend would not notice a difference) and a short note.`;
@@ -21,18 +22,18 @@ const CHECK = { type: 'OBJECT', properties: { ok: { type: 'BOOLEAN' }, note: { t
 const SCHEMA = {
   type: 'OBJECT',
   properties: {
-    hair: CHECK, facial_hair: CHECK, glasses: CHECK, expression: CHECK,
+    hair: CHECK, facial_hair: CHECK, glasses: CHECK, expression: CHECK, build: CHECK,
     age: { type: 'OBJECT', properties: { ok: { type: 'BOOLEAN' }, looks: { type: 'STRING', enum: ['younger', 'same', 'older'] }, note: { type: 'STRING' } }, required: ['ok', 'looks', 'note'] },
     added: { type: 'ARRAY', items: { type: 'STRING' } },
     hands_in_pockets: { type: 'BOOLEAN' },
   },
-  required: ['hair', 'facial_hair', 'glasses', 'expression', 'age', 'added', 'hands_in_pockets'],
+  required: ['hair', 'facial_hair', 'glasses', 'expression', 'build', 'age', 'added', 'hands_in_pockets'],
 };
 
 /** Which findings fail an image. Expression only warns: it is the cue friends forgive most and the model reads it least reliably. */
 export function lookVerdict(r) {
   const fails = [], warns = [];
-  for (const k of ['hair', 'facial_hair', 'glasses']) if (!r[k].ok) fails.push(`${k.replace('_', ' ')}: ${r[k].note}`);
+  for (const k of ['hair', 'facial_hair', 'glasses', 'build']) if (r[k] && !r[k].ok) fails.push(`${k.replace('_', ' ')}: ${r[k].note}`);
   if (!r.age.ok || r.age.looks !== 'same') fails.push(`looks ${r.age.looks}: ${r.age.note}`);
   if (r.added.length) fails.push(`added: ${r.added.join(', ')}`);
   if (r.hands_in_pockets) fails.push('hand in a pocket');
@@ -90,4 +91,26 @@ export async function poseCheck(anchor, image, { model = LOOK_MODEL, key = proce
   try { r = JSON.parse(text); } catch { throw new Error(`Could not understand the pose check: ${text.slice(0, 200)}`); }
   const u = json.usageMetadata || {};
   return { same: r.same_pose === true, note: r.note || '', cost: ((u.promptTokenCount || 0) * PRICE.inputPerM + ((u.candidatesTokenCount || 0) + (u.thoughtsTokenCount || 0)) * PRICE.outputPerM) / 1e6 };
+}
+
+// Outfit check: the look must show exactly its garments. Seen 2026-10-27: edited looks kept look 1's blazer.
+const OUTFIT_SCHEMA = { type: 'OBJECT', properties: { missing: { type: 'ARRAY', items: { type: 'STRING' } }, extra: { type: 'ARRAY', items: { type: 'STRING' } } }, required: ['missing', 'extra'] };
+
+/** image: { bytes, mime }; items: [{ category, description }]; defaultShoes: text when the look names no shoes. */
+export async function outfitCheck(image, items, defaultShoes, { model = LOOK_MODEL, key = process.env.GEMINI_API_KEY } = {}) {
+  if (!key) throw new Error('GEMINI_API_KEY is not set');
+  const list = [...items.map((x) => `${x.description} (${x.category})`), ...(defaultShoes ? [`${defaultShoes} (shoes)`] : [])];
+  const prompt = `The person in this photo should wear exactly these garments and nothing else:\n${list.map((x) => '- ' + x).join('\n')}
+missing: any garment from the list that is not visible or is clearly a different garment (other colour, cut or type).
+extra: any outerwear, top, bottom, dress or shoes the person wears that is not on the list (e.g. a jacket or blazer that should not be there). Ignore belts, jewellery, underwear and small details. Empty lists if it matches.`;
+  const res = await fetch(`${GEMINI_BASE}/v1beta/models/${model}:generateContent`, {
+    method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
+    body: JSON.stringify({ contents: [{ role: 'user', parts: [{ inlineData: { mimeType: image.mime, data: image.bytes.toString('base64') } }, { text: prompt }] }],
+      generationConfig: { responseMimeType: 'application/json', responseSchema: OUTFIT_SCHEMA, temperature: 0 } }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(`${res.status}: ${json.error?.message || 'no details'}`);
+  const r = JSON.parse(json.candidates?.[0]?.content?.parts?.map((p) => p.text).join('') || '{}');
+  const missing = Array.isArray(r.missing) ? r.missing : [], extra = Array.isArray(r.extra) ? r.extra : [];
+  return { ok: !missing.length && !extra.length, missing, extra, note: [...missing.map((x) => 'missing ' + x), ...extra.map((x) => 'extra ' + x)].join(', ') };
 }

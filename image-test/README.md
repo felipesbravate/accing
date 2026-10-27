@@ -67,7 +67,9 @@ Drawn faces plateaued at the identity of an average real photo (~0.6) and still 
 person's REAL face: from the face photo whose head angle matches best, aligned by the landmarks and relit to the
 generated light (her features, the image's light; toward the face edges only skin is taken, never hair). Identity on
 2026-10-27: 0.62 → 0.86. Then a harmonize pass asks the image model to blend the edges without changing features; it is
-kept only if the identity stays above 0.75 and within 0.06 of the transplant. Looks 2+ get that face via the face lock.
+kept only if the identity stays above 0.75 and within 0.06 of the transplant. Every look is generated fresh from the same pose reference and gets that same real face, so all looks share face, pose,
+framing and shadow without editing one into the other (`--anchor` brings back editing look 1, which kept old garments,
+invented ghosts and reshaped the body).
 `--no-real-face` goes back to drawn faces. Works best with an evenly lit, front face photo with no hair over the cheeks.
 
 ## Face fidelity (automatic)
@@ -97,6 +99,14 @@ The body is read from your photos (`--body=female|male` sets it); `--no-pose-ref
 Edited looks may change only the foot angle when the shoes change heel height. Look 1's pose is measured against the
 mannequin's and remade if it differs; each edit's pose is also measured from
 the person outline (feet gap and how far one foot is in front): more than 1% of the height off look 1 and it is remade.
+
+## Checks on every look (automatic, remade up to 3 times)
+- Pose: measured against the mannequin (feet stagger and gap, 1% of the height).
+- Face check: identity gate, hair, age, beard, glasses, **body build** vs the real full-body photos, invented items,
+  hands in pockets.
+- **Outfit check**: exactly the look's garments, nothing missing, nothing extra (e.g. a blazer from another look).
+Outfit photos are cut out onto a plain background before they are sent (clutter in mirror selfies came back as ghosts);
+`--no-clean-refs` sends them as they are.
 
 ## 4. Face check (runs automatically after every image test)
 Two layers, because one number is not enough: on 2026-10-27 ArcFace ranked first the image friends liked least.
