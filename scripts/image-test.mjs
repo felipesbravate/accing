@@ -2,7 +2,9 @@
 // reads the garments in each photo, composes a new outfit across photos, then sends the same photos and prompt to
 // each image model and measures seconds, tokens and cost.
 // Usage: see image-test/README.md. Needs Node 20+ (built-in fetch, FormData, Blob). Keys come from .env.local.
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import { existsSync } from 'node:fs';
 import { extname, join, resolve } from 'node:path';
 import { CATEGORIES, composeOutfit, normaliseReading } from './image-test-lib.mjs';
@@ -57,6 +59,25 @@ function args() {
 
 const MAX_PHOTOS = 10;
 
+// Phone photos are 4–11 MB. Models gain nothing above ~2048 px, and big uploads distort the timing and can exceed
+// request limits, so photos are resized like the app would (macOS sips; without it the original is sent).
+const MAX_SIDE = 2048;
+let scratch = null;
+async function shrink(img) {
+  if (img.bytes.length < 1_500_000) return img;
+  try {
+    scratch ??= await mkdtemp(join(tmpdir(), 'accing-image-test-'));
+    const src = join(scratch, 'in-' + img.file), out = join(scratch, img.file.replace(/\.[^.]+$/, '') + '.jpg');
+    await writeFile(src, img.bytes);
+    execFileSync('sips', ['-Z', String(MAX_SIDE), '-s', 'format', 'jpeg', '-s', 'formatOptions', '90', src, '--out', out], { stdio: 'ignore' });
+    const bytes = await readFile(out);
+    return { ...img, bytes, mime: 'image/jpeg', resized: `${(img.bytes.length / 1e6).toFixed(1)} MB → ${(bytes.length / 1e6).toFixed(1)} MB` };
+  } catch {
+    if (!shrink.warned) { console.warn(`Could not resize photos (sips not available); sending originals, which may be slow or too large.`); shrink.warned = true; }
+    return img;
+  }
+}
+
 const FACES = [['face-front', 'face close-up, front'], ['face-left', 'face close-up, left side'], ['face-right', 'face close-up, right side']];
 
 /** Faces first (fixed names, as captured in onboarding), then every other photo as a head-to-toe outfit photo. */
@@ -66,7 +87,7 @@ async function loadInputs() {
   const heic = all.filter((f) => /\.(heic|heif)$/i.test(f));
   if (heic.length) console.warn(`Skipping ${heic.join(', ')}: HEIC is not supported. Export as JPG (AirDrop > Options > Most Compatible).`);
   const files = all.filter((f) => MIME[extname(f).toLowerCase()]);
-  const load = async (f) => ({ file: f, bytes: await readFile(join(INPUTS, f)), mime: MIME[extname(f).toLowerCase()] });
+  const load = async (f) => shrink({ file: f, bytes: await readFile(join(INPUTS, f)), mime: MIME[extname(f).toLowerCase()] });
   const faces = [];
   for (const [name, label] of FACES) {
     const f = files.find((x) => x.toLowerCase().startsWith(name + '.'));
@@ -231,6 +252,10 @@ async function main() {
   const opts = args();
   const { faces, outfits, images } = await loadInputs();
   console.log(`Faces: ${faces.map((x) => x.file).join(', ')}`);
+  const resized = images.filter((x) => x.resized);
+  if (resized.length) console.log(`Resized ${resized.length} photo(s) to max ${MAX_SIDE} px: ${resized.map((x) => `${x.file} ${x.resized}`).join(', ')}`);
+  const totalMB = images.reduce((n, x) => n + x.bytes.length, 0) / 1e6;
+  console.log(`Upload per request: ${totalMB.toFixed(1)} MB`);
   console.log(`Reading the garments in ${outfits.length} outfit photo(s) with ${opts.reader}…`);
   const { readings, wardrobe, cost: readCost } = await readWardrobe(outfits, opts.reader);
   readings.forEach((r, i) => console.log(`  photo ${i + 1} = image ${faces.length + i + 1}, ${outfits[i].file}: ${r.items.map((x) => `${x.description} [${x.category}${x.visibility === 'full' ? '' : ', ' + x.visibility}]`).join('; ') || 'nothing recognised'}`));
@@ -251,7 +276,7 @@ async function main() {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const out = join(RESULTS, stamp);
   await mkdir(out, { recursive: true });
-  for (const img of images) await writeFile(join(out, 'ref-' + img.file), img.bytes);
+  for (const img of images) { img.refName = 'ref-' + (img.resized ? img.file.replace(/\.[^.]+$/, '.jpg') : img.file); await writeFile(join(out, img.refName), img.bytes); }
   await writeFile(join(out, 'prompt.txt'), prompt);
   await writeFile(join(out, 'wardrobe.json'), JSON.stringify({ seed, readerModel: opts.reader, faces: faces.map((x) => x.file), readings: readings.map((r, i) => ({ file: outfits[i].file, ...r })), outfit }, null, 2));
 
@@ -296,8 +321,8 @@ async function main() {
 <style>body{font:14px system-ui,sans-serif;margin:24px;color:#0c0c36}h2{margin:32px 0 8px}.row{display:flex;gap:12px;flex-wrap:wrap}
 figure{margin:0;width:240px}img{width:240px;height:360px;object-fit:contain;background:#f7f7f7;border:1px solid #cccce5}figcaption{font-size:12px;color:#53538b;margin-top:4px}.err{width:240px;height:360px;display:flex;align-items:center;justify-content:center;background:#fdecea;color:#b3261e;padding:12px;font-size:12px}</style>
 <h1>Image test ${stamp}</h1><p>${esc(opts.occasion)} · ${esc(opts.weather)} · ${esc(opts.time)}</p>
-<h2>Face photos</h2><div class="row">${faces.map((x) => `<figure><img src="ref-${esc(x.file)}"><figcaption>${esc(x.label)}</figcaption></figure>`).join('')}</div>
-<h2>Outfit photos and garments read</h2><div class="row">${outfits.map((x, i) => `<figure><img src="ref-${esc(x.file)}"><figcaption>photo ${i + 1}: ${esc(readings[i].items.map((g) => g.description).join(' · ') || 'nothing recognised')}</figcaption></figure>`).join('')}</div>
+<h2>Face photos</h2><div class="row">${faces.map((x) => `<figure><img src="${esc(x.refName)}"><figcaption>${esc(x.label)}</figcaption></figure>`).join('')}</div>
+<h2>Outfit photos and garments read</h2><div class="row">${outfits.map((x, i) => `<figure><img src="${esc(x.refName)}"><figcaption>photo ${i + 1}: ${esc(readings[i].items.map((g) => g.description).join(' · ') || 'nothing recognised')}</figcaption></figure>`).join('')}</div>
 <h2>Outfit asked for</h2><p>${outfit.items.map((x) => `${esc(x.description)} <small>(photo ${x.photo + 1})</small>`).join(' + ')}</p>
 ${models.map((m) => `<h2>${esc(m.key)}</h2><div class="row">${rows.filter((r) => r.m === m).map((r) => r.error
     ? `<figure><div class="err">${esc(r.error)}</div><figcaption>run ${r.run}</figcaption></figure>`
@@ -306,4 +331,5 @@ ${models.map((m) => `<h2>${esc(m.key)}</h2><div class="row">${rows.filter((r) =>
   console.log(`\nDone. Open ${join(out, 'index.html')} to compare, and ${join(out, 'report.md')} for the numbers.`);
 }
 
-main().catch((e) => { console.error('Error: ' + e.message); process.exit(1); });
+main().catch((e) => { console.error('Error: ' + e.message); process.exitCode = 1; })
+  .finally(() => (scratch ? rm(scratch, { recursive: true, force: true }) : null));
