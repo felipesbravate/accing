@@ -31,7 +31,8 @@ const OPENAI_BASE = process.env.OPENAI_BASE_URL || 'https://api.openai.com';
 const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
 
 function args() {
-  const out = { runs: 3, only: null, dryRun: false, occasion: 'an office day', weather: 'sunny 24°C', time: 'Monday morning' };
+  const out = { runs: 3, only: null, dryRun: false, occasion: 'an office day', weather: 'sunny 24°C', time: 'Monday morning',
+    pose: 'a natural fashion lookbook pose: body turned about 15 degrees from the camera, weight on one leg with the other knee slightly bent, shoulders relaxed, one hand casually in a pocket or resting on the hip and the other loose at the side, chin level, a calm confident expression with a slight smile, eyes to the camera' };
   for (const a of process.argv.slice(2)) {
     const [k, ...rest] = a.replace(/^--/, '').split('='); const v = rest.join('=');
     if (k === 'runs') out.runs = Math.max(1, Math.min(10, parseInt(v, 10) || 3));
@@ -84,7 +85,8 @@ function buildPrompt(template, images, opts) {
     : x.role === 'worn' ? `  Image ${n(i)}: the ${x.label} worn in this photo. Take only the ${x.label}; ignore everything else in that photo (other clothes, pose, background, and the person in it)`
     : null)).filter(Boolean).join('\n');
   return template.replace('{{IDENTITY}}', identity.join('\n')).replace('{{GARMENTS}}', garments)
-    .replace('{{OCCASION}}', opts.occasion).replace('{{WEATHER}}', opts.weather).replace('{{TIME}}', opts.time);
+    .replace('{{OCCASION}}', opts.occasion).replace('{{WEATHER}}', opts.weather).replace('{{TIME}}', opts.time)
+    .replace('{{POSE}}', opts.pose);
 }
 
 async function callGemini(m, images, prompt) {
@@ -190,7 +192,7 @@ async function main() {
     }
   }
 
-  const lines = ['# Image test ' + stamp, '', `Occasion: ${opts.occasion} · Weather: ${opts.weather} · Time: ${opts.time}`, '',
+  const lines = ['# Image test ' + stamp, '', `Occasion: ${opts.occasion} · Weather: ${opts.weather} · Time: ${opts.time}`, '', `Pose: ${opts.pose}`, '',
     '| Model | Run | Seconds | Input tokens | Output tokens | Est. cost (USD) | Result |', '|---|---|---|---|---|---|---|'];
   for (const r of rows) lines.push(`| ${r.m.key} | ${r.run} | ${r.seconds.toFixed(1)} | ${fmt(r.tokens?.input, 0)} | ${fmt(r.tokens?.output, 0)} | ${fmt(r.cost)} | ${r.error ? 'FAILED: ' + r.error.replace(/\|/g, '/') : r.file} |`);
   lines.push('', '## Averages (successful runs)', '', '| Model | Runs OK | Avg seconds | Avg cost (USD) |', '|---|---|---|---|');

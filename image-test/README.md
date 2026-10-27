@@ -27,6 +27,7 @@ npm run image-test                      # every model, 3 runs each
 npm run image-test -- --runs=1          # quicker
 npm run image-test -- --only=gemini     # one provider (gemini or openai)
 npm run image-test -- --occasion="a dinner" --weather="rainy 14°C" --time="Friday evening"
+npm run image-test -- --pose="walking towards the camera mid-step, arms swinging naturally"
 npm run image-test -- --dry-run         # check inputs and show the prompt, no API calls, no cost
 ```
 Results land in `image-test/results/<date-time>/`: every image, `report.md` (seconds, tokens, estimated cost) and
