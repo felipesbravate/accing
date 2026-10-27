@@ -13,8 +13,13 @@ OPENAI_API_KEY=...
 Put them in `image-test/inputs/` (git-ignored, they stay on your Mac). JPG, PNG or WebP.
 - `face-front.jpg`, `face-left.jpg`, `face-right.jpg`: required
 - `body.jpg`: one full-body photo, strongly recommended
-- `garment-1-brown-tweed-blazer.jpg`, `garment-2-black-v-neck-top.jpg`, …: one per garment.
-  The words after the number become the garment's description in the prompt.
+- The clothes, in either (or both) of two ways:
+  - `worn-1-brown-tweed-blazer.jpg`, `worn-2-black-jeans.jpg`, …: photos of you **wearing** clothes. Name each file
+    after the one item to take from it; everything else in that photo is ignored. To test real outfit building, take
+    items from **different** photos (blazer from one outfit, jeans from another).
+  - `garment-1-brown-tweed-blazer.jpg`, …: a photo of the item on its own (flat or on a hanger).
+  The words after the number become the description in the prompt.
+- iPhone photos must be JPG/PNG, not HEIC (AirDrop → Options → Most Compatible).
 
 ## 3. Run
 ```

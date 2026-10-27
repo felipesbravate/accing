@@ -54,12 +54,18 @@ async function loadInputs() {
     if (!f && name !== 'body') throw new Error(`Missing ${name}.jpg (or .png/.webp) in image-test/inputs`);
     if (f) images.push({ file: f, label, role: name });
   }
-  const garments = files.filter((f) => /^garment-\d+/i.test(f))
+  // garment-N-<item>: a photo of the item itself. worn-N-<item>: a photo of someone wearing it; only <item> is taken.
+  const byNumber = (re) => files.filter((f) => re.test(f))
     .sort((a, b) => parseInt(a.match(/\d+/)[0], 10) - parseInt(b.match(/\d+/)[0], 10));
-  if (!garments.length) throw new Error('Add at least one garment-1-<description>.jpg to image-test/inputs');
-  for (const f of garments) {
-    const desc = f.replace(/\.[^.]+$/, '').replace(/^garment-\d+-?/i, '').replace(/[-_]+/g, ' ').trim() || 'garment';
-    images.push({ file: f, label: desc, role: 'garment' });
+  const describe = (f, prefix) => f.replace(/\.[^.]+$/, '').replace(new RegExp('^' + prefix + '-\\d+-?', 'i'), '').replace(/[-_]+/g, ' ').trim();
+  for (const f of byNumber(/^garment-\d+/i)) images.push({ file: f, label: describe(f, 'garment') || 'garment', role: 'garment' });
+  for (const f of byNumber(/^worn-\d+/i)) {
+    const item = describe(f, 'worn');
+    if (!item) throw new Error(`Name ${f} after the item to take from it, e.g. worn-1-brown-tweed-blazer.jpg`);
+    images.push({ file: f, label: item, role: 'worn' });
+  }
+  if (!images.some((x) => x.role === 'garment' || x.role === 'worn')) {
+    throw new Error('Add at least one garment-1-<item>.jpg or worn-1-<item>.jpg to image-test/inputs');
   }
   for (const img of images) {
     img.bytes = await readFile(join(INPUTS, img.file));
@@ -74,7 +80,9 @@ function buildPrompt(template, images, opts) {
   const body = images.findIndex((x) => x.role === 'body');
   const identity = [`- Images ${faces.join(', ')} show this person's face from the front, left and right.`];
   identity.push(body >= 0 ? `- Image ${n(body)} shows their full body.` : '- No full-body photo is given: keep a natural, average build for this person.');
-  const garments = images.map((x, i) => (x.role === 'garment' ? `  Image ${n(i)}: ${x.label}` : null)).filter(Boolean).join('\n');
+  const garments = images.map((x, i) => (x.role === 'garment' ? `  Image ${n(i)}: ${x.label}`
+    : x.role === 'worn' ? `  Image ${n(i)}: the ${x.label} worn in this photo. Take only the ${x.label}; ignore everything else in that photo (other clothes, pose, background, and the person in it)`
+    : null)).filter(Boolean).join('\n');
   return template.replace('{{IDENTITY}}', identity.join('\n')).replace('{{GARMENTS}}', garments)
     .replace('{{OCCASION}}', opts.occasion).replace('{{WEATHER}}', opts.weather).replace('{{TIME}}', opts.time);
 }
@@ -84,7 +92,7 @@ async function callGemini(m, images, prompt) {
   if (!key) throw new Error('GEMINI_API_KEY is not set in .env.local');
   const parts = [];
   images.forEach((img, i) => {
-    parts.push({ text: `Image ${i + 1} (${img.role === 'garment' ? 'garment: ' + img.label : img.label}):` });
+    parts.push({ text: `Image ${i + 1} (${img.role === 'garment' ? 'garment: ' + img.label : img.role === 'worn' ? 'take only the ' + img.label + ' from this photo' : img.label}):` });
     parts.push({ inlineData: { mimeType: img.mime, data: img.bytes.toString('base64') } });
   });
   parts.push({ text: prompt });
@@ -120,7 +128,7 @@ async function callOpenAI(m, images, prompt) {
   if (!key) throw new Error('OPENAI_API_KEY is not set in .env.local');
   const form = new FormData();
   form.append('model', m.model);
-  form.append('prompt', prompt + '\n\nThe images are given in order: ' + images.map((x, i) => `${i + 1} = ${x.role === 'garment' ? 'garment: ' + x.label : x.label}`).join('; ') + '.');
+  form.append('prompt', prompt + '\n\nThe images are given in order: ' + images.map((x, i) => `${i + 1} = ${x.role === 'garment' ? 'garment: ' + x.label : x.role === 'worn' ? 'take only the ' + x.label + ' from this photo' : x.label}`).join('; ') + '.');
   form.append('size', m.size);
   form.append('quality', m.quality);
   form.append('output_format', 'png');
