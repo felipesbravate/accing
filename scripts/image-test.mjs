@@ -404,7 +404,7 @@ async function main() {
   await mkdir(out, { recursive: true });
   for (const img of images) { img.refName = 'ref-' + (img.resized ? img.file.replace(/\.[^.]+$/, '.jpg') : img.file); await writeFile(join(out, img.refName), img.bytes); }
   await writeFile(join(out, 'prompt.txt'), looks.map((l) => (looks.length > 1 ? `=== Look ${l.n} ===\n` : '') + l.prompt).join('\n\n'));
-  await writeFile(join(out, 'wardrobe.json'), JSON.stringify({ seed, readerModel: opts.reader, faces: faces.map((x) => x.file), readings: readings.map((r, i) => ({ file: outfits[i].file, ...r })), looks: looks.map(({ prompt, label, ...l }) => l) }, null, 2));
+  await writeFile(join(out, 'wardrobe.json'), JSON.stringify({ seed, readerModel: opts.reader, faces: faces.map((x) => x.file), readings: readings.map((r, i) => ({ file: outfits[i].file, ...r })), looks: looks.map(({ prompt, label, images: _i, ...l }) => l) }, (k, v) => (k === 'bytes' || v?.type === 'Buffer' ? undefined : v), 2));
 
   let cleaner = null;
   if (opts.clean) {
