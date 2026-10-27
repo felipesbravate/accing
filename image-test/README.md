@@ -62,7 +62,22 @@ is drawn under every look (a light pool around the shoes, slightly behind them, 
 a darker contact line under the soles; tune it in `SHADOW` in `scripts/clean-background.mjs`). The model's own output is kept as `*-raw.png`.
 Takes ~3–7 s per image; `--no-clean` skips it.
 
-## Real face (default)
+## Base photo (try-on mode, used when `inputs/base.jpg` exists)
+Generating a new person never looked enough like her, even with her real face pasted in (2026-10-27: faces, hair and
+body still varied between looks). So when a full-body photo named `base.jpg` (or `.png`/`.heic`) is in the inputs, every
+look is an EDIT of that real photo: only the clothes change; face, hair, body, pose, framing and light come from the
+photo. The garments she wears in it are read first and listed as "take off" in the edit; her face is locked back from
+the base photo after each edit; the background is painted `#F9F9FB` with the house shadow; each look is checked for pose
+(against the base photo's outline), face, body and outfit, and remade up to 3 times (`--anchor-tries`).
+The base photo decides how good every look can be. Take it like this:
+- full body, head to feet with a little space; phone propped at chest height, timer, 2–3 m away, portrait
+- plain wall, even soft light (facing a window, no sun or flash), no mirror
+- face fully visible, looking at the camera, natural expression; hair off the cheeks
+- fitted, plain, neutral clothes (easier to replace than a coat or a long dress), barefoot or simple flat shoes
+- the house pose: body turned about 15°, arms loose at the sides, hands open, never in pockets
+Keep her `face-*` photos and the garment photos in the folder as before. Remove `base.*` to go back to generating.
+
+## Real face (default, when there is no base photo)
 Drawn faces plateaued at the identity of an average real photo (~0.6) and still read as "not her". Now look 1 gets the
 person's REAL face: from the face photo whose head angle matches best, aligned by the landmarks and relit to the
 generated light (her features, the image's light; toward the face edges only skin is taken, never hair). Identity on

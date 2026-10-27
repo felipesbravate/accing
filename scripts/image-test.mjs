@@ -124,12 +124,15 @@ async function loadInputs() {
   for (const [i, f] of faceFiles.entries()) {
     faces.push({ ...(await load(f)), label: FACE_LABELS[f.toLowerCase().replace(/\.[^.]+$/, '')] || `face close-up ${i + 1} of ${faceFiles.length}` });
   }
-  const outfitFiles = files.filter((f) => !faces.some((x) => x.file === f));
+  // Base photo (base.jpg / base-*.png …): one real full-body photo of the person; looks then only change its clothes.
+  const baseFile = files.find((f) => /^base([-.]|$)/i.test(f));
+  const base = baseFile ? { ...(await load(baseFile)), label: 'base photo' } : null;
+  const outfitFiles = files.filter((f) => !faces.some((x) => x.file === f) && f !== baseFile);
   if (!outfitFiles.length) throw new Error('Add head-to-toe photos of the same person in different outfits to image-test/inputs (any file names)');
   if (outfitFiles.length > MAX_PHOTOS) throw new Error(`Use at most ${MAX_PHOTOS} outfit photos (found ${outfitFiles.length})`);
   const outfits = [];
   for (const f of outfitFiles) outfits.push(await load(f));
-  return { faces, outfits, images: [...faces, ...outfits] };
+  return { faces, outfits, base, images: [...faces, ...outfits] };
 }
 
 // Identity card: what the person looks like, in words, read once from the face photos. Image models drifted on what
@@ -239,7 +242,7 @@ function imageLabel(faces, outfit, i) {
 
 /** Look 2+ in anchor mode: image 1 is the accepted first look; the other images are only the photos this look takes
  *  garments from. Everything but the clothes is kept from image 1, so face, pose and shadow are the same in every look. */
-function buildEdit(template, outfits, look, anchor) {
+function buildEdit(template, outfits, look, anchor, takeOff = []) {
   const used = [...new Set(look.items.map((x) => x.photo))].sort((a, b) => a - b);
   const pos = (photo) => used.indexOf(photo) + 2;
   const lines = look.items.map((x) => `  - the ${x.description} (${x.category}) from image ${pos(x.photo)}`);
@@ -247,7 +250,8 @@ function buildEdit(template, outfits, look, anchor) {
   const images = [anchor, ...used.map((p) => outfits[p])];
   const label = (i) => (i === 0 ? 'the finished photo to edit: keep everything except the clothes'
     : `take only the ${look.items.filter((x) => x.photo === used[i - 1]).map((x) => x.description).join(' and the ')} from this photo`);
-  return { prompt: template.replace('{{GARMENTS}}', lines.join('\n')), images, label };
+  const off = takeOff.length ? `TAKE OFF what image 1 wears now: ${takeOff.join('; ')} (unless the same item is listed below).\n\n` : '';
+  return { prompt: template.replace('{{GARMENTS}}', lines.join('\n')).replace('CHANGE THE CLOTHES TO', off + 'CHANGE THE CLOTHES TO'), images, label };
 }
 
 async function callGemini(m, images, prompt, label, opts) {
@@ -345,7 +349,7 @@ const fmt = (x, d = 3) => (x == null ? '–' : typeof x === 'number' ? x.toFixed
 
 async function main() {
   const opts = args();
-  const { faces, outfits, images } = await loadInputs();
+  const { faces, outfits, base, images } = await loadInputs();
   console.log(`Faces: ${faces.map((x) => x.file).join(', ')}`);
   const resized = images.filter((x) => x.resized);
   if (resized.length) console.log(`Resized ${resized.length} photo(s) to max ${MAX_SIDE} px: ${resized.map((x) => `${x.file} ${x.resized}`).join(', ')}`);
@@ -472,7 +476,7 @@ async function main() {
       }
       await writeFile(join(out, file), r.image);
       if (r.usage) await writeFile(join(out, file.replace(/\.png$/, '.usage.json')), JSON.stringify(r.usage, null, 2));
-      const faceNote = r.face ? (r.face.pass ? `, face ${fmt(r.face.before)}→${fmt(r.face.after)} (${r.face.kept})` : r.face.locked ? `, face locked to look 1 ${fmt(r.face.before)}→${fmt(r.face.after)}` : `, face not locked: ${r.face.reason}`) : '';
+      const faceNote = r.face ? (r.face.pass ? `, face ${fmt(r.face.before)}→${fmt(r.face.after)} (${r.face.kept})` : r.face.locked ? `, face locked ${fmt(r.face.before)}→${fmt(r.face.after)}` : `, face not locked: ${r.face.reason}`) : '';
       console.log(`${post ? '  ' : ''}${seconds.toFixed(1)}s, ~$${fmt(r.cost)}${faceNote}${r.clean ? `, background ${Math.round(r.clean.before)}→${opts.background} in ${r.clean.seconds.toFixed(1)}s` : ''}`);
       return { m, look, run, seconds, file, ...r };
     } catch (e) {
@@ -482,14 +486,14 @@ async function main() {
     }
   };
   // Everything a fresh look must pass: the pose reference's stance (measured), the face check, and exactly its outfit.
-  const lookProblems = async (look, r) => {
+  const lookProblems = async (look, r, refGeometry = null) => {
     const why = [];
-    if (cleaner && look.pose && r.clean?.pose) {
-      look.pose.geometry ??= await measurePose(cleaner, look.pose.bytes).catch(() => null);
-      const ref = look.pose.geometry, g = r.clean.pose;
+    if (cleaner && (refGeometry || look.pose) && r.clean?.pose) {
+      if (!refGeometry) look.pose.geometry ??= await measurePose(cleaner, look.pose.bytes).catch(() => null);
+      const ref = refGeometry || look.pose.geometry, g = r.clean.pose;
       if (ref) {
         const off = Math.max(Math.abs(g.stagger - ref.stagger), Math.abs(g.gap - ref.gap) / 2);
-        if (off > POSE_TOLERANCE) why.push(`pose differs from the pose reference (feet off by ${off.toFixed(3)} of the height)`);
+        if (off > POSE_TOLERANCE) why.push(`pose differs from the ${refGeometry ? 'base photo' : 'pose reference'} (feet off by ${off.toFixed(3)} of the height)`);
       }
     }
     const img = { file: r.file, bytes: r.image, mime: 'image/png' };
@@ -505,9 +509,40 @@ async function main() {
   // Looks are generated fresh from the same pose reference, and the real face gives every one the same face. Editing
   // look 1 into the others (--anchor) kept old garments, invented ghosts and reshaped the body (2026-10-27), so it is
   // only the default when the real face is off.
-  const anchorMode = (opts.anchor ?? !opts.realFace) && looks.length > 1;
+  const anchorMode = !base && (opts.anchor ?? !opts.realFace) && looks.length > 1;
   const rejected = [];
-  if (anchorMode) {
+  if (base) {
+    // BASE PHOTO MODE: every look is the person's own photo with only the clothes changed, so face, body, hair and pose
+    // are real. The face is then put back from the base photo itself (same light, same angle), and the background
+    // painted. Chosen 2026-10-27 after generated people never reliably looked like the person.
+    const editTemplate = await readFile(EDIT_PROMPT_FILE, 'utf8');
+    const baseReading = await readPhoto(base, 0, opts.reader).catch(() => ({ items: [] }));
+    const takeOff = baseReading.items.filter((x) => ['outerwear', 'top', 'dress', 'bottom', 'shoes'].includes(x.category)).map((x) => x.description);
+    console.log(`Base photo ${base.file}: wears ${takeOff.join('; ') || 'nothing recognised'}`);
+    const baseGeometry = cleaner ? await measurePose(cleaner, base.bytes).catch(() => null) : null;
+    const lockToBase = faceModel && opts.faceLock ? async (bytes) => {
+      const fl = await faceLock({ model: faceModel, source: base.bytes, target: bytes, reference });
+      return { bytes: fl.bytes, face: { locked: fl.locked, before: fl.before, after: fl.after, reason: fl.reason } };
+    } : null;
+    for (const look of looks) for (const m of models) {
+      const edit = buildEdit(editTemplate, outfits, look, base, takeOff);
+      look.editPrompt = edit.prompt;
+      for (let run = 1; run <= opts.runs; run++) {
+        for (let attempt = 1; attempt <= opts.anchorTries; attempt++) {
+          const r = await generate(m, look, run, name(m, look, run), edit.images, edit.prompt, edit.label, { ...opts, faceCount: 1 }, lockToBase);
+          const last = attempt === opts.anchorTries;
+          if (r.error || !opts.check || last) { rows.push(r); break; }
+          const why = await lookProblems(look, r, baseGeometry);
+          if (!why.length) { rows.push(r); break; }
+          const rej = r.file.replace(/\.png$/, `-rejected-${attempt}.png`);
+          await writeFile(join(out, rej), r.image);
+          rejected.push({ file: rej, reasons: why, cost: r.cost });
+          console.log(`  look ${look.n} rejected (${why.join('; ')}), making it again…`);
+        }
+      }
+    }
+    await writeFile(join(out, 'prompt.txt'), looks.map((l) => `=== Look ${l.n} (base photo, clothes changed) ===\n${l.editPrompt}`).join('\n\n'));
+  } else if (anchorMode) {
     // Look 1 is generated from the face photos and checked; looks 2+ edit only the clothes of that accepted image,
     // so face, pose, framing and shadow stay the same in every look.
     const editTemplate = await readFile(EDIT_PROMPT_FILE, 'utf8');
@@ -613,7 +648,7 @@ async function main() {
       ...(rejected.length ? ['', `Attempts rejected before one passed (${rejected.length}, ~$${fmt(rejected.reduce((s, r) => s + (r.cost || 0), 0))}):`, ...rejected.map((r) => `- ${r.file}: ${r.reasons.join('; ')}`)] : []), ''] : []),
     '## Results', '',
     '| Look | Model | Run | Seconds | Input tokens | Output tokens | Est. cost (USD) | Face step | Result |', '|---|---|---|---|---|---|---|---|---|'];
-  const faceCell = (f) => (!f ? '–' : f.pass ? `face ${fmt(f.before)}→${fmt(f.after)} (${f.kept})` : f.locked ? `locked to look 1 ${fmt(f.before)}→${fmt(f.after)}` : `not locked: ${f.reason}`);
+  const faceCell = (f) => (!f ? '–' : f.pass ? `face ${fmt(f.before)}→${fmt(f.after)} (${f.kept})` : f.locked ? `face locked ${fmt(f.before)}→${fmt(f.after)}` : `not locked: ${f.reason}`);
   for (const r of rows) lines.push(`| ${r.look.n} | ${r.m.key} | ${r.run} | ${r.seconds.toFixed(1)} | ${fmt(r.tokens?.input, 0)} | ${fmt(r.tokens?.output, 0)} | ${fmt(r.cost)} | ${faceCell(r.face)} | ${r.error ? 'FAILED: ' + r.error.replace(/\|/g, '/') : r.file} |`);
   lines.push('', '## Averages (successful runs)', '', '| Model | Runs OK | Avg seconds | Avg cost (USD) |', '|---|---|---|---|');
   for (const m of models) {

@@ -1,10 +1,10 @@
-Edit image 1. It is a finished photo of a real person. Change ONLY their clothes; everything else must stay exactly as it is in image 1, pixel for pixel where the clothes do not cover it.
+Edit image 1. It is a real photo of a real person. Change ONLY their clothes; everything else must stay exactly as it is in image 1, pixel for pixel where the clothes do not cover it.
 
 KEEP EXACTLY AS IN IMAGE 1
 - The face and head: every feature, skin texture, expression, hair, hairline, beard and its grey, glasses, head angle and gaze.
 - The body: pose, posture, arm and hand positions, leg and foot positions, height, build and proportions. The other images show the person standing differently: never copy their pose, turn or framing; image 1 decides all of it.
 - The feet stay where they are; only their angle may change when the new shoes have a different heel height (high heels raise the heels, flat shoes put them down).
-- The photo: camera position, framing and crop, pure white background, lighting, and the single soft shadow on the floor under the feet.
+- The photo: camera position, framing and crop, the background, the lighting and the shadows.
 
 CHANGE THE CLOTHES TO
 {{GARMENTS}}
