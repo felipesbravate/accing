@@ -9,5 +9,6 @@ export default async function Page() {
   let user = null;
   try { user = await currentUser(); } catch { user = null; }
   if (!user) redirect('/login');
-  return <DailyMirror name={user.name || (user.email ? user.email.split('@')[0] : '')} />;
+  const first = (user.name || '').split(' ')[0] || (user.email ? user.email.split('@')[0] : '');
+  return <DailyMirror name={first} />;
 }

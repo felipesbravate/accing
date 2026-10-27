@@ -1,14 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { clampIndex, indexFromScroll } from '../src/mirror/carousel.js';
+import { around, wrap } from '../src/mirror/carousel.js';
 
-test('clampIndex keeps the index inside the list', () => {
-  assert.equal(clampIndex(-1, 3), 0);
-  assert.equal(clampIndex(5, 3), 2);
-  assert.equal(clampIndex(1, 0), 0);
+test('wrap loops in both directions', () => {
+  assert.equal(wrap(-1, 3), 2);
+  assert.equal(wrap(3, 3), 0);
+  assert.equal(wrap(4, 0), 0);
 });
-test('indexFromScroll picks the nearest card', () => {
-  assert.equal(indexFromScroll(0, 300, 16, 3), 0);
-  assert.equal(indexFromScroll(316, 300, 16, 3), 1);
-  assert.equal(indexFromScroll(5000, 300, 16, 3), 2);
+test('around returns previous, current and next', () => {
+  assert.deepEqual(around(0, 3), [2, 0, 1]);
+  assert.deepEqual(around(2, 3), [1, 2, 0]);
 });

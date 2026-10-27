@@ -1,0 +1,41 @@
+/* Thread Design System components, built only from tokens (src/ui/theme.css). States follow the Figma variants. */
+.icon { display: block; flex: none; }
+
+/* badge, Size=Small */
+.ds-badge { display: inline-flex; align-items: center; justify-content: center; padding: var(--space-sm); border-radius: var(--radius-lg);
+  background: var(--bg-secondary); color: var(--text-primary); font-size: var(--fs-label-small); font-weight: 500; line-height: var(--lh-label-small); white-space: nowrap; }
+
+/* filter-item: Default / Hover / Press / Active */
+.ds-filter-item { display: inline-flex; align-items: center; justify-content: center; padding: var(--space-sm); border: 0; border-radius: var(--radius-lg);
+  background: transparent; color: var(--text-secondary); font-size: var(--fs-label-small); font-weight: 500; line-height: var(--lh-label-small); white-space: nowrap; }
+.ds-filter-item:hover { background: var(--bg-secondary); }
+.ds-filter-item:active { background: var(--bg-secondary); color: var(--text-press); }
+.ds-filter-item[aria-pressed="true"] { background: var(--bg-selected); color: var(--text-tertiary); }
+
+/* menu-item: Default / Hover / Press / Active (underline 4px below, in the text colour) */
+.ds-menu-item { position: relative; padding: 0; border: 0; background: transparent; color: var(--text-secondary);
+  font-size: var(--fs-label-medium); font-weight: 500; line-height: var(--lh-label-medium); white-space: nowrap; }
+.ds-menu-item::after { content: ''; position: absolute; left: 0; right: 0; bottom: -4px; height: 1px; background: currentColor; opacity: 0; }
+.ds-menu-item:hover { color: var(--text-hover); }
+.ds-menu-item:hover::after, .ds-menu-item[aria-current="true"]::after, .ds-menu-item:active::after { opacity: 1; }
+.ds-menu-item[aria-current="true"], .ds-menu-item:active { color: var(--text-press); }
+
+/* round-button, Size=Small: Default / Hover */
+.ds-round-button { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 24px; padding: 0 var(--space-xs);
+  border: 1px solid var(--border-default); border-radius: var(--radius-full); background: transparent; color: var(--icon-primary); }
+.ds-round-button:hover { background: var(--bg-secondary); }
+
+/* Toggle (vertical) */
+.ds-toggle { display: inline-flex; align-items: center; justify-content: flex-end; gap: var(--space-sm); padding: 0; border: 0; background: transparent; }
+.ds-toggle-label { color: var(--text-secondary); font-size: var(--fs-label-small); font-weight: 500; line-height: var(--lh-label-small); }
+.ds-toggle-track { position: relative; width: 20px; height: 32px; border: 1px solid var(--border-default); border-radius: var(--radius-full); background: transparent; }
+.ds-toggle-knob { position: absolute; left: 1px; bottom: 1px; width: 16px; height: 16px; border-radius: var(--radius-full); background: var(--bg-tertiary); transition: transform .15s; }
+.ds-toggle[aria-checked="true"] .ds-toggle-track { background: var(--bg-tertiary); border-color: var(--bg-tertiary); }
+.ds-toggle[aria-checked="true"] .ds-toggle-knob { background: var(--bg-secondary); transform: translateY(-12px); }
+
+/* avatar, Variation=Image */
+.ds-avatar { display: block; width: 46px; height: 40px; border-radius: var(--radius-lg); overflow: hidden; background: var(--bg-primary); }
+.ds-avatar img { display: block; width: 100%; height: 100%; object-fit: cover; }
+
+.ds-toggle:focus-visible, .ds-filter-item:focus-visible, .ds-menu-item:focus-visible, .ds-round-button:focus-visible, .ds-avatar:focus-visible {
+  outline: 2px solid var(--bg-selected); outline-offset: 2px; }

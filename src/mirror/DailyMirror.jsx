@@ -1,87 +1,84 @@
 'use client';
-// Daily Mirror home: today's outfit as a full-height card, 3-5 alternatives to swipe, and Save / Details / Regenerate.
-import { useRef, useState } from 'react';
-import { SAMPLE_OUTFITS } from './outfits.js';
-import { clampIndex, indexFromScroll } from './carousel.js';
+// Daily Mirror, desktop (Figma: Accing › Accing app › "Daily Mirror — Desktop", node 3:76).
+import { useEffect, useState } from 'react';
+import { Icon } from '../ui/Icon.jsx';
+import { Logo } from '../ui/Logo.jsx';
+import { Toggle } from '../ui/Toggle.jsx';
+import { around, wrap } from './carousel.js';
+import { dateLine, vibeQuestion } from './greeting.js';
+import { OCCASIONS, SAMPLE_OUTFITS, SEASONS } from './outfits.js';
+import '../ui/components.css';
 import './mirror.css';
 
-const GAP = 16;
-
-function today() {
-  return new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date());
+function Outfit({ outfit, size }) {
+  return (
+    <figure className={`outfit is-${size}`}>
+      <figcaption className="outfit-badges">
+        {outfit.tags.map((tag) => <span key={tag} className="ds-badge">{tag}</span>)}
+      </figcaption>
+      <img className="outfit-image" src={outfit.image} alt={outfit.alt} />
+    </figure>
+  );
 }
 
-export default function DailyMirror({ name = '', outfits = SAMPLE_OUTFITS }) {
-  const strip = useRef(null);
+export default function DailyMirror({ name = '', avatar = '/samples/avatar.png', outfits = SAMPLE_OUTFITS, temperature = '24º' }) {
+  const [now, setNow] = useState(null); // set on the client, so the time is the viewer's own
   const [index, setIndex] = useState(0);
-  const [details, setDetails] = useState(false);
-  const [saved, setSaved] = useState(() => new Set());
-  const current = outfits[index];
+  const [season, setSeason] = useState(SEASONS[0]);
+  const [occasion, setOccasion] = useState(OCCASIONS[0]);
+  const [vacay, setVacay] = useState(false);
+  useEffect(() => { setNow(new Date()); const t = setInterval(() => setNow(new Date()), 60_000); return () => clearInterval(t); }, []);
 
-  const goTo = (i) => {
-    const next = clampIndex(i, outfits.length);
-    const el = strip.current;
-    const card = el?.children[next];
-    if (card) el.scrollTo({ left: card.offsetLeft - el.offsetLeft, behavior: 'smooth' });
-    setIndex(next);
-  };
-  const onScroll = () => {
-    const el = strip.current;
-    const card = el?.children[0];
-    if (card) setIndex(indexFromScroll(el.scrollLeft, card.offsetWidth, GAP, outfits.length));
-  };
-  const toggleSave = () => setSaved((s) => { const n = new Set(s); n.has(current.id) ? n.delete(current.id) : n.add(current.id); return n; });
+  // The server renders with its own clock; the browser corrects it to the viewer's time right after it loads.
+  const shown = now || new Date();
+  const [prev, current, next] = around(index, outfits.length);
+  const go = (delta) => setIndex((i) => wrap(i + delta, outfits.length));
 
   return (
     <div className="mirror">
       <header className="mirror-header">
-        <div>
-          <p className="caption">{today()}</p>
-          <h1 className="h2">{name ? `Good morning, ${name}` : 'Good morning'}</h1>
-        </div>
-        <form method="post" action="/auth/signout">
-          <button className="btn is-ghost mirror-signout" type="submit">Sign out</button>
-        </form>
+        <Logo className="mirror-logo" />
+        <details className="mirror-account">
+          <summary className="ds-avatar" aria-label="Account"><img src={avatar} alt="" /></summary>
+          <form className="mirror-account-menu" method="post" action="/auth/signout">
+            <button type="submit">Sign out</button>
+          </form>
+        </details>
       </header>
 
-      <main className="mirror-main">
-        <div className="mirror-strip" ref={strip} onScroll={onScroll} aria-roledescription="carousel" aria-label="Today's outfits">
-          {outfits.map((o, i) => (
-            <article key={o.id} className="mirror-card" aria-roledescription="slide" aria-label={`${i + 1} of ${outfits.length}: ${o.title}`}>
-              <div className="mirror-figure" aria-hidden="true">
-                <svg viewBox="0 0 120 240" className="mirror-silhouette"><circle cx="60" cy="28" r="18" /><path d="M30 60 Q60 48 90 60 L98 140 L82 140 L80 230 L64 230 L60 150 L56 230 L40 230 L38 140 L22 140 Z" /></svg>
-                <p className="caption">Your look will appear here</p>
-              </div>
-              <div className="mirror-card-text">
-                <h2 className="mirror-title">{o.title}</h2>
-                <p className="caption">{o.why}</p>
-              </div>
-            </article>
-          ))}
-        </div>
+      <main className="mirror-content">
+        <div className="mirror-top">
+          <div className="mirror-greeting">
+            <p className="mirror-meta">
+              <span suppressHydrationWarning>{dateLine(shown)}</span>
+              <span className="mirror-weather"><Icon name="sun" size={16} />{temperature}</span>
+            </p>
+            <h1 className="mirror-question" suppressHydrationWarning>{vibeQuestion(shown, name)}</h1>
+          </div>
 
-        <nav className="mirror-nav" aria-label="Choose an outfit">
-          <button className="mirror-arrow" type="button" onClick={() => goTo(index - 1)} disabled={index === 0} aria-label="Previous outfit">‹</button>
-          <div className="mirror-dots">
-            {outfits.map((o, i) => (
-              <button key={o.id} type="button" className={'mirror-dot' + (i === index ? ' is-active' : '')} onClick={() => goTo(i)} aria-label={`Outfit ${i + 1}`} aria-current={i === index} />
+          <div className="mirror-filters" role="group" aria-label="Season">
+            {SEASONS.map((s) => (
+              <button key={s} type="button" className="ds-filter-item" aria-pressed={season === s} onClick={() => setSeason(s)}>{s}</button>
             ))}
           </div>
-          <button className="mirror-arrow" type="button" onClick={() => goTo(index + 1)} disabled={index === outfits.length - 1} aria-label="Next outfit">›</button>
-        </nav>
 
-        {details && (
-          <section className="mirror-details" aria-label="Outfit details">
-            <h3 className="mirror-title">What you're wearing</h3>
-            <ul>{current.items.map((item) => <li key={item}>{item}</li>)}</ul>
-          </section>
-        )}
-
-        <div className="mirror-actions">
-          <button className="btn is-ghost" type="button" onClick={toggleSave} aria-pressed={saved.has(current.id)}>{saved.has(current.id) ? 'Saved' : 'Save'}</button>
-          <button className="btn is-ghost" type="button" onClick={() => setDetails((d) => !d)} aria-expanded={details}>Details</button>
-          <button className="btn" type="button" disabled title="Generation comes next">Regenerate</button>
+          <nav className="mirror-nav" aria-label="Occasion">
+            <Toggle label="Vacay" checked={vacay} onChange={setVacay} />
+            <div className="mirror-menu">
+              {OCCASIONS.map((o) => (
+                <button key={o} type="button" className="ds-menu-item" aria-current={occasion === o} onClick={() => setOccasion(o)}>{o}</button>
+              ))}
+            </div>
+          </nav>
         </div>
+
+        <section className="mirror-carousel" aria-roledescription="carousel" aria-label="Today's outfits">
+          <button type="button" className="ds-round-button" onClick={() => go(-1)} aria-label="Previous outfit"><Icon name="arrow-left" size={20} /></button>
+          {outfits.length > 2 && <Outfit outfit={outfits[prev]} size="side" />}
+          <Outfit outfit={outfits[current]} size="main" />
+          {outfits.length > 1 && <Outfit outfit={outfits[next]} size="side" />}
+          <button type="button" className="ds-round-button" onClick={() => go(1)} aria-label="Next outfit"><Icon name="arrow-right" size={20} /></button>
+        </section>
       </main>
     </div>
   );

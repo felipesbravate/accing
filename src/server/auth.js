@@ -28,7 +28,7 @@ export async function authClient() {
 export async function currentUser() {
   if (previewAllowed()) {
     const store = await cookies();
-    return store.get(PREVIEW_COOKIE)?.value === '1' ? { id: 'preview', email: 'preview@accing.local', name: 'Felipe' } : null;
+    return store.get(PREVIEW_COOKIE)?.value === '1' ? { id: 'preview', email: 'preview@accing.local', name: 'Juliana' } : null;
   }
   if (!supabaseConfigured()) return null;
   const sb = await authClient();

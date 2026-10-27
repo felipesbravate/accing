@@ -1,26 +1,32 @@
-.mirror { min-height: 100vh; max-width: 480px; margin: 0 auto; display: flex; flex-direction: column; }
-.mirror-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-md); padding: var(--space-lg) var(--space-md) var(--space-md); }
-.mirror-signout { min-height: 36px; padding: 0 var(--space-md); font-size: 12px; }
-.mirror-main { flex: 1; display: flex; flex-direction: column; gap: var(--space-md); padding-bottom: var(--space-lg); }
+/* Desktop layout from the 1512×982 frame. */
+.mirror { max-width: 1512px; min-height: 100vh; margin: 0 auto; background: var(--bg-primary); color: var(--text-primary); }
 
-.mirror-strip { display: flex; gap: 16px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 0 var(--space-md); scrollbar-width: none; }
-.mirror-strip::-webkit-scrollbar { display: none; }
-.mirror-card { flex: 0 0 calc(100% - 32px); scroll-snap-align: center; background: var(--bg-primary); border: 1px solid var(--border-default); border-radius: var(--radius-lg); overflow: hidden; }
-.mirror-figure { height: min(62vh, 500px); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-md);
-  background: linear-gradient(180deg, var(--blue-50), var(--bg-primary)); }
-.mirror-silhouette { height: 60%; fill: var(--blue-200); }
-.mirror-card-text { padding: var(--space-md); display: flex; flex-direction: column; gap: var(--space-xs); }
-.mirror-title { font-size: 16px; font-weight: 700; }
+.mirror-header { display: flex; align-items: center; justify-content: space-between; height: 88px; padding: var(--space-xl); }
+.mirror-logo { color: var(--text-primary); }
+.mirror-account { position: relative; }
+.mirror-account > summary { list-style: none; cursor: pointer; }
+.mirror-account > summary::-webkit-details-marker { display: none; }
+.mirror-account-menu { position: absolute; right: 0; top: calc(100% + var(--space-sm)); z-index: 10; padding: var(--space-xs); border: 1px solid var(--border-default);
+  border-radius: var(--radius-md); background: var(--bg-primary); }
+.mirror-account-menu button { padding: var(--space-sm) var(--space-md); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text-primary); white-space: nowrap; }
+.mirror-account-menu button:hover { background: var(--bg-secondary); }
 
-.mirror-nav { display: flex; align-items: center; justify-content: center; gap: var(--space-md); }
-.mirror-arrow { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--border-default); background: var(--bg-primary); font-size: 20px; line-height: 1; }
-.mirror-arrow:disabled { opacity: .35; cursor: default; }
-.mirror-dots { display: flex; gap: var(--space-sm); }
-.mirror-dot { width: 8px; height: 8px; border-radius: 50%; border: 0; background: var(--blue-200); }
-.mirror-dot.is-active { background: var(--blue-800); width: 20px; border-radius: 4px; }
+.mirror-content { margin-top: var(--space-lg); padding: 0 var(--space-2xl); }
 
-.mirror-details { margin: 0 var(--space-md); padding: var(--space-md); background: var(--bg-primary); border: 1px solid var(--border-default); border-radius: var(--radius-md); }
-.mirror-details ul { margin-top: var(--space-sm); padding-left: var(--space-md); color: var(--text-secondary); }
+/* Greeting on the left; season filters and the occasion column on the right, as in the frame. */
+.mirror-top { display: flex; align-items: flex-start; gap: var(--space-sm); }
+.mirror-greeting { flex: 1; display: flex; flex-direction: column; gap: var(--space-xs); padding-top: var(--space-lg); }
+.mirror-meta { display: flex; align-items: center; gap: var(--space-md); color: var(--text-secondary); font-size: var(--fs-body); line-height: normal; }
+.mirror-weather { display: inline-flex; align-items: center; gap: var(--space-xs); color: var(--icon-secondary); }
+.mirror-question { font-size: var(--fs-h3); font-weight: 500; line-height: normal; color: var(--text-primary); }
+.mirror-filters { display: flex; align-items: center; gap: var(--space-sm); margin-top: 50px; }
+.mirror-nav { width: 109px; display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-lg); }
+.mirror-menu { display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-md); }
 
-.mirror-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-sm); padding: 0 var(--space-md); }
-.mirror-actions .btn { padding: 0 var(--space-sm); }
+/* Carousel: arrows, side outfits (360×540), main outfit (400×600). */
+.mirror-carousel { display: flex; align-items: center; justify-content: center; gap: var(--space-lg); height: 640px; }
+.outfit { display: flex; flex-direction: column; margin: 0; }
+.outfit-badges { display: flex; align-items: center; gap: var(--space-sm); height: 40px; padding: var(--space-sm); }
+.outfit-image { display: block; object-fit: cover; background: var(--bg-primary); }
+.outfit.is-main .outfit-image { width: 400px; height: 600px; }
+.outfit.is-side .outfit-image { width: 360px; height: 540px; }
