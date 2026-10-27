@@ -16,7 +16,7 @@ export const MIN_IDENTITY = 0.4;
  * images: generated images [{ file, bytes, mime }]
  * Returns one result per image: { file, identity, faceWidth, look, pass, reasons, warnings } and the total look cost.
  */
-export async function checkFaces({ faces, lookRefs, images, minIdentity = MIN_IDENTITY, identity = true, look = true, log = console.log }) {
+export async function checkFaces({ faces, lookRefs, images, minIdentity = MIN_IDENTITY, identity = true, look = true, background, log = console.log }) {
   const results = images.map((img) => ({ file: img.file, identity: null, look: null, reasons: [], warnings: [] }));
   if (identity) {
     try {
@@ -55,9 +55,9 @@ export async function checkFaces({ faces, lookRefs, images, minIdentity = MIN_ID
   }
   for (const [i, img] of images.entries()) {
     try {
-      const b = await backgroundCheck(img.bytes);
+      const b = await backgroundCheck(img.bytes, background);
       results[i].background = b;
-      if (!b.white) results[i].warnings.push(`background not pure white (edges average ${Math.round(b.mean)}/255)`);
+      if (!b.white) results[i].warnings.push(`background not the flat colour (edges average ${Math.round(b.mean)}/255, expected ${Math.round(b.target)})`);
     } catch (e) { results[i].warnings.push(`background check failed: ${e.message}`); }
   }
   for (const r of results) r.pass = r.reasons.length === 0 && (identity ? r.identity != null : true);
@@ -70,6 +70,6 @@ export function checkTable(results) {
     ...results.map((r) => {
       const l = r.look, c = (k) => (l ? (l[k].ok ? 'ok' : '✗ ' + l[k].note) : '–');
       const cell = (s) => String(s).replace(/\|/g, '/').replace(/\n/g, ' ');
-      return `| ${r.file} | ${fmt(r.identity)} | ${cell(c('hair'))} | ${cell(l ? (l.age.looks === 'same' && l.age.ok ? 'same' : '✗ ' + l.age.looks) : '–')} | ${cell(c('facial_hair'))} | ${cell(c('glasses'))} | ${cell(c('expression'))} | ${cell(l ? (l.added.length ? '✗ ' + l.added.join(', ') : 'none') : '–')} | ${l ? (l.hands_in_pockets ? '✗ in pocket' : 'ok') : '–'} | ${r.background ? (r.background.white ? 'white' : '✗ ' + Math.round(r.background.mean) + '/255') : '–'} | ${r.pass ? 'PASS' : 'FAIL'} |`;
+      return `| ${r.file} | ${fmt(r.identity)} | ${cell(c('hair'))} | ${cell(l ? (l.age.looks === 'same' && l.age.ok ? 'same' : '✗ ' + l.age.looks) : '–')} | ${cell(c('facial_hair'))} | ${cell(c('glasses'))} | ${cell(c('expression'))} | ${cell(l ? (l.added.length ? '✗ ' + l.added.join(', ') : 'none') : '–')} | ${l ? (l.hands_in_pockets ? '✗ in pocket' : 'ok') : '–'} | ${r.background ? (r.background.white ? 'clean' : '✗ ' + Math.round(r.background.mean) + '/255') : '–'} | ${r.pass ? 'PASS' : 'FAIL'} |`;
     })];
 }

@@ -54,10 +54,10 @@ Results land in `image-test/results/<date-time>/`: every image, `wardrobe.json` 
 `report.md` (seconds, tokens, estimated cost) and `index.html` (open it to compare everything side by side).
 Prices for the estimates are in `scripts/image-test.mjs` (`PRICES`) with their sources; check them before trusting totals.
 
-## Pure white background (automatic)
+## Flat background colour (automatic)
 Image models never return pure white (every image measured 232–244/255, some with window-light patterns), which shows
 as a grey box on the app's white screen. After each generation the person is cut out (ISNet, run on your Mac; model
-~180 MB downloaded once into `image-test/models/`), the background is made pure white, and the same soft floor shadow
+~180 MB downloaded once into `image-test/models/`), the background is painted one flat colour (`#F9F9FB`; `--background=#RRGGBB` to change it), and the same soft floor shadow
 is drawn under every look (a light pool around the shoes, slightly behind them, fading out well before the edges, and
 a darker contact line under the soles; tune it in `SHADOW` in `scripts/clean-background.mjs`). The model's own output is kept as `*-raw.png`.
 Takes ~3–7 s per image; `--no-clean` skips it.
@@ -87,7 +87,7 @@ Two layers, because one number is not enough: on 2026-10-27 ArcFace ranked first
    It also fails any image with a hand in a pocket.
 
 Each image gets PASS or FAIL with reasons in `report.md` and `index.html`. A third, free check measures whether the
-background is pure white (edges ≥ 250/255; before the white-background prompt every image measured 232–244); it only warns.
+background is that flat colour (within 3/255; raw model output measured 232–244); it only warns.
 
 Setup once: `npm install`. The first check downloads the face model (~280 MB) into `image-test/models/` (git-ignored).
 - `npm run face-check` re-checks every results folder (also older ones); `npm run face-check -- image-test/results/<folder>` one folder.

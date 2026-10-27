@@ -49,7 +49,7 @@ const OPENAI_BASE = process.env.OPENAI_BASE_URL || 'https://api.openai.com';
 const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
 
 function args() {
-  const out = { runs: 3, looks: 1, poseRef: true, facePasses: 2, faceLock: true, clean: true, anchor: true, anchorTries: 3, only: null, dryRun: false, check: true, minIdentity: MIN_IDENTITY, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
+  const out = { runs: 3, looks: 1, background: '#F9F9FB', poseRef: true, facePasses: 2, faceLock: true, clean: true, anchor: true, anchorTries: 3, only: null, dryRun: false, check: true, minIdentity: MIN_IDENTITY, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
     expression: 'relaxed and neutral, the same natural expression as in the face photos (no smile they do not have)', occasion: 'an office day', weather: 'sunny 24°C', time: 'Monday morning',
     shoes: 'plain white leather low-top sneakers with white soles and white laces',
     pose: 'relaxed standing pose: body turned about 15 degrees so their left shoulder is slightly closer to the camera, head turned back to face the camera, chin level, eyes looking into the lens; weight on the back (right) leg, front (left) knee slightly relaxed, feet about hip-width apart; both arms hanging loosely at the sides, elbows very slightly bent, hands open and relaxed beside the thighs, never in pockets; shoulders relaxed and level' };
@@ -62,6 +62,7 @@ function args() {
     else if (k === 'no-check') out.check = false;
     else if (k === 'no-anchor') out.anchor = false;
     else if (k === 'no-clean') out.clean = false;
+    else if (k === 'background') { if (!/^#[0-9a-f]{6}$/i.test(v)) throw new Error('--background must be a colour like #F9F9FB'); out.background = v; }
     else if (k === 'no-face-lock') out.faceLock = false;
     else if (k === 'no-pose-ref') out.poseRef = false;
     else if (k === 'face-passes') out.facePasses = Math.max(0, Math.min(4, parseInt(v, 10) || 0));
@@ -388,7 +389,7 @@ async function main() {
       if (cleaner) {
         try {
           const t1 = performance.now();
-          const cleaned = await cleanBackground(cleaner, r.image);
+          const cleaned = await cleanBackground(cleaner, r.image, { background: opts.background });
           await writeFile(join(out, file.replace(/\.png$/, '-raw.png')), raw);
           r.image = cleaned.bytes;
           r.clean = { before: cleaned.before, seconds: (performance.now() - t1) / 1000 };
@@ -397,7 +398,7 @@ async function main() {
       await writeFile(join(out, file), r.image);
       if (r.usage) await writeFile(join(out, file.replace(/\.png$/, '.usage.json')), JSON.stringify(r.usage, null, 2));
       const faceNote = r.face ? (r.face.pass ? `, face ${fmt(r.face.before)}→${fmt(r.face.after)} (${r.face.kept})` : r.face.locked ? `, face locked to look 1 ${fmt(r.face.before)}→${fmt(r.face.after)}` : `, face not locked: ${r.face.reason}`) : '';
-      console.log(`${post ? '  ' : ''}${seconds.toFixed(1)}s, ~$${fmt(r.cost)}${faceNote}${r.clean ? `, background ${Math.round(r.clean.before)}→255 in ${r.clean.seconds.toFixed(1)}s` : ''}`);
+      console.log(`${post ? '  ' : ''}${seconds.toFixed(1)}s, ~$${fmt(r.cost)}${faceNote}${r.clean ? `, background ${Math.round(r.clean.before)}→${opts.background} in ${r.clean.seconds.toFixed(1)}s` : ''}`);
       return { m, look, run, seconds, file, ...r };
     } catch (e) {
       const seconds = (performance.now() - t0) / 1000;
@@ -420,7 +421,7 @@ async function main() {
         const r = await generate(m, looks[0], 1, file, genImages, looks[0].prompt, looks[0].label, opts, withFacePass(m));
         if (r.error) { if (last) rows.push(r); continue; }
         if (!opts.check || last) { anchor = r; break; }
-        const c = (await checkFaces({ faces, lookRefs: images, images: [{ file: r.file, bytes: r.image, mime: 'image/png' }], minIdentity: opts.minIdentity, log: () => {} })).results[0];
+        const c = (await checkFaces({ faces, lookRefs: images, images: [{ file: r.file, bytes: r.image, mime: 'image/png' }], minIdentity: opts.minIdentity, background: opts.background, log: () => {} })).results[0];
         if (c.pass) { anchor = r; break; }
         const rej = r.file.replace(/\.png$/, `-rejected-${attempt}.png`);
         await writeFile(join(out, rej), r.image);
@@ -447,7 +448,7 @@ async function main() {
             const img = { file: r.file, bytes: r.image, mime: 'image/png' };
             const [pose, face] = await Promise.all([
               poseCheck(anchorImg, img).catch((e) => ({ same: true, note: `pose check failed: ${e.message}` })),
-              checkFaces({ faces, lookRefs: images, images: [img], minIdentity: opts.minIdentity, log: () => {} }).then((x) => x.results[0]),
+              checkFaces({ faces, lookRefs: images, images: [img], minIdentity: opts.minIdentity, background: opts.background, log: () => {} }).then((x) => x.results[0]),
             ]);
             const reasons = [...(pose.same ? [] : [`pose differs from look 1: ${pose.note}`]), ...face.reasons];
             if (!reasons.length) { rows.push(r); break; }
@@ -472,7 +473,7 @@ async function main() {
   let check = null;
   if (opts.check && done.length) {
     console.log(`\nChecking faces (identity gate ≥ ${opts.minIdentity}, then hair/age/added items)…`);
-    check = await checkFaces({ faces, lookRefs: images, images: done.map((r) => ({ file: r.file, bytes: r.image, mime: 'image/png' })), minIdentity: opts.minIdentity });
+    check = await checkFaces({ faces, lookRefs: images, images: done.map((r) => ({ file: r.file, bytes: r.image, mime: 'image/png' })), minIdentity: opts.minIdentity, background: opts.background });
     check.results.forEach((c, i) => { done[i].check = c; console.log(`  ${c.pass ? 'PASS' : 'FAIL'}  ${c.file}  identity ${fmt(c.identity)}${c.reasons.length ? '  ' + c.reasons.join('; ') : ''}`); });
     console.log(`Look check cost: ~$${check.lookCost.toFixed(4)}`);
   }

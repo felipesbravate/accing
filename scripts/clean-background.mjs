@@ -1,8 +1,9 @@
-// Makes the background of a generated photo pure white (#FFFFFF) and keeps only a soft floor shadow under the feet.
+// Makes the background of a generated photo one flat colour (#F9F9FB, Felipe's choice 2026-10-27) and keeps only a soft
+// floor shadow under the feet.
 // Image models never return pure white: every image on 2026-10-27 measured 232–244/255, with gradients and window
 // light patterns, which shows as a grey box on the app's white screen.
 // 1. Cut the person out with ISNet (rembg "isnet-general-use", run locally with onnxruntime).
-// 2. Everything that is not the person becomes #FFFFFF.
+// 2. Everything that is not the person becomes the background colour.
 // 3. The same floor shadow is drawn under every look (the model's own shadows differ from image to image), matched to
 //    the shadow Felipe chose on 2026-10-27: a light pool around both shoes, slightly behind them, fading out well before
 //    the edges, plus a darker contact line where the soles touch the floor.
@@ -13,6 +14,8 @@ import { join } from 'node:path';
 export const SEG_URL = 'https://github.com/danielgatis/rembg/releases/download/v0.0.0/isnet-general-use.onnx';
 const SEG_FILE = 'isnet-general-use.onnx';
 const SEG_SIZE = 1024;
+export const BACKGROUND = '#F9F9FB';
+export const hexToRgb = (hex) => { const m = /^#?([0-9a-f]{6})$/i.exec(hex || ''); if (!m) throw new Error(`Not a colour: ${hex} (use #RRGGBB)`); const n = parseInt(m[1], 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
 // Shadow, as darkness 0–1 (measured on the chosen image): pool ~0.09 at its centre, contact up to ~0.35.
 export const SHADOW = { pool: 0.12, poolWidth: 1.45, poolHeight: 0.042, poolBehind: 0.012,
   contact: 0.38, contactBlur: 0.004, contactDrop: 0.002, cast: 0.22, castBlur: 0.012, castBehind: 0.014 };
@@ -56,7 +59,8 @@ async function personMask(c, bytes, width, height) {
 }
 
 /** Returns { bytes (PNG), before, after } where before/after are the mean edge brightness (0–255). */
-export async function cleanBackground(c, input) {
+export async function cleanBackground(c, input, { background = BACKGROUND } = {}) {
+  const colour = hexToRgb(background);
   const { data, info } = await c.sharp(input).removeAlpha().raw().toBuffer({ resolveWithObject: true });
   const { width, height } = info, n = width * height;
   const mask = await personMask(c, input, width, height);
@@ -93,8 +97,8 @@ export async function cleanBackground(c, input) {
     const con = (contact[i] / 255) * SHADOW.contact * low;
     const cst = (cast[i] / 255) * SHADOW.cast * low * (d2 < 4 ? 1 - d2 / 4 : 0);
     const shadow = 1 - (1 - pool) * (1 - con) * (1 - cst);
-    const bg = 255 * (1 - shadow), m = mask[i];
-    for (let ch = 0; ch < 3; ch++) out[i * 3 + ch] = Math.round(data[i * 3 + ch] * m + bg * (1 - m));
+    const m = mask[i];
+    for (let ch = 0; ch < 3; ch++) out[i * 3 + ch] = Math.round(data[i * 3 + ch] * m + colour[ch] * (1 - shadow) * (1 - m));
   }
   const edge = (buf) => { let s = 0, k = 0; const sw = Math.round(width * 0.08); for (let y = 0; y < Math.round(height * 0.7); y++) for (let x = 0; x < width; x++) if (x < sw || x >= width - sw) { const i = y * width + x; s += (buf[i * 3] + buf[i * 3 + 1] + buf[i * 3 + 2]) / 3; k++; } return s / k; };
   const bytes = await c.sharp(out, { raw: { width, height, channels: 3 } }).png().toBuffer();
