@@ -44,7 +44,7 @@ function args() {
   const out = { runs: 3, only: null, dryRun: false, check: true, minIdentity: MIN_IDENTITY, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
     expression: 'relaxed and neutral, the same natural expression as in the face photos (no smile they do not have)', occasion: 'an office day', weather: 'sunny 24°C', time: 'Monday morning',
     shoes: 'plain white leather low-top sneakers with white soles and white laces',
-    pose: 'a natural fashion lookbook pose: body turned about 15 degrees from the camera, weight on one leg with the other knee slightly bent, shoulders relaxed, one hand casually in a pocket or resting on the hip and the other loose at the side, chin level, eyes to the camera' };
+    pose: 'standing straight and facing the camera, feet hip-width apart and pointing forward, weight even on both feet, legs straight, shoulders level and relaxed, both arms hanging naturally at the sides with hands open and relaxed beside the thighs, head straight, chin level, eyes looking into the lens' };
   for (const a of process.argv.slice(2)) {
     const [k, ...rest] = a.replace(/^--/, '').split('='); const v = rest.join('=');
     if (k === 'runs') out.runs = Math.max(1, Math.min(10, parseInt(v, 10) || 3));

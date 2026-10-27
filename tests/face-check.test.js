@@ -37,3 +37,13 @@ test('a different expression only warns', () => {
   assert.equal(r.pass, true);
   assert.deepEqual(r.warns, ['expression: stiff, tired look']);
 });
+
+import { edgeStats } from '../scripts/face-check/background.mjs';
+
+test('background check: pure white edges pass, light grey (like early runs) fails, the person in the middle is ignored', () => {
+  const make = (bg) => { const w = 100, h = 150, a = new Uint8Array(w * h).fill(bg); for (let y = 20; y < 150; y++) for (let x = 30; x < 70; x++) a[y * w + x] = 20; return [a, w, h]; };
+  assert.equal(edgeStats(...make(255)).white, true);
+  const grey = edgeStats(...make(236));
+  assert.equal(grey.white, false);
+  assert.equal(Math.round(grey.mean), 236);
+});

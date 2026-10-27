@@ -39,6 +39,9 @@ npm run image-test
   `--time="Friday evening"`, `--pose="walking towards the camera mid-step"`, `--reader-model=<gemini model>`,
   `--shoes="black leather Chelsea boots"` (used only when no photo shows shoes; default plain white leather sneakers).
 
+Every look uses the same pose, framing and pure white background (shadow only on the floor), so looks compare side by side.
+The default pose is standing straight, facing the camera, arms relaxed at the sides; `--pose="…"` overrides it for a test.
+
 Results land in `image-test/results/<date-time>/`: every image, `wardrobe.json` (what was read and chosen),
 `report.md` (seconds, tokens, estimated cost) and `index.html` (open it to compare everything side by side).
 Prices for the estimates are in `scripts/image-test.mjs` (`PRICES`) with their sources; check them before trusting totals.
@@ -51,7 +54,8 @@ Two layers, because one number is not enough: on 2026-10-27 ArcFace ranked first
 2. **Look check.** Gemini Flash-Lite (~$0.002 per image) compares the result with your real photos on what ArcFace
    cannot see: hair colour and grey, apparent age, beard, glasses, expression, and anything invented (tattoos, logos, watches).
 
-Each image gets PASS or FAIL with reasons in `report.md` and `index.html`.
+Each image gets PASS or FAIL with reasons in `report.md` and `index.html`. A third, free check measures whether the
+background is pure white (edges ≥ 250/255; before the white-background prompt every image measured 232–244); it only warns.
 
 Setup once: `npm install`. The first check downloads the face model (~280 MB) into `image-test/models/` (git-ignored).
 - `npm run face-check` re-checks every results folder (also older ones); `npm run face-check -- image-test/results/<folder>` one folder.

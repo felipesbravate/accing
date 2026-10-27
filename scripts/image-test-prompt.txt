@@ -18,10 +18,11 @@ OUTFIT
 - Do not add, remove or swap any clothing, shoes, jewellery, watches, bags or accessories, and never add brand logos, wordmarks or text that the photos do not show.
 - Style it naturally for {{OCCASION}} on a {{WEATHER}} {{TIME}}. Styling may only change how items are worn (jacket open or closed), never which items. Keep sleeves down.
 
-PHOTO
-- Head-to-toe, full body visible including shoes, centred with space above the head and below the feet. The face must be sharp and clearly lit.
-- Pose: {{POSE}}
-- The pose must look effortless and suit this person's own body and style; it must not hide or cover any of the garments.
-- Plain seamless white studio background, soft even daylight-style lighting from the front, realistic shadows on the floor, sharp focus, e-commerce lookbook style.
+PHOTO — identical framing, pose and background for every look, so looks can be compared side by side
+- Head-to-toe, full body visible including shoes. Camera straight on at chest height, person centred, top of the head about 8% below the top edge, soles about 6% above the bottom edge. The face must be sharp and clearly lit.
+- Pose (fixed, never vary it): {{POSE}}
+- Background: pure white (#FFFFFF), seamless and evenly lit edge to edge: no wall, no corner, no horizon line, no gradient, no vignette, no grey areas.
+- Shadow: only one soft, short contact shadow on the floor directly under and around the feet. No shadow on the background behind or beside the person, no window light patterns.
+- Soft, even, frontal studio lighting. Sharp focus, e-commerce lookbook style.
 - Portrait orientation, 2:3.
 - No text, watermarks, props, other people, mirrors or cropped limbs.

@@ -5,6 +5,7 @@
 import { join, resolve } from 'node:path';
 import { average, cosine, createFaceModel, embedFace } from './arcface.mjs';
 import { lookCheck } from './look-check.mjs';
+import { backgroundCheck } from './background.mjs';
 
 export const MODELS_DIR = join(resolve(import.meta.dirname, '..', '..'), 'image-test', 'models', 'buffalo_l');
 export const MIN_IDENTITY = 0.4;
@@ -52,16 +53,23 @@ export async function checkFaces({ faces, lookRefs, images, minIdentity = MIN_ID
       }
     }));
   }
+  for (const [i, img] of images.entries()) {
+    try {
+      const b = await backgroundCheck(img.bytes);
+      results[i].background = b;
+      if (!b.white) results[i].warnings.push(`background not pure white (edges average ${Math.round(b.mean)}/255)`);
+    } catch (e) { results[i].warnings.push(`background check failed: ${e.message}`); }
+  }
   for (const r of results) r.pass = r.reasons.length === 0 && (identity ? r.identity != null : true);
   return { results, lookCost, identityRan: identity };
 }
 
 const fmt = (x) => (x == null ? '–' : x.toFixed(3));
 export function checkTable(results) {
-  return ['| Image | Identity (gate ≥ ' + MIN_IDENTITY + ') | Hair | Age | Facial hair | Glasses | Expression | Added | Verdict |', '|---|---|---|---|---|---|---|---|---|',
+  return ['| Image | Identity (gate ≥ ' + MIN_IDENTITY + ') | Hair | Age | Facial hair | Glasses | Expression | Added | Background | Verdict |', '|---|---|---|---|---|---|---|---|---|---|',
     ...results.map((r) => {
       const l = r.look, c = (k) => (l ? (l[k].ok ? 'ok' : '✗ ' + l[k].note) : '–');
       const cell = (s) => String(s).replace(/\|/g, '/').replace(/\n/g, ' ');
-      return `| ${r.file} | ${fmt(r.identity)} | ${cell(c('hair'))} | ${cell(l ? (l.age.looks === 'same' && l.age.ok ? 'same' : '✗ ' + l.age.looks) : '–')} | ${cell(c('facial_hair'))} | ${cell(c('glasses'))} | ${cell(c('expression'))} | ${cell(l ? (l.added.length ? '✗ ' + l.added.join(', ') : 'none') : '–')} | ${r.pass ? 'PASS' : 'FAIL'} |`;
+      return `| ${r.file} | ${fmt(r.identity)} | ${cell(c('hair'))} | ${cell(l ? (l.age.looks === 'same' && l.age.ok ? 'same' : '✗ ' + l.age.looks) : '–')} | ${cell(c('facial_hair'))} | ${cell(c('glasses'))} | ${cell(c('expression'))} | ${cell(l ? (l.added.length ? '✗ ' + l.added.join(', ') : 'none') : '–')} | ${r.background ? (r.background.white ? 'white' : '✗ ' + Math.round(r.background.mean) + '/255') : '–'} | ${r.pass ? 'PASS' : 'FAIL'} |`;
     })];
 }
