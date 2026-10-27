@@ -2,7 +2,7 @@
 .login-header { text-align: center; }
 .login-logo { font-size: 32px; font-weight: 700; letter-spacing: -0.02em; }
 .login-tagline { color: var(--text-secondary); }
-.login-card { width: 100%; max-width: 400px; background: var(--bg-primary); border: 1px solid var(--border-default); border-radius: var(--radius-lg); padding: var(--space-lg); display: flex; flex-direction: column; gap: var(--space-md); }
+.login-card { width: 100%; max-width: 400px; background: var(--bg-primary); border: 1px solid var(--border-default); border-radius: var(--radius-xl); padding: var(--space-lg); display: flex; flex-direction: column; gap: var(--space-md); }
 .login-form { display: flex; flex-direction: column; gap: var(--space-md); }
 .login-form .btn { width: 100%; margin-top: var(--space-xs); }
 .login-msg { padding: var(--space-sm) var(--space-md); border-radius: var(--radius-md); background: #fdecea; color: var(--danger); }
