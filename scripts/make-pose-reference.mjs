@@ -2,6 +2,7 @@
 // one with the first look ("copy this pose"), because the image model ignored the pose written in words three runs in
 // a row. One per body and feet: feet flat (flats, sneakers, boots) or heels raised (high heels), since the shoes decide it.
 // Usage: npm run make-pose-reference -- --body=female|male --feet=flat|heels   (or --all for every missing one)
+// Flat feet are bare by default; --sneakers puts plain grey sneakers on them instead (flatter feet, but shoes).
 // Writes scripts/assets/pose-reference-<body>-<feet>.png: open it, commit it if the pose is right, else run again.
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -18,7 +19,8 @@ const BODY_TEXT = { female: 'a female fashion mannequin with a natural adult fem
 // Mannequins are built for heels, so asked for flat feet the model still drew them on tiptoe (2026-10-27). When the
 // other feet version exists, this one is made as an edit of it: only the feet change, and the pose stays identical.
 const FEET_EDIT = {
-  flat: 'Put both heels down so the whole soles stand flat on the floor, and give the mannequin plain low-top sneakers in the same matte light grey as its body, with no laces detail, logos or stripes.',
+  flat: 'Bare feet, no shoes. Lower both heels all the way down so each whole sole, heel to toes, rests flat on the floor, as when a person stands barefoot: ankles at a right angle to the shins, a low natural arch, toes relaxed and flat. Replace the arched, tiptoe mannequin feet with flat-standing ones in the same matte light grey.',
+  flatShoes: 'Put both heels down so the whole soles stand flat on the floor, and give the mannequin plain low-top sneakers in the same matte light grey as its body, with no laces detail, logos or stripes.',
   heels: 'Raise both heels so the weight is on the balls of the feet, and give the mannequin plain high-heeled pumps in the same matte light grey as its body.',
 };
 const FEET_TEXT = {
@@ -33,7 +35,7 @@ async function make(body, feet, pose, key) {
   const other = poseReferencePath(body, feet === 'flat' ? 'heels' : 'flat');
   const fromOther = existsSync(other);
   const prompt = fromOther
-    ? `Edit image 1. Change ONLY the feet: ${FEET_EDIT[feet]}
+    ? `Edit image 1. Change ONLY the feet: ${FEET_EDIT[feet === 'flat' && process.argv.includes('--sneakers') ? 'flatShoes' : feet]}
 Keep everything else exactly as in image 1: the mannequin, its pose and turn, arms, hands, legs and where the feet stand, the framing, the white background and the soft floor shadow.`
     : `A photo of ${BODY_TEXT[body]}: plain, smooth, matte light grey, no face, no hair, no clothes, no details.
 Full body from head to feet. Pose, exactly: ${pose}. ${FEET_TEXT[feet]}
