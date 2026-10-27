@@ -14,17 +14,21 @@ const PROMPT_FILE = join(ROOT, 'scripts', 'image-test-prompt.txt');
 
 // Models compared. Edit freely.
 const MODELS = [
-  { key: 'gemini-nano-banana-2', provider: 'gemini', model: 'gemini-3.1-flash-image-preview', aspectRatio: '2:3', imageSize: '1K' },
+  { key: 'gemini-nano-banana-2', provider: 'gemini', model: 'gemini-3.1-flash-image-preview', aspectRatio: '2:3' },
+  { key: 'gemini-nano-banana-pro', provider: 'gemini', model: 'gemini-3-pro-image', aspectRatio: '2:3', optIn: true },
   { key: 'openai-2.5-flare-medium', provider: 'openai', model: 'gpt-image-2.5-flare', size: '1024x1536', quality: 'medium' },
   { key: 'openai-2.5-flare-high', provider: 'openai', model: 'gpt-image-2.5-flare', size: '1024x1536', quality: 'high' },
 ];
 
 // USD. Estimates only: verify on the providers' pricing pages before trusting totals.
-// Gemini 3.1 Flash Image: $0.067 per 1K image, input $0.50 / 1M tokens (myarchitectai.com, Aug 2026).
+// Gemini 3.1 Flash Image (Nano Banana 2): per image 0.5K $0.045, 1K $0.067, 2K $0.101, 4K $0.151; input $0.50 / 1M tokens.
+// Gemini 3 Pro Image (Nano Banana Pro): per image 1K/2K $0.134, 4K $0.24; input $2.00 / 1M tokens.
+//   (both from ai.google.dev/gemini-api/docs/pricing, read 2026-10-27)
 // GPT Image 2.5: image input $8 / 1M, text input $5 / 1M (virse.ai, Sep 2026); output per square image
 //   medium $0.01317, high $0.05268 (virse.ai); portrait 1024x1536 assumed ~1.5x square.
 const PRICES = {
-  'gemini-nano-banana-2': { inputPerM: 0.5, outputPerImage: 0.067 },
+  'gemini-nano-banana-2': { inputPerM: 0.5, outputBySize: { '512': 0.045, '1K': 0.067, '2K': 0.101, '4K': 0.151 } },
+  'gemini-nano-banana-pro': { inputPerM: 2, outputBySize: { '1K': 0.134, '2K': 0.134, '4K': 0.24 } },
   'openai-2.5-flare-medium': { imageInputPerM: 8, textInputPerM: 5, outputPerImage: 0.01317 * 1.5 },
   'openai-2.5-flare-high': { imageInputPerM: 8, textInputPerM: 5, outputPerImage: 0.05268 * 1.5 },
 };
@@ -34,8 +38,9 @@ const OPENAI_BASE = process.env.OPENAI_BASE_URL || 'https://api.openai.com';
 const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
 
 function args() {
-  const out = { runs: 3, only: null, dryRun: false, seed: null, reader: 'gemini-3.1-flash-lite', occasion: 'an office day', weather: 'sunny 24°C', time: 'Monday morning',
-    pose: 'a natural fashion lookbook pose: body turned about 15 degrees from the camera, weight on one leg with the other knee slightly bent, shoulders relaxed, one hand casually in a pocket or resting on the hip and the other loose at the side, chin level, a calm confident expression with a slight smile, eyes to the camera' };
+  const out = { runs: 3, only: null, dryRun: false, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K',
+    expression: 'relaxed and neutral, the same natural expression as in the face photos (no smile they do not have)', occasion: 'an office day', weather: 'sunny 24°C', time: 'Monday morning',
+    pose: 'a natural fashion lookbook pose: body turned about 15 degrees from the camera, weight on one leg with the other knee slightly bent, shoulders relaxed, one hand casually in a pocket or resting on the hip and the other loose at the side, chin level, eyes to the camera' };
   for (const a of process.argv.slice(2)) {
     const [k, ...rest] = a.replace(/^--/, '').split('='); const v = rest.join('=');
     if (k === 'runs') out.runs = Math.max(1, Math.min(10, parseInt(v, 10) || 3));
@@ -43,6 +48,7 @@ function args() {
     else if (k === 'dry-run') out.dryRun = true;
     else if (k === 'seed') out.seed = parseInt(v, 10) || 1;
     else if (k === 'reader-model') out.reader = v;
+    else if (k === 'size') { if (!['512', '1K', '2K', '4K'].includes(v)) throw new Error('--size must be 512, 1K, 2K or 4K'); out.size = v; }
     else if (k in out) out[k] = v;
     else throw new Error(`Unknown option --${k}`);
   }
@@ -140,7 +146,7 @@ function buildPrompt(template, faces, outfits, outfit, opts) {
   return template.replace('{{FACE_IMAGES}}', range(1, f)).replace('{{BODY_IMAGES}}', range(f + 1, f + outfits.length))
     .replace('{{GARMENTS}}', garments)
     .replace('{{OCCASION}}', opts.occasion).replace('{{WEATHER}}', opts.weather).replace('{{TIME}}', opts.time)
-    .replace('{{POSE}}', opts.pose);
+    .replace('{{POSE}}', opts.pose).replace('{{EXPRESSION}}', opts.expression);
 }
 
 /** What each image is for, sent next to the image (Gemini) or listed after the prompt (OpenAI). */
@@ -150,7 +156,7 @@ function imageLabel(faces, outfit, i) {
   return take.length ? `this person head to toe; take only the ${take.join(' and the ')} from this photo` : 'this person head to toe, for body and hair only';
 }
 
-async function callGemini(m, images, prompt, label) {
+async function callGemini(m, images, prompt, label, opts) {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error('GEMINI_API_KEY is not set in .env.local');
   const parts = [];
@@ -159,14 +165,19 @@ async function callGemini(m, images, prompt, label) {
     parts.push({ inlineData: { mimeType: img.mime, data: img.bytes.toString('base64') } });
   });
   parts.push({ text: prompt });
-  const res = await fetch(`${GEMINI_BASE}/v1beta/models/${m.model}:generateContent`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
-    body: JSON.stringify({
-      contents: [{ role: 'user', parts }],
-      generationConfig: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: m.aspectRatio, imageSize: m.imageSize } },
-    }),
+  const body = JSON.stringify({
+    contents: [{ role: 'user', parts }],
+    generationConfig: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: m.aspectRatio, imageSize: opts.size } },
   });
+  const post = (model) => fetch(`${GEMINI_BASE}/v1beta/models/${model}:generateContent`, {
+    method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': key }, body,
+  });
+  let res = await post(m.model);
+  if (res.status === 404) { // model ids move between "-preview" and stable names; try the other spelling once
+    const alt = m.model.endsWith('-preview') ? m.model.replace(/-preview$/, '') : m.model + '-preview';
+    const retry = await post(alt);
+    if (retry.ok) { console.log(`(using ${alt})`); m.model = alt; res = retry; }
+  }
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(`Gemini ${res.status}: ${json.error?.message || JSON.stringify(json).slice(0, 300)}`);
   const cand = json.candidates?.[0];
@@ -182,11 +193,11 @@ async function callGemini(m, images, prompt, label) {
   return {
     image: Buffer.from(data, 'base64'),
     tokens: { input: inputTokens, output: u.candidatesTokenCount ?? null },
-    cost: p ? p.outputPerImage + (inputTokens || 0) / 1e6 * p.inputPerM : null,
+    cost: p ? (p.outputBySize[opts.size] ?? null) + (inputTokens || 0) / 1e6 * p.inputPerM : null,
   };
 }
 
-async function callOpenAI(m, images, prompt, label) {
+async function callOpenAI(m, images, prompt, label, opts) {
   const key = process.env.OPENAI_API_KEY;
   if (!key) throw new Error('OPENAI_API_KEY is not set in .env.local');
   const form = new FormData();
@@ -230,10 +241,11 @@ async function main() {
   console.log(`Reading cost: ~$${readCost.toFixed(4)}`);
   const prompt = buildPrompt(await readFile(PROMPT_FILE, 'utf8'), faces, outfits, outfit, opts);
   const label = (i) => imageLabel(faces, outfit, i);
-  const models = MODELS.filter((m) => !opts.only || m.provider === opts.only || m.key === opts.only);
-  if (!models.length) throw new Error(`--only=${opts.only} matches no model (use gemini, openai or a model key)`);
+  const wanted = opts.only ? opts.only.split(',') : null;
+  const models = MODELS.filter((m) => (wanted ? wanted.some((w) => w === m.key || (w === m.provider && !m.optIn)) : !m.optIn));
+  if (!models.length) throw new Error(`--only=${opts.only} matches no model. Use gemini, openai or model keys: ${MODELS.map((m) => m.key).join(', ')}`);
 
-  console.log(`Models: ${models.map((m) => m.key).join(', ')} × ${opts.runs} run(s)`);
+  console.log(`Models: ${models.map((m) => m.key).join(', ')} × ${opts.runs} run(s), Gemini size ${opts.size}`);
   if (opts.dryRun) { console.log('\n--- prompt ---\n' + prompt + '\n\nDry run: no images generated. Use the same --seed to generate this outfit.'); return; }
 
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
@@ -249,7 +261,7 @@ async function main() {
       process.stdout.write(`${m.key} run ${run}… `);
       const t0 = performance.now();
       try {
-        const r = await (m.provider === 'gemini' ? callGemini : callOpenAI)(m, images, prompt, label);
+        const r = await (m.provider === 'gemini' ? callGemini : callOpenAI)(m, images, prompt, label, opts);
         const seconds = (performance.now() - t0) / 1000;
         const file = `${m.key}-${run}.png`;
         await writeFile(join(out, file), r.image);
@@ -263,7 +275,7 @@ async function main() {
     }
   }
 
-  const lines = ['# Image test ' + stamp, '', `Occasion: ${opts.occasion} · Weather: ${opts.weather} · Time: ${opts.time}`, '', `Pose: ${opts.pose}`, '', `Seed: ${seed} (repeat with --seed=${seed})`, '',
+  const lines = ['# Image test ' + stamp, '', `Occasion: ${opts.occasion} · Weather: ${opts.weather} · Time: ${opts.time}`, '', `Pose: ${opts.pose}`, '', `Seed: ${seed} (repeat with --seed=${seed}) · Gemini size: ${opts.size}`, '',
     '## Garments read', '', ...readings.map((r, i) => `- Photo ${i + 1} (${outfits[i].file}): ${r.items.map((x) => `${x.description} [${x.category}]`).join('; ') || 'nothing recognised'}`), '',
     '## Outfit asked for', '', ...outfit.items.map((x) => `- ${x.description} (${x.category}) from photo ${x.photo + 1}`), '',
     `Reading cost: ~$${readCost.toFixed(4)}`, '', '## Results', '',

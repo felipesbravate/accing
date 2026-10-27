@@ -1,23 +1,26 @@
-Create a photorealistic, full-body fashion photo of the person in the reference images, wearing the outfit described below.
+Create a photorealistic, full-body photo of this exact, real person, wearing the outfit described below.
 
-IDENTITY (most important)
-- Images {{FACE_IMAGES}} are close-ups of this person's face (front, left and right). Use them for the face: they are the most important reference.
-- Images {{BODY_IMAGES}} show the same person head to toe in their own clothes. Use them for body shape, height, proportions and hair.
-- The result must be unmistakably the same person: same face shape, eyes, nose, mouth, skin tone, hairline, hair colour, length and texture, age, height and body proportions.
-- Do not beautify, slim, age, de-age or change makeup. If anything is unclear, stay closer to the references, never more "idealised".
+IDENTITY — the highest priority, above pose, styling and image quality
+- This must be a photo of this specific real person, not of a similar-looking model. Someone who knows them must recognise them instantly.
+- Images {{FACE_IMAGES}} are close-ups of their face (front, left and right). Copy the face from them with full fidelity.
+- Images {{BODY_IMAGES}} show the same person head to toe. Cross-check the face against these photos too: the close-ups were taken near the camera and can exaggerate the nose and the centre of the face, while these show the true proportions at a normal distance. The final face must match both.
+- Keep every identifying detail exactly as in the photos: face shape and width, jawline, nose shape and size, eye shape, eye colour and spacing, eyebrows, ears, skin tone and texture (including freckles, lines and marks), hairline (including any recession at the temples), hair colour, length, texture and parting, facial hair shape, length, density and any grey, and glasses (frame shape, thickness and colour) if they wear them.
+- Keep their real age, build, height and body proportions from the head-to-toe photos.
+- Do not beautify, idealise, smooth the skin, slim, age, de-age, tidy the beard or hair, or change makeup. When unsure, copy the photos more literally.
+- Expression: {{EXPRESSION}}
 
 OUTFIT
 - Dress them only in these garments, each taken from the photo named:
 {{GARMENTS}}
 - From each of those photos take only the named item; ignore every other piece of clothing in it.
-- Reproduce each garment exactly: colour, pattern, fabric texture, fit, length, buttons, seams and any logos.
+- Reproduce each garment exactly: colour, pattern, fabric texture, fit, length, buttons, zips, seams and any logos.
 - Do not add, remove or swap any clothing, shoes, jewellery, bags or accessories.
 - Style it naturally for {{OCCASION}} on a {{WEATHER}} {{TIME}}. Styling may only change how items are worn (sleeves rolled, jacket open), never which items.
 
 PHOTO
-- Head-to-toe, full body visible including shoes, centred with space above the head and below the feet.
+- Head-to-toe, full body visible including shoes, centred with space above the head and below the feet. The face must be sharp and clearly lit.
 - Pose: {{POSE}}
 - The pose must look effortless and suit this person's own body and style; it must not hide or cover any of the garments.
-- Plain seamless white studio background, soft even daylight-style lighting, realistic shadows on the floor, sharp focus, e-commerce lookbook style.
+- Plain seamless white studio background, soft even daylight-style lighting from the front, realistic shadows on the floor, sharp focus, e-commerce lookbook style.
 - Portrait orientation, 2:3.
 - No text, watermarks, props, other people, mirrors or cropped limbs.

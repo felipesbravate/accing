@@ -26,7 +26,10 @@ npm run image-test
 ```
 - `--dry-run` reads the garments (well under one cent) and shows the outfit and prompt, without generating images.
 - Each run picks the outfit with a random seed and prints it; `--seed=<number>` repeats the same outfit.
-- Other options: `--runs=1`, `--only=gemini` / `--only=openai`, `--occasion="a dinner"`, `--weather="rainy 14°C"`,
+- `--size=2K` gives the face more detail (Gemini models; 512, 1K, 2K or 4K).
+- `--only=` picks models: `gemini`, `openai`, or keys such as `gemini-nano-banana-pro` (Nano Banana Pro, only runs when named),
+  comma-separated, e.g. `--only=gemini-nano-banana-2,gemini-nano-banana-pro`.
+- Other options: `--runs=1`, `--occasion="a dinner"`, `--weather="rainy 14°C"`,
   `--time="Friday evening"`, `--pose="walking towards the camera mid-step"`, `--reader-model=<gemini model>`.
 
 Results land in `image-test/results/<date-time>/`: every image, `wardrobe.json` (what was read and chosen),
