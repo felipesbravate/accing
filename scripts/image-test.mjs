@@ -44,7 +44,7 @@ function args() {
   const out = { runs: 3, only: null, dryRun: false, check: true, minIdentity: MIN_IDENTITY, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
     expression: 'relaxed and neutral, the same natural expression as in the face photos (no smile they do not have)', occasion: 'an office day', weather: 'sunny 24°C', time: 'Monday morning',
     shoes: 'plain white leather low-top sneakers with white soles and white laces',
-    pose: 'standing straight and facing the camera, feet hip-width apart and pointing forward, weight even on both feet, legs straight, shoulders level and relaxed, both arms hanging naturally at the sides with hands open and relaxed beside the thighs, head straight, chin level, eyes looking into the lens' };
+    pose: 'relaxed standing pose: body turned about 15 degrees so their left shoulder is slightly closer to the camera, head turned back to face the camera, chin level, eyes looking into the lens; weight on the back (right) leg, front (left) knee slightly relaxed, feet about hip-width apart; right hand casually in the front trouser pocket up to the knuckles (if the outfit has no front pocket, that hand hangs relaxed at the side), left arm hanging loosely at the side with the hand open; shoulders relaxed and level' };
   for (const a of process.argv.slice(2)) {
     const [k, ...rest] = a.replace(/^--/, '').split('='); const v = rest.join('=');
     if (k === 'runs') out.runs = Math.max(1, Math.min(10, parseInt(v, 10) || 3));

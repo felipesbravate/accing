@@ -40,7 +40,7 @@ npm run image-test
   `--shoes="black leather Chelsea boots"` (used only when no photo shows shoes; default plain white leather sneakers).
 
 Every look uses the same pose, framing and pure white background (shadow only on the floor), so looks compare side by side.
-The default pose is standing straight, facing the camera, arms relaxed at the sides; `--pose="…"` overrides it for a test.
+The default pose is relaxed: turned about 15°, head to the camera, right hand in the front pocket, left arm loose (always the same); `--pose="…"` overrides it for a test.
 
 Results land in `image-test/results/<date-time>/`: every image, `wardrobe.json` (what was read and chosen),
 `report.md` (seconds, tokens, estimated cost) and `index.html` (open it to compare everything side by side).
