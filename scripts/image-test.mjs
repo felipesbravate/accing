@@ -1,5 +1,5 @@
 // Image generation test. Drop head-to-toe photos of one person (any file names) in image-test/inputs; the script
-// reads the garments in each photo, composes a new outfit across photos, then sends the same photos and prompt to
+// reads the garments in each photo, composes one or more new looks across photos (--looks), then sends the same photos and prompt to
 // each image model and measures seconds, tokens and cost.
 // Usage: see image-test/README.md. Needs Node 20+ (built-in fetch, FormData, Blob). Keys come from .env.local.
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
@@ -7,7 +7,7 @@ import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { existsSync } from 'node:fs';
 import { extname, join, resolve } from 'node:path';
-import { CATEGORIES, composeOutfit, normaliseReading } from './image-test-lib.mjs';
+import { CATEGORIES, composeLooks, normaliseReading } from './image-test-lib.mjs';
 import { checkFaces, checkTable, MIN_IDENTITY } from './face-check/index.mjs';
 
 const ROOT = resolve(import.meta.dirname, '..');
@@ -41,14 +41,15 @@ const OPENAI_BASE = process.env.OPENAI_BASE_URL || 'https://api.openai.com';
 const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
 
 function args() {
-  const out = { runs: 3, only: null, dryRun: false, check: true, minIdentity: MIN_IDENTITY, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
+  const out = { runs: 3, looks: 1, only: null, dryRun: false, check: true, minIdentity: MIN_IDENTITY, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
     expression: 'relaxed and neutral, the same natural expression as in the face photos (no smile they do not have)', occasion: 'an office day', weather: 'sunny 24°C', time: 'Monday morning',
     shoes: 'plain white leather low-top sneakers with white soles and white laces',
-    pose: 'relaxed standing pose: body turned about 15 degrees so their left shoulder is slightly closer to the camera, head turned back to face the camera, chin level, eyes looking into the lens; weight on the back (right) leg, front (left) knee slightly relaxed, feet about hip-width apart; right hand casually in the front trouser pocket up to the knuckles (if the outfit has no front pocket, that hand hangs relaxed at the side), left arm hanging loosely at the side with the hand open; shoulders relaxed and level' };
+    pose: 'relaxed standing pose: body turned about 15 degrees so their left shoulder is slightly closer to the camera, head turned back to face the camera, chin level, eyes looking into the lens; weight on the back (right) leg, front (left) knee slightly relaxed, feet about hip-width apart; both arms hanging loosely at the sides, elbows very slightly bent, hands open and relaxed beside the thighs, never in pockets; shoulders relaxed and level' };
   for (const a of process.argv.slice(2)) {
     const [k, ...rest] = a.replace(/^--/, '').split('='); const v = rest.join('=');
     if (k === 'runs') out.runs = Math.max(1, Math.min(10, parseInt(v, 10) || 3));
     else if (k === 'only') out.only = v;
+    else if (k === 'looks') out.looks = Math.max(1, Math.min(8, parseInt(v, 10) || 1));
     else if (k === 'dry-run') out.dryRun = true;
     else if (k === 'no-check') out.check = false;
     else if (k === 'min-identity') { out.minIdentity = Number(v); if (!(out.minIdentity > 0 && out.minIdentity < 1)) throw new Error('--min-identity must be between 0 and 1'); }
@@ -291,43 +292,48 @@ async function main() {
   const { readings, wardrobe, cost: readCost } = await readWardrobe(outfits, opts.reader);
   readings.forEach((r, i) => console.log(`  photo ${i + 1} = image ${faces.length + i + 1}, ${outfits[i].file}: ${r.items.map((x) => `${x.description} [${x.category}${x.visibility === 'full' ? '' : ', ' + x.visibility}]`).join('; ') || 'nothing recognised'}`));
   const seed = opts.seed ?? (Date.now() % 100000);
-  const outfit = composeOutfit(wardrobe, { seed });
-  console.log(`Outfit (seed ${seed}${outfit.newCombination ? '' : ', NOT a new combination: add photos with other outfits'}):`);
-  outfit.items.forEach((x) => console.log(`  - ${x.description} (${x.category}) from photo ${x.photo + 1} (${outfits[x.photo].file})`));
+  const looks = composeLooks(wardrobe, { count: opts.looks, seed });
+  if (looks.length < opts.looks) console.warn(`Only ${looks.length} different look(s) are possible from these photos (asked for ${opts.looks}).`);
+  const template = await readFile(PROMPT_FILE, 'utf8');
+  looks.forEach((look, i) => {
+    look.n = i + 1;
+    look.prompt = buildPrompt(template, faces, outfits, look, opts);
+    look.label = (k) => imageLabel(faces, look, k);
+    console.log(`Look ${look.n} (seed ${seed}${look.newCombination ? '' : ', NOT a new combination: add photos with other outfits'}):`);
+    look.items.forEach((x) => console.log(`  - ${x.description} (${x.category}) from photo ${x.photo + 1} (${outfits[x.photo].file})`));
+  });
   console.log(`Reading cost: ~$${readCost.toFixed(4)}`);
-  const prompt = buildPrompt(await readFile(PROMPT_FILE, 'utf8'), faces, outfits, outfit, opts);
-  const label = (i) => imageLabel(faces, outfit, i);
   opts.faceCount = faces.length;
   const wanted = opts.only ? opts.only.split(',') : null;
   const models = MODELS.filter((m) => (wanted ? wanted.some((w) => w === m.key || (w === m.provider && !m.optIn)) : !m.optIn));
   if (!models.length) throw new Error(`--only=${opts.only} matches no model. Use gemini, openai or model keys: ${MODELS.map((m) => m.key).join(', ')}`);
 
-  console.log(`Models: ${models.map((m) => m.key).join(', ')} × ${opts.runs} run(s), Gemini size ${opts.size}, photo detail ${opts.detail}`);
-  if (opts.dryRun) { console.log('\n--- prompt ---\n' + prompt + '\n\nDry run: no images generated. Use the same --seed to generate this outfit.'); return; }
+  console.log(`Models: ${models.map((m) => m.key).join(', ')} × ${looks.length} look(s) × ${opts.runs} run(s), Gemini size ${opts.size}, photo detail ${opts.detail}`);
+  if (opts.dryRun) { console.log('\n--- prompt (look 1) ---\n' + looks[0].prompt + '\n\nDry run: no images generated. Use the same --seed to generate these looks.'); return; }
 
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const out = join(RESULTS, stamp);
   await mkdir(out, { recursive: true });
   for (const img of images) { img.refName = 'ref-' + (img.resized ? img.file.replace(/\.[^.]+$/, '.jpg') : img.file); await writeFile(join(out, img.refName), img.bytes); }
-  await writeFile(join(out, 'prompt.txt'), prompt);
-  await writeFile(join(out, 'wardrobe.json'), JSON.stringify({ seed, readerModel: opts.reader, faces: faces.map((x) => x.file), readings: readings.map((r, i) => ({ file: outfits[i].file, ...r })), outfit }, null, 2));
+  await writeFile(join(out, 'prompt.txt'), looks.map((l) => (looks.length > 1 ? `=== Look ${l.n} ===\n` : '') + l.prompt).join('\n\n'));
+  await writeFile(join(out, 'wardrobe.json'), JSON.stringify({ seed, readerModel: opts.reader, faces: faces.map((x) => x.file), readings: readings.map((r, i) => ({ file: outfits[i].file, ...r })), looks: looks.map(({ prompt, label, ...l }) => l) }, null, 2));
 
   const rows = [];
-  for (const m of models) {
+  for (const look of looks) for (const m of models) {
     for (let run = 1; run <= opts.runs; run++) {
-      process.stdout.write(`${m.key} run ${run}… `);
+      process.stdout.write(`${looks.length > 1 ? `look ${look.n} · ` : ''}${m.key} run ${run}… `);
       const t0 = performance.now();
       try {
-        const r = await (m.provider === 'gemini' ? callGemini : callOpenAI)(m, images, prompt, label, opts);
+        const r = await (m.provider === 'gemini' ? callGemini : callOpenAI)(m, images, look.prompt, look.label, opts);
         const seconds = (performance.now() - t0) / 1000;
-        const file = `${m.key}-${run}.png`;
+        const file = looks.length > 1 ? `${m.key}-look${look.n}-${run}.png` : `${m.key}-${run}.png`;
         await writeFile(join(out, file), r.image);
         if (r.usage) await writeFile(join(out, file.replace(/\.png$/, '.usage.json')), JSON.stringify(r.usage, null, 2));
-        rows.push({ m, run, seconds, file, ...r });
+        rows.push({ m, look, run, seconds, file, ...r });
         console.log(`${seconds.toFixed(1)}s, ~$${fmt(r.cost)}`);
       } catch (e) {
         const seconds = (performance.now() - t0) / 1000;
-        rows.push({ m, run, seconds, error: e.message });
+        rows.push({ m, look, run, seconds, error: e.message });
         console.log(`FAILED after ${seconds.toFixed(1)}s: ${e.message}`);
       }
     }
@@ -345,15 +351,15 @@ async function main() {
 
   const lines = ['# Image test ' + stamp, '', `Occasion: ${opts.occasion} · Weather: ${opts.weather} · Time: ${opts.time}`, '', `Pose: ${opts.pose}`, '', `Seed: ${seed} (repeat with --seed=${seed}) · Gemini size: ${opts.size} · Photo detail: ${opts.detail}`, '',
     '## Garments read', '', ...readings.map((r, i) => `- Photo ${i + 1} (${outfits[i].file}): ${r.items.map((x) => `${x.description} [${x.category}]`).join('; ') || 'nothing recognised'}`), '',
-    '## Outfit asked for', '', ...outfit.items.map((x) => `- ${x.description} (${x.category}) from photo ${x.photo + 1}`), '',
+    '## Looks asked for', '', ...looks.map((l) => `- Look ${l.n}: ${l.items.map((x) => `${x.description} (${x.category}, photo ${x.photo + 1})`).join(' + ')}`), '',
     `Reading cost: ~$${readCost.toFixed(4)}`, '', '## Results', '',
-    '| Model | Run | Seconds | Input tokens | Output tokens | Est. cost (USD) | Result |', '|---|---|---|---|---|---|---|'];
-  for (const r of rows) lines.push(`| ${r.m.key} | ${r.run} | ${r.seconds.toFixed(1)} | ${fmt(r.tokens?.input, 0)} | ${fmt(r.tokens?.output, 0)} | ${fmt(r.cost)} | ${r.error ? 'FAILED: ' + r.error.replace(/\|/g, '/') : r.file} |`);
+    '| Look | Model | Run | Seconds | Input tokens | Output tokens | Est. cost (USD) | Result |', '|---|---|---|---|---|---|---|---|'];
+  for (const r of rows) lines.push(`| ${r.look.n} | ${r.m.key} | ${r.run} | ${r.seconds.toFixed(1)} | ${fmt(r.tokens?.input, 0)} | ${fmt(r.tokens?.output, 0)} | ${fmt(r.cost)} | ${r.error ? 'FAILED: ' + r.error.replace(/\|/g, '/') : r.file} |`);
   lines.push('', '## Averages (successful runs)', '', '| Model | Runs OK | Avg seconds | Avg cost (USD) |', '|---|---|---|---|');
   for (const m of models) {
     const ok = rows.filter((r) => r.m === m && !r.error);
     const avg = (f) => (ok.length ? ok.reduce((s, r) => s + (f(r) || 0), 0) / ok.length : null);
-    lines.push(`| ${m.key} | ${ok.length}/${opts.runs} | ${fmt(avg((r) => r.seconds), 1)} | ${fmt(avg((r) => r.cost))} |`);
+    lines.push(`| ${m.key} | ${ok.length}/${opts.runs * looks.length} | ${fmt(avg((r) => r.seconds), 1)} | ${fmt(avg((r) => r.cost))} |`);
   }
   if (check) {
     lines.push('', '## Face check', '', `Identity: ArcFace similarity to the average face photo; below ${opts.minIdentity} = a different person. It only gates: it does not rank likeness.`,
@@ -371,10 +377,10 @@ figure{margin:0;width:240px}img{width:240px;height:360px;object-fit:contain;back
 <h1>Image test ${stamp}</h1><p>${esc(opts.occasion)} · ${esc(opts.weather)} · ${esc(opts.time)}</p>
 <h2>Face photos</h2><div class="row">${faces.map((x) => `<figure><img src="${esc(x.refName)}"><figcaption>${esc(x.label)}</figcaption></figure>`).join('')}</div>
 <h2>Outfit photos and garments read</h2><div class="row">${outfits.map((x, i) => `<figure><img src="${esc(x.refName)}"><figcaption>photo ${i + 1}: ${esc(readings[i].items.map((g) => g.description).join(' · ') || 'nothing recognised')}</figcaption></figure>`).join('')}</div>
-<h2>Outfit asked for</h2><p>${outfit.items.map((x) => `${esc(x.description)} <small>(photo ${x.photo + 1})</small>`).join(' + ')}</p>
-${models.map((m) => `<h2>${esc(m.key)}</h2><div class="row">${rows.filter((r) => r.m === m).map((r) => r.error
+${looks.map((l) => `<h2>Look ${l.n}: ${l.items.map((x) => `${esc(x.description)} <small>(photo ${x.photo + 1})</small>`).join(' + ')}</h2>
+${models.map((m) => `<h3>${esc(m.key)}</h3><div class="row">${rows.filter((r) => r.m === m && r.look === l).map((r) => r.error
     ? `<figure><div class="err">${esc(r.error)}</div><figcaption>run ${r.run}</figcaption></figure>`
-    : `<figure><img src="${esc(r.file)}"><figcaption>run ${r.run} · ${r.seconds.toFixed(1)}s · ~$${fmt(r.cost)}${r.check ? `<br><b style="color:${r.check.pass ? '#1b7f3b' : '#b3261e'}">${r.check.pass ? 'PASS' : 'FAIL'}</b> · identity ${fmt(r.check.identity)}${r.check.reasons.length ? '<br>' + esc(r.check.reasons.join('; ')) : ''}` : ''}</figcaption></figure>`).join('')}</div>`).join('')}`;
+    : `<figure><img src="${esc(r.file)}"><figcaption>run ${r.run} · ${r.seconds.toFixed(1)}s · ~$${fmt(r.cost)}${r.check ? `<br><b style="color:${r.check.pass ? '#1b7f3b' : '#b3261e'}">${r.check.pass ? 'PASS' : 'FAIL'}</b> · identity ${fmt(r.check.identity)}${r.check.reasons.length ? '<br>' + esc(r.check.reasons.join('; ')) : ''}` : ''}</figcaption></figure>`).join('')}</div>`).join('')}`).join('')}`;
   await writeFile(join(out, 'index.html'), html);
   console.log(`\nDone. Open ${join(out, 'index.html')} to compare, and ${join(out, 'report.md')} for the numbers.`);
 }

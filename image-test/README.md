@@ -30,6 +30,8 @@ npm run image-test
 ```
 - `--dry-run` reads the garments (well under one cent) and shows the outfit and prompt, without generating images.
 - Each run picks the outfit with a random seed and prints it; `--seed=<number>` repeats the same outfit.
+- `--looks=4` makes up to 4 different looks from your garments (new combinations first, spreading the garments), one
+  image each with `--runs=1`. Fewer come back if your photos cannot make that many.
 - `--size=2K` gives the face more detail in the output (Gemini models; 512, 1K, 2K or 4K).
 - `--detail=max` (default) makes Gemini read the face photos at its highest detail and the other photos at high detail;
   `--detail=default` leaves it to Gemini (which reads them at low detail). Check "Input tokens" in the report.
@@ -40,7 +42,7 @@ npm run image-test
   `--shoes="black leather Chelsea boots"` (used only when no photo shows shoes; default plain white leather sneakers).
 
 Every look uses the same pose, framing and pure white background (shadow only on the floor), so looks compare side by side.
-The default pose is relaxed: turned about 15°, head to the camera, right hand in the front pocket, left arm loose (always the same); `--pose="…"` overrides it for a test.
+The default pose is relaxed: turned about 15°, head to the camera, both arms loose at the sides, no hands in pockets (always the same); `--pose="…"` overrides it for a test.
 
 Results land in `image-test/results/<date-time>/`: every image, `wardrobe.json` (what was read and chosen),
 `report.md` (seconds, tokens, estimated cost) and `index.html` (open it to compare everything side by side).

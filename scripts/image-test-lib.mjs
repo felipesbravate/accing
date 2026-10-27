@@ -71,6 +71,42 @@ export function composeOutfit(wardrobe, { seed = 1 } = {}) {
   return { items: out, distinctPhotos: new Set(out.map((x) => x.photo)).size, newCombination: pick.fresh };
 }
 
+/**
+ * Several different looks from the same wardrobe: every distinct combination (top + bottom or dress, shoes,
+ * with or without outerwear), new combinations first, each next look chosen to reuse as few already-used garments
+ * as possible. Fewer looks come back when the wardrobe cannot make `count` different ones.
+ */
+export function composeLooks(wardrobe, { count = 1, seed = 1 } = {}) {
+  const items = dedupeWardrobe(wardrobe).filter((x) => x.visibility !== 'hidden');
+  const photoKeys = new Map();
+  for (const x of wardrobe) {
+    if (!photoKeys.has(x.photo)) photoKeys.set(x.photo, new Set());
+    photoKeys.get(x.photo).add(keyOf(x));
+  }
+  const isNew = (chosen) => ![...photoKeys.values()].some((keys) => chosen.every((x) => keys.has(x.key)));
+  const of = (c) => items.filter((x) => x.category === c);
+  const bases = [];
+  for (const t of of('top')) for (const b of of('bottom')) bases.push([t, b]);
+  for (const d of of('dress')) bases.push([d]);
+  if (!bases.length) throw new Error('No outfit possible: the photos need at least a top and bottoms, or a dress, that are clearly visible.');
+  const shoes = of('shoes'), outer = of('outerwear'), rand = seededRandom(seed);
+  const candidates = [];
+  for (const base of bases) for (const s of shoes.length ? shoes.map((x) => [x]) : [[]]) for (const o of [[], ...outer.map((x) => [x])]) {
+    const chosen = [...o, ...base, ...s];
+    candidates.push({ chosen, fresh: isNew(chosen), full: chosen.filter((x) => x.visibility === 'full').length, tie: rand() });
+  }
+  const looks = [], used = new Map();
+  while (looks.length < count && candidates.length) {
+    const reuse = (c) => c.chosen.reduce((n, x) => n + (used.get(x.key) || 0), 0);
+    candidates.sort((a, b) => (b.fresh - a.fresh) || (reuse(a) - reuse(b)) || (b.full - a.full) || (a.tie - b.tie));
+    const pick = candidates.shift();
+    pick.chosen.forEach((x) => used.set(x.key, (used.get(x.key) || 0) + 1));
+    const out = pick.chosen.map(({ key, seenIn, ...x }) => x);
+    looks.push({ items: out, distinctPhotos: new Set(out.map((x) => x.photo)).size, newCombination: pick.fresh });
+  }
+  return looks;
+}
+
 /** Turns the reader model's JSON (one photo) into wardrobe rows. Unknown categories become 'other'. */
 export function normaliseReading(json, photo) {
   const items = Array.isArray(json?.items) ? json.items : [];

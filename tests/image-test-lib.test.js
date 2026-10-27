@@ -55,3 +55,24 @@ test('a new combination is preferred over a complete outfit already worn', () =>
   assert.equal(o.newCombination, true);
   assert.ok(o.items.some((x) => x.description === 'white shirt'));
 });
+
+import { composeLooks } from '../scripts/image-test-lib.mjs';
+
+test('composeLooks returns different looks, new combinations first, spreading the garments', () => {
+  // Like the 2026-10-27 test photos: grey tee + cargos, windbreaker + grey tee + cargos, black hoodie + jeans.
+  const w = [item(0, 'top', 'grey t-shirt'), item(0, 'bottom', 'black cargo trousers'),
+    item(1, 'outerwear', 'mint windbreaker'), item(1, 'top', 'grey t-shirt'), item(1, 'bottom', 'black cargo trousers'),
+    item(2, 'top', 'black hoodie'), item(2, 'bottom', 'blue jeans')];
+  const looks = composeLooks(w, { count: 4, seed: 1 });
+  assert.equal(looks.length, 4);
+  const sig = looks.map((l) => l.items.map((x) => x.description).sort().join('+'));
+  assert.equal(new Set(sig).size, 4);
+  assert.ok(looks.every((l) => l.newCombination));
+  const tops = new Set(looks.slice(0, 2).map((l) => l.items.find((x) => x.category === 'top').description));
+  assert.equal(tops.size, 2); // the first two looks already use both tops
+  assert.deepEqual(composeLooks(w, { count: 4, seed: 1 }), looks);
+});
+
+test('composeLooks returns fewer looks when the wardrobe runs out', () => {
+  assert.equal(composeLooks([item(0, 'top', 'a'), item(0, 'bottom', 'b')], { count: 5 }).length, 1);
+});
