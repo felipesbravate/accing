@@ -79,6 +79,12 @@ export function poseGeometry(mask, width, height) {
   return { stagger: L.y >= 0 && R.y >= 0 ? (L.y - R.y) / ph : 0, gap: L.x != null && R.x != null ? (R.x - L.x) / ph : 0, shoulders: s1 > s0 ? (s1 - s0) / ph : 0 };
 }
 
+/** Pose geometry of any photo (e.g. a pose reference mannequin), without changing it. */
+export async function measurePose(c, input) {
+  const { info } = await c.sharp(input).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  return poseGeometry(await personMask(c, input, info.width, info.height), info.width, info.height);
+}
+
 /** Returns { bytes (PNG), before, after, pose } where before/after are the mean edge brightness (0–255). */
 export async function cleanBackground(c, input, { background = BACKGROUND } = {}) {
   const colour = hexToRgb(background);

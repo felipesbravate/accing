@@ -76,7 +76,8 @@ look 1 to 0.47–0.51 on its edits). Two steps fix that:
 Before generating, Gemini Flash-Lite describes the person from the face photos in exact words (hair colour roots to
 ends, skin, eyes, face, natural expression, age, what they always wear; ~$0.001), and the prompts state it. The image
 model drifted on exactly these (dark brown hair with caramel ends came out auburn, a soft smile came out stern).
-The expression is copied from the front face photo, including a slight smile. `--pro-face` uses Nano Banana Pro for the
+The card is saved as `image-test/inputs/identity-read.txt`; correct it (e.g. hair colour, age) and save it as
+`identity.txt` in the same folder to use the person's own words instead. The expression is copied from the front face photo, including a slight smile. `--pro-face` uses Nano Banana Pro for the
 face redraw (~$0.13 instead of ~$0.07 each) to compare.
 
 ## Pose references (once)
@@ -85,7 +86,8 @@ feet (heels raise the feet, flats/sneakers/boots keep them down; the shoes of th
 `npm run make-pose-reference -- --all` makes the missing ones (female flat, female heels, male flat; ~$0.10 each) in
 `scripts/assets/`; `-- --body=male --feet=heels` makes one. Open them; commit the good ones, run again for any that are off.
 The body is read from your photos (`--body=female|male` sets it); `--no-pose-ref` leaves the reference out.
-Edited looks may change only the foot angle when the shoes change heel height. Each edit's pose is also measured from
+Edited looks may change only the foot angle when the shoes change heel height. Look 1's pose is measured against the
+mannequin's and remade if it differs; each edit's pose is also measured from
 the person outline (feet gap and how far one foot is in front): more than 1% of the height off look 1 and it is remade.
 
 ## 4. Face check (runs automatically after every image test)

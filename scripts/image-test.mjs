@@ -10,7 +10,7 @@ import { extname, join, resolve } from 'node:path';
 import { CATEGORIES, composeLooks, normaliseReading } from './image-test-lib.mjs';
 import { checkFaces, checkTable, MIN_IDENTITY } from './face-check/index.mjs';
 import { poseCheck } from './face-check/look-check.mjs';
-import { cleanBackground, createCleaner } from './clean-background.mjs';
+import { cleanBackground, createCleaner, measurePose } from './clean-background.mjs';
 import { facePass, faceLock, referenceFace } from './face-detail.mjs';
 import { createFaceModel } from './face-check/arcface.mjs';
 import { feetFor, poseReferencePath } from './make-pose-reference.mjs';
@@ -351,8 +351,12 @@ async function main() {
   console.log(`Reading the garments in ${outfits.length} outfit photo(s) with ${opts.reader}…`);
   const [{ readings, wardrobe, cost: readCost }, identityCard] = await Promise.all([readWardrobe(outfits, opts.reader),
     readIdentity(faces, opts.reader).catch((e) => { console.log(`(identity card skipped: ${e.message})`); return null; })]);
-  opts.identityCard = identityCard;
-  if (identityCard) console.log(`Identity card: ${identityCard}`);
+  // image-test/inputs/identity.txt, if present, replaces the card: the person can correct how they are described.
+  const own = join(INPUTS, 'identity.txt');
+  opts.identityCard = existsSync(own) ? (await readFile(own, 'utf8')).trim() : identityCard;
+  if (existsSync(own)) console.log('Identity card: using image-test/inputs/identity.txt');
+  else if (identityCard) await writeFile(join(INPUTS, 'identity-read.txt'), identityCard + '\n').catch(() => {});
+  if (identityCard && !existsSync(join(INPUTS, 'identity.txt'))) console.log(`Identity card: ${identityCard}\n  (saved as image-test/inputs/identity-read.txt; correct it and save it as identity.txt to use your own words)`);
   readings.forEach((r, i) => console.log(`  photo ${i + 1} = image ${faces.length + i + 1}, ${outfits[i].file}: ${r.items.map((x) => `${x.description} [${x.category}${x.visibility === 'full' ? '' : ', ' + x.visibility}]`).join('; ') || 'nothing recognised'}`));
   const seed = opts.seed ?? (Date.now() % 100000);
   const looks = composeLooks(wardrobe, { count: opts.looks, seed });
@@ -466,12 +470,24 @@ async function main() {
         const r = await generate(m, looks[0], 1, file, looks[0].images, looks[0].prompt, looks[0].label, opts, withFacePass(m));
         if (r.error) { if (last) rows.push(r); continue; }
         if (!opts.check || last) { anchor = r; break; }
+        // Look 1 must stand like the pose reference (2026-10-27: it came out facing the camera, stagger 0.000 vs the
+        // mannequin's -0.021, and every edit copied that).
+        let poseOff = null;
+        if (cleaner && looks[0].pose && r.clean?.pose) {
+          looks[0].pose.geometry ??= await measurePose(cleaner, looks[0].pose.bytes).catch(() => null);
+          const ref = looks[0].pose.geometry, g = r.clean.pose;
+          if (ref) {
+            const off = Math.max(Math.abs(g.stagger - ref.stagger), Math.abs(g.gap - ref.gap) / 2);
+            if (off > POSE_TOLERANCE) poseOff = `pose differs from the pose reference (feet off by ${off.toFixed(3)} of the height)`;
+          }
+        }
         const c = (await checkFaces({ faces, lookRefs: images, images: [{ file: r.file, bytes: r.image, mime: 'image/png' }], minIdentity: opts.minIdentity, background: opts.background, log: () => {} })).results[0];
-        if (c.pass) { anchor = r; break; }
+        const why = [...(poseOff ? [poseOff] : []), ...c.reasons];
+        if (!why.length) { anchor = r; break; }
         const rej = r.file.replace(/\.png$/, `-rejected-${attempt}.png`);
         await writeFile(join(out, rej), r.image);
-        rejected.push({ file: rej, reasons: c.reasons, cost: r.cost });
-        console.log(`  first look rejected (${c.reasons.join('; ')}), generating it again…`);
+        rejected.push({ file: rej, reasons: why, cost: r.cost });
+        console.log(`  first look rejected (${why.join('; ')}), generating it again…`);
       }
       if (!anchor) continue;
       if (opts.check && rejected.length && anchor) console.log(`  first look accepted.`);
