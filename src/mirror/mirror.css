@@ -1,0 +1,26 @@
+.mirror { min-height: 100vh; max-width: 480px; margin: 0 auto; display: flex; flex-direction: column; }
+.mirror-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-md); padding: var(--space-lg) var(--space-md) var(--space-md); }
+.mirror-signout { min-height: 36px; padding: 0 var(--space-md); font-size: 12px; }
+.mirror-main { flex: 1; display: flex; flex-direction: column; gap: var(--space-md); padding-bottom: var(--space-lg); }
+
+.mirror-strip { display: flex; gap: 16px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 0 var(--space-md); scrollbar-width: none; }
+.mirror-strip::-webkit-scrollbar { display: none; }
+.mirror-card { flex: 0 0 calc(100% - 32px); scroll-snap-align: center; background: var(--bg-primary); border: 1px solid var(--border-default); border-radius: var(--radius-lg); overflow: hidden; }
+.mirror-figure { height: min(62vh, 500px); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-md);
+  background: linear-gradient(180deg, var(--blue-50), var(--bg-primary)); }
+.mirror-silhouette { height: 60%; fill: var(--blue-200); }
+.mirror-card-text { padding: var(--space-md); display: flex; flex-direction: column; gap: var(--space-xs); }
+.mirror-title { font-size: 16px; font-weight: 700; }
+
+.mirror-nav { display: flex; align-items: center; justify-content: center; gap: var(--space-md); }
+.mirror-arrow { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--border-default); background: var(--bg-primary); font-size: 20px; line-height: 1; }
+.mirror-arrow:disabled { opacity: .35; cursor: default; }
+.mirror-dots { display: flex; gap: var(--space-sm); }
+.mirror-dot { width: 8px; height: 8px; border-radius: 50%; border: 0; background: var(--blue-200); }
+.mirror-dot.is-active { background: var(--blue-800); width: 20px; border-radius: 4px; }
+
+.mirror-details { margin: 0 var(--space-md); padding: var(--space-md); background: var(--bg-primary); border: 1px solid var(--border-default); border-radius: var(--radius-md); }
+.mirror-details ul { margin-top: var(--space-sm); padding-left: var(--space-md); color: var(--text-secondary); }
+
+.mirror-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-sm); padding: 0 var(--space-md); }
+.mirror-actions .btn { padding: 0 var(--space-sm); }
