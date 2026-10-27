@@ -49,8 +49,8 @@ const OPENAI_BASE = process.env.OPENAI_BASE_URL || 'https://api.openai.com';
 const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
 
 function args() {
-  const out = { runs: 3, looks: 1, body: null, background: '#F9F9FB', poseRef: true, facePasses: 2, faceLock: true, clean: true, anchor: true, anchorTries: 3, only: null, dryRun: false, check: true, minIdentity: MIN_IDENTITY, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
-    expression: 'relaxed and neutral, the same natural expression as in the face photos (no smile they do not have)', occasion: 'an office day', weather: 'sunny 24°C', time: 'Monday morning',
+  const out = { runs: 3, looks: 1, proFace: false, body: null, background: '#F9F9FB', poseRef: true, facePasses: 2, faceLock: true, clean: true, anchor: true, anchorTries: 3, only: null, dryRun: false, check: true, minIdentity: MIN_IDENTITY, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
+    expression: 'copy it exactly from the front face photo, including any slight smile; no smile or seriousness that photo does not have', occasion: 'an office day', weather: 'sunny 24°C', time: 'Monday morning',
     shoes: 'plain white leather low-top sneakers with white soles and white laces',
     pose: 'relaxed standing pose: body turned about 15 degrees so their left shoulder is slightly closer to the camera, head turned back to face the camera, chin level, eyes looking into the lens; weight on the back (right) leg, front (left) knee slightly relaxed, feet about hip-width apart; both arms hanging loosely at the sides, elbows very slightly bent, hands open and relaxed beside the thighs, never in pockets; shoulders relaxed and level' };
   for (const a of process.argv.slice(2)) {
@@ -64,6 +64,7 @@ function args() {
     else if (k === 'no-clean') out.clean = false;
     else if (k === 'background') { if (!/^#[0-9a-f]{6}$/i.test(v)) throw new Error('--background must be a colour like #F9F9FB'); out.background = v; }
     else if (k === 'no-face-lock') out.faceLock = false;
+    else if (k === 'pro-face') out.proFace = true;
     else if (k === 'no-pose-ref') out.poseRef = false;
     else if (k === 'body') { if (!['female', 'male'].includes(v)) throw new Error('--body must be female or male'); out.body = v; }
     else if (k === 'face-passes') out.facePasses = Math.max(0, Math.min(4, parseInt(v, 10) || 0));
@@ -80,6 +81,7 @@ function args() {
 }
 
 const MAX_PHOTOS = 10;
+const POSE_TOLERANCE = 0.01; // feet position difference allowed between look 1 and an edit, as a share of the height
 
 // Phone photos are 4–11 MB and often stored sideways with a rotation flag (EXIF orientation). Every photo is turned
 // upright and, if large, resized to max 2048 px like the app would. Seen 2026-10-27: macOS sips dropped the rotation
@@ -125,6 +127,35 @@ async function loadInputs() {
   const outfits = [];
   for (const f of outfitFiles) outfits.push(await load(f));
   return { faces, outfits, images: [...faces, ...outfits] };
+}
+
+// Identity card: what the person looks like, in words, read once from the face photos. Image models drifted on what
+// they can name (2026-10-27: dark brown hair with caramel ends came out auburn, a soft smile came out stern), so the
+// prompt states it explicitly.
+const CARD_PROMPT = `These are close-up photos of one person. Describe how they look, precisely, so an artist could paint them from your words. Use exact colour words and be specific, never flattering.
+hair: colour from roots to ends (e.g. "dark chestnut brown, lighter caramel ends"), length, texture, parting and how it falls.
+skin: tone and undertone, texture, freckles, moles, lines.
+eyes: colour, shape, eyelids; eyebrows: colour, thickness, shape.
+face: shape, jaw, nose, lips, anything distinctive.
+expression: their natural resting expression in these photos (e.g. "soft closed-mouth smile", "neutral, lips relaxed").
+age: apparent age range.
+extras: glasses, facial hair, earrings or piercings they wear in every photo; empty if none.`;
+const CARD_SCHEMA = { type: 'OBJECT', properties: Object.fromEntries(['hair', 'skin', 'eyes', 'face', 'expression', 'age', 'extras'].map((k) => [k, { type: 'STRING' }])), required: ['hair', 'skin', 'eyes', 'face', 'expression', 'age', 'extras'] };
+
+async function readIdentity(faces, model) {
+  const key = process.env.GEMINI_API_KEY;
+  const res = await fetch(`${GEMINI_BASE}/v1beta/models/${model}:generateContent`, {
+    method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
+    body: JSON.stringify({ contents: [{ role: 'user', parts: [...faces.map((f) => ({ inlineData: { mimeType: f.mime, data: f.bytes.toString('base64') } })), { text: CARD_PROMPT }] }],
+      generationConfig: { responseMimeType: 'application/json', responseSchema: CARD_SCHEMA, temperature: 0 } }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(`Reading the face photos failed (${res.status}): ${json.error?.message || 'no details'}`);
+  const c = JSON.parse(json.candidates?.[0]?.content?.parts?.map((p) => p.text).join('') || '{}');
+  const str = (v) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+  const parts = [['hair', c.hair], ['skin', c.skin], ['eyes', c.eyes], ['face', c.face], ['natural expression', c.expression], ['age', c.age], ['always wears', c.extras]]
+    .filter(([, v]) => str(v)).map(([k, v]) => `${k} ${str(v)}`);
+  return parts.length ? parts.join('; ') + '.' : null;
 }
 
 // Step 1: read the garments in each photo with a cheap vision model (Gemini Flash-Lite).
@@ -193,7 +224,7 @@ function buildPrompt(template, faces, outfits, outfit, opts) {
   return template.replace('{{FACE_IMAGES}}', range(1, f)).replace('{{BODY_IMAGES}}', range(f + 1, f + outfits.length))
     .replace('{{GARMENTS}}', garments)
     .replace('{{OCCASION}}', opts.occasion).replace('{{WEATHER}}', opts.weather).replace('{{TIME}}', opts.time)
-    .replace('{{POSE}}', opts.poseImage ? `exactly the pose and framing of image ${opts.poseImage} (a faceless mannequin: copy only how it stands and where it is in the frame, never its look): ${opts.pose}` : opts.pose).replace('{{EXPRESSION}}', opts.expression);
+    .replace('{{IDENTITY_CARD}}', opts.identityCard || 'see the face photos').replace('{{POSE}}', opts.poseImage ? `exactly the pose and framing of image ${opts.poseImage} (a faceless mannequin: copy only how it stands and where it is in the frame, never its look): ${opts.pose}` : opts.pose).replace('{{EXPRESSION}}', opts.expression);
 }
 
 /** What each image is for, sent next to the image (Gemini) or listed after the prompt (OpenAI). */
@@ -318,7 +349,10 @@ async function main() {
   const totalMB = images.reduce((n, x) => n + x.bytes.length, 0) / 1e6;
   console.log(`Upload per request: ${totalMB.toFixed(1)} MB`);
   console.log(`Reading the garments in ${outfits.length} outfit photo(s) with ${opts.reader}…`);
-  const { readings, wardrobe, cost: readCost } = await readWardrobe(outfits, opts.reader);
+  const [{ readings, wardrobe, cost: readCost }, identityCard] = await Promise.all([readWardrobe(outfits, opts.reader),
+    readIdentity(faces, opts.reader).catch((e) => { console.log(`(identity card skipped: ${e.message})`); return null; })]);
+  opts.identityCard = identityCard;
+  if (identityCard) console.log(`Identity card: ${identityCard}`);
   readings.forEach((r, i) => console.log(`  photo ${i + 1} = image ${faces.length + i + 1}, ${outfits[i].file}: ${r.items.map((x) => `${x.description} [${x.category}${x.visibility === 'full' ? '' : ', ' + x.visibility}]`).join('; ') || 'nothing recognised'}`));
   const seed = opts.seed ?? (Date.now() % 100000);
   const looks = composeLooks(wardrobe, { count: opts.looks, seed });
@@ -327,10 +361,11 @@ async function main() {
   // look (heels raise the feet), sent with the first image of each look set.
   const votes = readings.map((r) => r.figure).filter(Boolean);
   const body = opts.body || (votes.filter((v) => v === 'male').length > votes.length / 2 ? 'male' : 'female');
+  const warned = new Set();
   const poseFor = async (look) => {
     if (!opts.poseRef) return null;
     const feet = feetFor(look.items), file = poseReferencePath(body, feet);
-    if (!existsSync(file)) { console.log(`No pose reference for ${body}, feet ${feet} (npm run make-pose-reference -- --body=${body} --feet=${feet}): pose in words only.`); return null; }
+    if (!existsSync(file)) { if (warned.has(file)) return null; warned.add(file); console.log(`No pose reference for ${body}, feet ${feet} (npm run make-pose-reference -- --body=${body} --feet=${feet}): pose in words only.`); return null; }
     return { file: `pose-reference-${body}-${feet}.png`, bytes: await readFile(file), mime: 'image/png', body, feet };
   };
   console.log(`Body for the pose reference: ${body}${opts.body ? '' : ' (read from the photos; --body=female|male to set it)'}`);
@@ -374,7 +409,7 @@ async function main() {
   const redrawModel = MODELS.find((x) => x.key === 'gemini-nano-banana-2');
   const withFacePass = (m) => (faceModel && opts.facePasses ? async (bytes) => {
     const fp = await facePass({ model: faceModel, image: bytes, faces, reference, passes: opts.facePasses,
-      redraw: (imgs, prompt, label) => callGemini({ ...redrawModel, aspectRatio: '1:1' }, imgs, prompt, label, { ...opts, size: '1K', faceCount: imgs.length }),
+      redraw: (imgs, prompt, label) => callGemini({ ...(opts.proFace ? MODELS.find((x) => x.key === 'gemini-nano-banana-pro') : redrawModel), aspectRatio: '1:1' }, imgs, prompt.replace('{{IDENTITY_CARD}}', opts.identityCard || 'see the face photos'), label, { ...opts, size: '1K', faceCount: imgs.length }),
       log: (t) => console.log(t) });
     return { bytes: fp.bytes, cost: fp.cost, face: { pass: true, before: fp.before, after: fp.after, kept: fp.kept } };
   } : null);
@@ -402,7 +437,7 @@ async function main() {
           const cleaned = await cleanBackground(cleaner, r.image, { background: opts.background });
           await writeFile(join(out, file.replace(/\.png$/, '-raw.png')), raw);
           r.image = cleaned.bytes;
-          r.clean = { before: cleaned.before, seconds: (performance.now() - t1) / 1000 };
+          r.clean = { before: cleaned.before, seconds: (performance.now() - t1) / 1000, pose: cleaned.pose };
         } catch (e) { console.log(`(background not cleaned: ${e.message})`); }
       }
       await writeFile(join(out, file), r.image);
@@ -442,6 +477,7 @@ async function main() {
       if (opts.check && rejected.length && anchor) console.log(`  first look accepted.`);
       rows.push(anchor);
       const anchorImg = { file: anchor.file, bytes: anchor.image, mime: 'image/png' };
+      const anchorPose = anchor.clean?.pose;
       for (const look of looks.slice(1)) {
         const edit = buildEdit(editTemplate, outfits, look, anchorImg);
         look.editPrompt = edit.prompt;
@@ -460,7 +496,10 @@ async function main() {
               poseCheck(anchorImg, img).catch((e) => ({ same: true, note: `pose check failed: ${e.message}` })),
               checkFaces({ faces, lookRefs: images, images: [img], minIdentity: opts.minIdentity, background: opts.background, log: () => {} }).then((x) => x.results[0]),
             ]);
-            const reasons = [...(pose.same ? [] : [`pose differs from look 1: ${pose.note}`]), ...face.reasons];
+            // Measured pose: feet stagger and gap vs look 1 (2026-10-27: a front-facing edit was 0.022 and 0.013 off, good
+            // edits within 0.005). The model's pose opinion missed that one, so the measurement decides first.
+            const g = r.clean?.pose, measured = anchorPose && g ? Math.max(Math.abs(g.stagger - anchorPose.stagger), Math.abs(g.gap - anchorPose.gap)) : 0;
+            const reasons = [...(measured > POSE_TOLERANCE ? [`pose differs from look 1 (feet off by ${measured.toFixed(3)} of the height)`] : []), ...(pose.same ? [] : [`pose differs from look 1: ${pose.note}`]), ...face.reasons];
             if (!reasons.length) { rows.push(r); break; }
             const rej = r.file.replace(/\.png$/, `-rejected-${attempt}.png`);
             await writeFile(join(out, rej), r.image);
@@ -490,6 +529,7 @@ async function main() {
 
   const lines = ['# Image test ' + stamp, '', `Occasion: ${opts.occasion} · Weather: ${opts.weather} · Time: ${opts.time}`, '', `Pose: ${opts.pose}`, '', `Seed: ${seed} (repeat with --seed=${seed}) · Gemini size: ${opts.size} · Photo detail: ${opts.detail}`, '',
     '## Garments read', '', ...readings.map((r, i) => `- Photo ${i + 1} (${outfits[i].file}): ${r.items.map((x) => `${x.description} [${x.category}]`).join('; ') || 'nothing recognised'}`), '',
+    ...(opts.identityCard ? ['## Identity card (read from the face photos)', '', opts.identityCard, ''] : []),
     '## Looks asked for', '', ...looks.map((l) => `- Look ${l.n}: ${l.items.map((x) => `${x.description} (${x.category}, photo ${x.photo + 1})`).join(' + ')}`), '',
     `Reading cost: ~$${readCost.toFixed(4)}`, '',
     ...(anchorMode ? [`Same face, pose and shadow: look 1 was generated from the face photos${opts.check ? ' and had to pass the face check' : ''}; looks 2–${looks.length} are edits of it where only the clothes change, each checked for the same pose as look 1 and remade if it differs.`,

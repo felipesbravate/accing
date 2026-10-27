@@ -1,5 +1,7 @@
 Image 1 is a close-up of the head from a full-body photo. Images {{FACE_IMAGES}} are real close-up photos of the person it must show.
 
+What they look like, read from their face photos: {{IDENTITY_CARD}}
+
 Redraw ONLY the face in image 1 so that anyone who knows this person recognises them instantly. Copy from images {{FACE_IMAGES}} with full fidelity:
 - face shape and width, jawline, chin and cheekbones
 - nose shape, width and length
@@ -10,5 +12,5 @@ Redraw ONLY the face in image 1 so that anyone who knows this person recognises 
 - their real age
 
 Keep exactly as in image 1: the head's position, size, angle and tilt, where the eyes look, the hairstyle, hair colour and where the hair falls, the ears and earrings, the lighting direction and softness, the background, and everything outside the face. Same square framing.
-Expression: relaxed and neutral, the same natural expression as in the real photos; no smile they do not have.
+Expression: copy it from the first real photo (image 2) exactly, including any slight smile; no smile or seriousness it does not have.
 Do not beautify, smooth the skin, slim the face, add makeup, or make them look younger or older.

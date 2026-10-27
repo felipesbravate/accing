@@ -58,7 +58,28 @@ async function personMask(c, bytes, width, height) {
   return Float32Array.from(big, (v) => v / 255);
 }
 
-/** Returns { bytes (PNG), before, after } where before/after are the mean edge brightness (0–255). */
+/** Simple body geometry from the person mask, to compare poses without a model: the two feet (horizontal gap and how
+ *  far one stands in front of the other) and the width at shoulder height, all relative to the person's height.
+ *  A 15° turn shows as a narrower shoulder line and staggered feet; facing the camera as wide shoulders and level feet. */
+export function poseGeometry(mask, width, height) {
+  let top = height, bottom = 0;
+  for (let i = 0; i < mask.length; i++) if (mask[i] > 0.5) { const y = (i / width) | 0; if (y < top) top = y; if (y > bottom) bottom = y; }
+  if (bottom <= top) return null;
+  const ph = bottom - top, cols = new Float32Array(width).fill(-1);
+  for (let y = Math.round(bottom - ph * 0.05); y <= bottom; y++) for (let x = 0; x < width; x++) if (mask[y * width + x] > 0.5) cols[x] = y; // lowest mask row per column
+  // Split the shoe columns into left and right foot at the widest gap (or the middle if they touch).
+  const xs = []; for (let x = 0; x < width; x++) if (cols[x] >= 0) xs.push(x);
+  if (xs.length < 2) return null;
+  let split = (xs[0] + xs[xs.length - 1]) / 2, best = 0;
+  for (let k = 1; k < xs.length; k++) if (xs[k] - xs[k - 1] > best) { best = xs[k] - xs[k - 1]; split = (xs[k] + xs[k - 1]) / 2; }
+  const foot = (a, b) => { let lo = -1, sx = 0, n = 0; for (let x = a; x < b; x++) if (cols[x] >= 0) { lo = Math.max(lo, cols[x]); sx += x; n++; } return { y: lo, x: n ? sx / n : null }; };
+  const L = foot(0, Math.round(split)), R = foot(Math.round(split), width);
+  const sy = Math.round(top + ph * 0.2); let s0 = width, s1 = -1;
+  for (let x = 0; x < width; x++) if (mask[sy * width + x] > 0.5) { if (x < s0) s0 = x; s1 = x; }
+  return { stagger: L.y >= 0 && R.y >= 0 ? (L.y - R.y) / ph : 0, gap: L.x != null && R.x != null ? (R.x - L.x) / ph : 0, shoulders: s1 > s0 ? (s1 - s0) / ph : 0 };
+}
+
+/** Returns { bytes (PNG), before, after, pose } where before/after are the mean edge brightness (0–255). */
 export async function cleanBackground(c, input, { background = BACKGROUND } = {}) {
   const colour = hexToRgb(background);
   const { data, info } = await c.sharp(input).removeAlpha().raw().toBuffer({ resolveWithObject: true });
@@ -102,5 +123,5 @@ export async function cleanBackground(c, input, { background = BACKGROUND } = {}
   }
   const edge = (buf) => { let s = 0, k = 0; const sw = Math.round(width * 0.08); for (let y = 0; y < Math.round(height * 0.7); y++) for (let x = 0; x < width; x++) if (x < sw || x >= width - sw) { const i = y * width + x; s += (buf[i * 3] + buf[i * 3 + 1] + buf[i * 3 + 2]) / 3; k++; } return s / k; };
   const bytes = await c.sharp(out, { raw: { width, height, channels: 3 } }).png().toBuffer();
-  return { bytes, before: edge(data), after: edge(out) };
+  return { bytes, before: edge(data), after: edge(out), pose: poseGeometry(mask, width, height) };
 }
