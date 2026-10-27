@@ -10,6 +10,7 @@ import { extname, join, resolve } from 'node:path';
 import { CATEGORIES, composeLooks, normaliseReading } from './image-test-lib.mjs';
 import { checkFaces, checkTable, MIN_IDENTITY } from './face-check/index.mjs';
 import { cleanBackground, createCleaner } from './clean-background.mjs';
+import './net.mjs'; // retry requests whose connection fails
 
 const ROOT = resolve(import.meta.dirname, '..');
 const INPUTS = join(ROOT, 'image-test', 'inputs');

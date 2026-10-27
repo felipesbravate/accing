@@ -5,6 +5,7 @@ import { existsSync } from 'node:fs';
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, extname, join, resolve } from 'node:path';
 import { checkFaces, checkTable, MIN_IDENTITY } from './face-check/index.mjs';
+import './net.mjs'; // retry requests whose connection fails
 
 const RESULTS = join(resolve(import.meta.dirname, '..'), 'image-test', 'results');
 const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
