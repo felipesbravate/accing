@@ -14,7 +14,32 @@ export function seededRandom(seed) {
   };
 }
 
-const keyOf = (x) => `${x.category}|${x.description.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()}`;
+const COLOURS = new Set(['black', 'white', 'grey', 'gray', 'blue', 'navy', 'red', 'green', 'mint', 'olive', 'khaki', 'beige', 'brown', 'tan', 'camel', 'cream', 'ivory', 'yellow', 'orange', 'pink', 'purple', 'burgundy', 'charcoal', 'denim', 'light', 'dark']);
+const FILLER = new Set(['a', 'an', 'the', 'with', 'and', 'of', 'in', 'style', 'plain', 'classic', 'basic', 'regular', 'fit', 'colour', 'color']);
+const words = (d) => d.toLowerCase().replace(/t-shirt|tee\b/g, 'tshirt').replace(/gray/g, 'grey').replace(/[^a-z0-9]+/g, ' ').trim().split(' ').filter((w) => w && !FILLER.has(w));
+
+/** Same garment described in two photos? The reader words it differently each time ("plain grey short-sleeved cotton
+ *  crew neck t-shirt" / "plain grey crew neck short-sleeved cotton t-shirt"), so compare meaning, not text: same
+ *  category, same colours, and at least half of the words in common. Two items from one photo are never the same. */
+export function sameGarment(a, b) {
+  if (a.category !== b.category || a.photo === b.photo) return false;
+  const wa = new Set(words(a.description)), wb = new Set(words(b.description));
+  const ca = [...wa].filter((w) => COLOURS.has(w)).sort().join(), cb = [...wb].filter((w) => COLOURS.has(w)).sort().join();
+  if (ca && cb && ca !== cb) return false;
+  const shared = [...wa].filter((w) => wb.has(w)).length;
+  return shared / new Set([...wa, ...wb]).size >= 0.5;
+}
+
+/** Gives every wardrobe row a key shared by all rows that are the same garment. */
+export function withKeys(wardrobe) {
+  const groups = [];
+  return wardrobe.map((x) => {
+    let g = groups.find((members) => members.every((m) => m.photo !== x.photo) && members.some((m) => sameGarment(m, x)));
+    if (!g) { g = []; g.id = `${x.category}#${groups.length}`; groups.push(g); }
+    g.push(x);
+    return { ...x, key: g.id };
+  });
+}
 const RANK = { full: 2, partial: 1, hidden: 0 };
 
 /**
@@ -23,13 +48,13 @@ const RANK = { full: 2, partial: 1, hidden: 0 };
  */
 export function dedupeWardrobe(wardrobe) {
   const byKey = new Map();
-  for (const x of wardrobe) {
-    const key = keyOf(x);
+  for (const x of withKeys(wardrobe)) {
+    const key = x.key;
     const prev = byKey.get(key);
     if (!prev) byKey.set(key, { ...x, key, seenIn: [x.photo] });
     else {
       prev.seenIn.push(x.photo);
-      if (RANK[x.visibility] > RANK[prev.visibility]) Object.assign(prev, { photo: x.photo, visibility: x.visibility });
+      if (RANK[x.visibility] > RANK[prev.visibility]) Object.assign(prev, { photo: x.photo, visibility: x.visibility, description: x.description });
     }
   }
   return [...byKey.values()];
@@ -43,9 +68,9 @@ export function dedupeWardrobe(wardrobe) {
 export function composeOutfit(wardrobe, { seed = 1 } = {}) {
   const items = dedupeWardrobe(wardrobe).filter((x) => x.visibility !== 'hidden');
   const photoKeys = new Map();
-  for (const x of wardrobe) {
+  for (const x of withKeys(wardrobe)) {
     if (!photoKeys.has(x.photo)) photoKeys.set(x.photo, new Set());
-    photoKeys.get(x.photo).add(keyOf(x));
+    photoKeys.get(x.photo).add(x.key);
   }
   const isNew = (chosen) => ![...photoKeys.values()].some((keys) => chosen.every((x) => keys.has(x.key)));
   const of = (c) => items.filter((x) => x.category === c);
@@ -79,9 +104,9 @@ export function composeOutfit(wardrobe, { seed = 1 } = {}) {
 export function composeLooks(wardrobe, { count = 1, seed = 1 } = {}) {
   const items = dedupeWardrobe(wardrobe).filter((x) => x.visibility !== 'hidden');
   const photoKeys = new Map();
-  for (const x of wardrobe) {
+  for (const x of withKeys(wardrobe)) {
     if (!photoKeys.has(x.photo)) photoKeys.set(x.photo, new Set());
-    photoKeys.get(x.photo).add(keyOf(x));
+    photoKeys.get(x.photo).add(x.key);
   }
   const isNew = (chosen) => ![...photoKeys.values()].some((keys) => chosen.every((x) => keys.has(x.key)));
   const of = (c) => items.filter((x) => x.category === c);

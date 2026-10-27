@@ -76,3 +76,29 @@ test('composeLooks returns different looks, new combinations first, spreading th
 test('composeLooks returns fewer looks when the wardrobe runs out', () => {
   assert.equal(composeLooks([item(0, 'top', 'a'), item(0, 'bottom', 'b')], { count: 5 }).length, 1);
 });
+
+import { sameGarment } from '../scripts/image-test-lib.mjs';
+
+// The real readings of 2026-10-27, where exact-text matching made looks 2 and 4 the same outfit.
+const real = [
+  item(0, 'top', 'plain grey short-sleeved cotton crew neck t-shirt'), item(0, 'bottom', 'black cargo style trousers with side pockets'),
+  item(1, 'outerwear', 'light green and dark grey color-blocked zip-up windbreaker jacket'), item(1, 'top', 'plain grey crew neck short-sleeved cotton t-shirt'),
+  item(1, 'bottom', 'black cargo style trousers with side pockets and cuffs'),
+  item(2, 'top', 'black cotton long-sleeved hooded sweatshirt with front pocket'), item(2, 'bottom', 'light blue denim jeans with rolled up cuffs'),
+];
+
+test('the same garment worded differently in two photos counts once', () => {
+  assert.equal(sameGarment(real[0], real[3]), true);
+  assert.equal(sameGarment(real[1], real[4]), true);
+  assert.equal(sameGarment(real[0], real[5]), false); // grey tee vs black hoodie
+  assert.equal(sameGarment(item(0, 'bottom', 'black jeans'), item(1, 'bottom', 'blue jeans')), false);
+  assert.equal(sameGarment(item(0, 'top', 'white shirt'), item(0, 'top', 'white shirt')), false); // same photo: two items
+});
+
+test('looks from the real readings are all different and all new', () => {
+  const looks = composeLooks(real, { count: 4, seed: 1 });
+  const names = (l) => l.items.map((x) => x.category + ':' + x.description.split(' ').slice(-2).join(' ')).sort().join(' + ');
+  assert.equal(new Set(looks.map(names)).size, looks.length);
+  assert.ok(looks.every((l) => l.newCombination), looks.map(names).join('\n'));
+  looks.forEach((l) => console.log('   ', names(l)));
+});

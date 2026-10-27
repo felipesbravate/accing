@@ -61,3 +61,32 @@ export async function lookCheck(refs, image, { model = LOOK_MODEL, key = process
   const cost = ((u.promptTokenCount || 0) * PRICE.inputPerM + ((u.candidatesTokenCount || 0) + (u.thoughtsTokenCount || 0)) * PRICE.outputPerM) / 1e6;
   return { ...result, ...lookVerdict(result), cost };
 }
+
+// Pose check for edited looks: image 2 must keep image 1's pose and framing exactly; only the clothes may differ.
+// Seen 2026-10-27: asked to keep the pose, an edit turned the person to face the camera.
+const POSE_PROMPT = `Image 1 and image 2 must show the same person in exactly the same pose and camera framing; only the clothes may differ.
+Compare, ignoring the clothes: how far the body is turned from the camera, head angle, shoulder line, arm and hand positions, leg and foot positions (which foot is forward, how far apart), and the person's size and position in the frame.
+same_pose is true only if someone flipping between the two images would notice nothing change except the clothes. Give a short note of any difference.`;
+const POSE_SCHEMA = { type: 'OBJECT', properties: { same_pose: { type: 'BOOLEAN' }, note: { type: 'STRING' } }, required: ['same_pose', 'note'] };
+
+/** anchor and image: { bytes, mime }. Returns { same, note, cost }. */
+export async function poseCheck(anchor, image, { model = LOOK_MODEL, key = process.env.GEMINI_API_KEY } = {}) {
+  if (!key) throw new Error('GEMINI_API_KEY is not set in .env.local (needed for the pose check)');
+  const res = await fetch(`${GEMINI_BASE}/v1beta/models/${model}:generateContent`, {
+    method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
+    body: JSON.stringify({
+      contents: [{ role: 'user', parts: [
+        { text: 'Image 1:' }, { inlineData: { mimeType: anchor.mime, data: anchor.bytes.toString('base64') } },
+        { text: 'Image 2:' }, { inlineData: { mimeType: image.mime, data: image.bytes.toString('base64') } },
+        { text: POSE_PROMPT }] }],
+      generationConfig: { responseMimeType: 'application/json', responseSchema: POSE_SCHEMA, temperature: 0 },
+    }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(`Pose check failed (${model}, ${res.status}): ${json.error?.message || 'no details'}`);
+  const text = json.candidates?.[0]?.content?.parts?.map((p) => p.text).filter(Boolean).join('') || '';
+  let r;
+  try { r = JSON.parse(text); } catch { throw new Error(`Could not understand the pose check: ${text.slice(0, 200)}`); }
+  const u = json.usageMetadata || {};
+  return { same: r.same_pose === true, note: r.note || '', cost: ((u.promptTokenCount || 0) * PRICE.inputPerM + ((u.candidatesTokenCount || 0) + (u.thoughtsTokenCount || 0)) * PRICE.outputPerM) / 1e6 };
+}

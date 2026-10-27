@@ -34,7 +34,10 @@ npm run image-test
   image each with `--runs=1`. Fewer come back if your photos cannot make that many.
   Same face, pose and shadow in every look: look 1 is generated from your face photos and must pass the face check
   (up to 3 tries, `--anchor-tries=N`); looks 2+ are edits of that image where only the clothes change
-  (prompt in `scripts/image-edit-prompt.txt`). `--no-anchor` generates every look from scratch instead.
+  (prompt in `scripts/image-edit-prompt.txt`). Each edit must keep look 1's pose (checked by Gemini Flash-Lite,
+  ~$0.001) and pass the face check, or it is made again; rejected attempts are kept as `*-rejected-N.png`.
+  `--no-anchor` generates every look from scratch instead.
+- The same garment in several photos counts once even when the reader words it differently, so looks don't repeat.
 - `--size=2K` gives the face more detail in the output (Gemini models; 512, 1K, 2K or 4K).
 - `--detail=max` (default) makes Gemini read the face photos at its highest detail and the other photos at high detail;
   `--detail=default` leaves it to Gemini (which reads them at low detail). Check "Input tokens" in the report.

@@ -9,6 +9,7 @@ import { existsSync } from 'node:fs';
 import { extname, join, resolve } from 'node:path';
 import { CATEGORIES, composeLooks, normaliseReading } from './image-test-lib.mjs';
 import { checkFaces, checkTable, MIN_IDENTITY } from './face-check/index.mjs';
+import { poseCheck } from './face-check/look-check.mjs';
 import { cleanBackground, createCleaner } from './clean-background.mjs';
 import './net.mjs'; // retry requests whose connection fails
 
@@ -400,7 +401,23 @@ async function main() {
         const edit = buildEdit(editTemplate, outfits, look, anchorImg);
         look.editPrompt = edit.prompt;
         for (let run = 1; run <= opts.runs; run++) {
-          rows.push(await generate(m, look, run, name(m, look, run), edit.images, edit.prompt, edit.label, { ...opts, faceCount: 1 }));
+          // Each edit must keep look 1's pose and pass the face check; otherwise it is made again (same tries as look 1).
+          for (let attempt = 1; attempt <= opts.anchorTries; attempt++) {
+            const r = await generate(m, look, run, name(m, look, run), edit.images, edit.prompt, edit.label, { ...opts, faceCount: 1 });
+            const last = attempt === opts.anchorTries;
+            if (r.error || !opts.check || last) { rows.push(r); break; }
+            const img = { file: r.file, bytes: r.image, mime: 'image/png' };
+            const [pose, face] = await Promise.all([
+              poseCheck(anchorImg, img).catch((e) => ({ same: true, note: `pose check failed: ${e.message}` })),
+              checkFaces({ faces, lookRefs: images, images: [img], minIdentity: opts.minIdentity, log: () => {} }).then((x) => x.results[0]),
+            ]);
+            const reasons = [...(pose.same ? [] : [`pose differs from look 1: ${pose.note}`]), ...face.reasons];
+            if (!reasons.length) { rows.push(r); break; }
+            const rej = r.file.replace(/\.png$/, `-rejected-${attempt}.png`);
+            await writeFile(join(out, rej), r.image);
+            rejected.push({ file: rej, reasons, cost: r.cost });
+            console.log(`  look ${look.n} rejected (${reasons.join('; ')}), making it again…`);
+          }
         }
       }
     }
@@ -426,8 +443,8 @@ async function main() {
     '## Garments read', '', ...readings.map((r, i) => `- Photo ${i + 1} (${outfits[i].file}): ${r.items.map((x) => `${x.description} [${x.category}]`).join('; ') || 'nothing recognised'}`), '',
     '## Looks asked for', '', ...looks.map((l) => `- Look ${l.n}: ${l.items.map((x) => `${x.description} (${x.category}, photo ${x.photo + 1})`).join(' + ')}`), '',
     `Reading cost: ~$${readCost.toFixed(4)}`, '',
-    ...(anchorMode ? [`Same face, pose and shadow: look 1 was generated from the face photos${opts.check ? ' and had to pass the face check' : ''}; looks 2–${looks.length} are edits of it where only the clothes change.`,
-      ...(rejected.length ? ['', `Look 1 attempts rejected before one passed (${rejected.length}, ~$${fmt(rejected.reduce((s, r) => s + (r.cost || 0), 0))}):`, ...rejected.map((r) => `- ${r.file}: ${r.reasons.join('; ')}`)] : []), ''] : []),
+    ...(anchorMode ? [`Same face, pose and shadow: look 1 was generated from the face photos${opts.check ? ' and had to pass the face check' : ''}; looks 2–${looks.length} are edits of it where only the clothes change, each checked for the same pose as look 1 and remade if it differs.`,
+      ...(rejected.length ? ['', `Attempts rejected before one passed (${rejected.length}, ~$${fmt(rejected.reduce((s, r) => s + (r.cost || 0), 0))}):`, ...rejected.map((r) => `- ${r.file}: ${r.reasons.join('; ')}`)] : []), ''] : []),
     '## Results', '',
     '| Look | Model | Run | Seconds | Input tokens | Output tokens | Est. cost (USD) | Result |', '|---|---|---|---|---|---|---|---|'];
   for (const r of rows) lines.push(`| ${r.look.n} | ${r.m.key} | ${r.run} | ${r.seconds.toFixed(1)} | ${fmt(r.tokens?.input, 0)} | ${fmt(r.tokens?.output, 0)} | ${fmt(r.cost)} | ${r.error ? 'FAILED: ' + r.error.replace(/\|/g, '/') : r.file} |`);
