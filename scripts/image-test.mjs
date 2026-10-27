@@ -229,8 +229,11 @@ async function callGemini(m, images, prompt, label, opts) {
   const data = (imgPart.inlineData || imgPart.inline_data).data;
   const u = json.usageMetadata || {};
   const p = PRICES[m.key];
-  const inputTokens = u.promptTokenCount ?? null;
+  // Some responses omit promptTokenCount; fall back to the per-modality breakdown, and keep the raw usage for checking.
+  const fromDetails = Array.isArray(u.promptTokensDetails) ? u.promptTokensDetails.reduce((n, d) => n + (d.tokenCount || 0), 0) : null;
+  const inputTokens = u.promptTokenCount ?? (fromDetails || null);
   return {
+    usage: u,
     image: Buffer.from(data, 'base64'),
     tokens: { input: inputTokens, output: u.candidatesTokenCount ?? null },
     cost: p ? (p.outputBySize[opts.size] ?? null) + (inputTokens || 0) / 1e6 * p.inputPerM : null,
@@ -310,6 +313,7 @@ async function main() {
         const seconds = (performance.now() - t0) / 1000;
         const file = `${m.key}-${run}.png`;
         await writeFile(join(out, file), r.image);
+        if (r.usage) await writeFile(join(out, file.replace(/\.png$/, '.usage.json')), JSON.stringify(r.usage, null, 2));
         rows.push({ m, run, seconds, file, ...r });
         console.log(`${seconds.toFixed(1)}s, ~$${fmt(r.cost)}`);
       } catch (e) {
