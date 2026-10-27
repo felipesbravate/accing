@@ -29,7 +29,7 @@ for (const dir of opts.dirs) {
   const files = (await readdir(dir)).filter((f) => MIME[extname(f).toLowerCase()]).sort();
   const faces = await Promise.all(files.filter((f) => /^ref-face-/i.test(f)).map((f) => load(dir, f)));
   const lookRefs = await Promise.all(files.filter((f) => /^ref-/i.test(f)).map((f) => load(dir, f)));
-  const images = await Promise.all(files.filter((f) => /^(gemini|openai)-.*\.png$/i.test(f)).map((f) => load(dir, f)));
+  const images = await Promise.all(files.filter((f) => /^(gemini|openai)-.*\.png$/i.test(f) && !/-(raw|rejected-\d+)\.png$/i.test(f)).map((f) => load(dir, f)));
   if (!faces.length || !images.length) { console.log(`${basename(dir)}: skipped (no ref-face-* photos or no generated images)`); continue; }
   console.log(`${basename(dir)}: checking ${images.length} image(s) against ${faces.length} face photo(s)…`);
   const { results, lookCost, identityRan } = await checkFaces({ faces, lookRefs, images, ...opts });

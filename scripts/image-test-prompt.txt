@@ -22,7 +22,7 @@ PHOTO — identical framing, pose and background for every look, so looks can be
 - Head-to-toe, full body visible including shoes. Camera straight on at chest height, person centred, top of the head about 8% below the top edge, soles about 6% above the bottom edge. The face must be sharp and clearly lit.
 - Pose (fixed, never vary it): {{POSE}}
 - Background: pure white (#FFFFFF), seamless and evenly lit edge to edge: no wall, no corner, no horizon line, no gradient, no vignette, no grey areas.
-- Shadow: only one soft, short contact shadow on the floor directly under and around the feet. No shadow on the background behind or beside the person, no window light patterns.
+- Shadow: only one soft, short contact shadow on the floor directly under the feet, falling slightly behind them and fading out well before the edges of the image. No shadow on the background behind or beside the person, no window light patterns.
 - Soft, even, frontal studio lighting. Sharp focus, e-commerce lookbook style.
 - Portrait orientation, 2:3.
 - No text, watermarks, props, other people, mirrors or cropped limbs.

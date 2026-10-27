@@ -51,6 +51,13 @@ Results land in `image-test/results/<date-time>/`: every image, `wardrobe.json` 
 `report.md` (seconds, tokens, estimated cost) and `index.html` (open it to compare everything side by side).
 Prices for the estimates are in `scripts/image-test.mjs` (`PRICES`) with their sources; check them before trusting totals.
 
+## Pure white background (automatic)
+Image models never return pure white (every image measured 232–244/255, some with window-light patterns), which shows
+as a grey box on the app's white screen. After each generation the person is cut out (ISNet, run on your Mac; model
+~180 MB downloaded once into `image-test/models/`), the background is made pure white, and only the real floor shadow
+under the feet is kept, fading out before the edges. The model's own output is kept as `*-raw.png`.
+Takes ~3–7 s per image; `--no-clean` skips it.
+
 ## 4. Face check (runs automatically after every image test)
 Two layers, because one number is not enough: on 2026-10-27 ArcFace ranked first the image friends liked least.
 1. **Identity gate (ArcFace).** Similarity between the generated face and your average face photo, computed on your Mac.

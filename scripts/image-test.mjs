@@ -9,6 +9,7 @@ import { existsSync } from 'node:fs';
 import { extname, join, resolve } from 'node:path';
 import { CATEGORIES, composeLooks, normaliseReading } from './image-test-lib.mjs';
 import { checkFaces, checkTable, MIN_IDENTITY } from './face-check/index.mjs';
+import { cleanBackground, createCleaner } from './clean-background.mjs';
 
 const ROOT = resolve(import.meta.dirname, '..');
 const INPUTS = join(ROOT, 'image-test', 'inputs');
@@ -42,7 +43,7 @@ const OPENAI_BASE = process.env.OPENAI_BASE_URL || 'https://api.openai.com';
 const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
 
 function args() {
-  const out = { runs: 3, looks: 1, anchor: true, anchorTries: 3, only: null, dryRun: false, check: true, minIdentity: MIN_IDENTITY, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
+  const out = { runs: 3, looks: 1, clean: true, anchor: true, anchorTries: 3, only: null, dryRun: false, check: true, minIdentity: MIN_IDENTITY, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
     expression: 'relaxed and neutral, the same natural expression as in the face photos (no smile they do not have)', occasion: 'an office day', weather: 'sunny 24°C', time: 'Monday morning',
     shoes: 'plain white leather low-top sneakers with white soles and white laces',
     pose: 'relaxed standing pose: body turned about 15 degrees so their left shoulder is slightly closer to the camera, head turned back to face the camera, chin level, eyes looking into the lens; weight on the back (right) leg, front (left) knee slightly relaxed, feet about hip-width apart; both arms hanging loosely at the sides, elbows very slightly bent, hands open and relaxed beside the thighs, never in pockets; shoulders relaxed and level' };
@@ -54,6 +55,7 @@ function args() {
     else if (k === 'dry-run') out.dryRun = true;
     else if (k === 'no-check') out.check = false;
     else if (k === 'no-anchor') out.anchor = false;
+    else if (k === 'no-clean') out.clean = false;
     else if (k === 'anchor-tries') out.anchorTries = Math.max(1, Math.min(5, parseInt(v, 10) || 3));
     else if (k === 'min-identity') { out.minIdentity = Number(v); if (!(out.minIdentity > 0 && out.minIdentity < 1)) throw new Error('--min-identity must be between 0 and 1'); }
     else if (k === 'seed') out.seed = parseInt(v, 10) || 1;
@@ -334,6 +336,11 @@ async function main() {
   await writeFile(join(out, 'prompt.txt'), looks.map((l) => (looks.length > 1 ? `=== Look ${l.n} ===\n` : '') + l.prompt).join('\n\n'));
   await writeFile(join(out, 'wardrobe.json'), JSON.stringify({ seed, readerModel: opts.reader, faces: faces.map((x) => x.file), readings: readings.map((r, i) => ({ file: outfits[i].file, ...r })), looks: looks.map(({ prompt, label, ...l }) => l) }, null, 2));
 
+  let cleaner = null;
+  if (opts.clean) {
+    try { cleaner = await createCleaner(join(ROOT, 'image-test', 'models')); }
+    catch (e) { console.log(`Background cleaning skipped: ${e.message}`); }
+  }
   const rows = [];
   const call = (m, imgs, prompt, label, o) => (m.provider === 'gemini' ? callGemini : callOpenAI)(m, imgs, prompt, label, o);
   const generate = async (m, look, run, file, imgs, prompt, label, o) => {
@@ -342,9 +349,19 @@ async function main() {
     try {
       const r = await call(m, imgs, prompt, label, o);
       const seconds = (performance.now() - t0) / 1000;
+      // Pure white background, shadow only under the feet. The model's own output is kept as *-raw.png.
+      if (cleaner) {
+        try {
+          const t1 = performance.now();
+          const cleaned = await cleanBackground(cleaner, r.image);
+          await writeFile(join(out, file.replace(/\.png$/, '-raw.png')), r.image);
+          r.image = cleaned.bytes;
+          r.clean = { before: cleaned.before, seconds: (performance.now() - t1) / 1000 };
+        } catch (e) { console.log(`(background not cleaned: ${e.message})`); }
+      }
       await writeFile(join(out, file), r.image);
       if (r.usage) await writeFile(join(out, file.replace(/\.png$/, '.usage.json')), JSON.stringify(r.usage, null, 2));
-      console.log(`${seconds.toFixed(1)}s, ~$${fmt(r.cost)}`);
+      console.log(`${seconds.toFixed(1)}s, ~$${fmt(r.cost)}${r.clean ? `, background ${Math.round(r.clean.before)}→255 in ${r.clean.seconds.toFixed(1)}s` : ''}`);
       return { m, look, run, seconds, file, ...r };
     } catch (e) {
       const seconds = (performance.now() - t0) / 1000;
