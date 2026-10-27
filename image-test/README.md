@@ -1,6 +1,8 @@
 # Image generation test
 
-Compares models on the same photos: does the result look like you, how long does it take, what does it cost.
+Mirrors the real onboarding: three face close-ups plus ordinary head-to-toe photos. The script reads the garments in
+each photo by itself, composes a new outfit across photos, generates it with each image model, and measures how long
+it takes and what it costs.
 
 ## 1. Keys (once)
 Add to `.env.local` in the project root (never commit it, never paste it in a chat):
@@ -8,30 +10,25 @@ Add to `.env.local` in the project root (never commit it, never paste it in a ch
 GEMINI_API_KEY=...
 OPENAI_API_KEY=...
 ```
+The Gemini key is always needed (it reads the garments); the OpenAI key only for the OpenAI models.
 
-## 2. Photos
-Put them in `image-test/inputs/` (git-ignored, they stay on your Mac). JPG, PNG or WebP.
-- `face-front.jpg`, `face-left.jpg`, `face-right.jpg`: required
-- `body.jpg`: one full-body photo, strongly recommended
-- The clothes, in either (or both) of two ways:
-  - `worn-1-brown-tweed-blazer.jpg`, `worn-2-black-jeans.jpg`, …: photos of you **wearing** clothes. Name each file
-    after the one item to take from it; everything else in that photo is ignored. To test real outfit building, take
-    items from **different** photos (blazer from one outfit, jeans from another).
-  - `garment-1-brown-tweed-blazer.jpg`, …: a photo of the item on its own (flat or on a hanger).
-  The words after the number become the description in the prompt.
-- iPhone photos must be JPG/PNG, not HEIC (AirDrop → Options → Most Compatible).
+## 2. Photos in `image-test/inputs/` (git-ignored, they stay on your Mac)
+- `face-front.jpg`, `face-left.jpg`, `face-right.jpg`: face close-ups, as in onboarding.
+- Any other photos, any file names: you head to toe, each in a different outfit. 2 to 4 is a good start.
+  The script reads what you wear in each and mixes items across photos (e.g. the blazer from one, the jeans from another).
+- JPG, PNG or WebP. iPhone HEIC is skipped (AirDrop > Options > Most Compatible gives JPG).
 
-## 3. Run
+## 3. Run (one command at a time)
 ```
-npm run image-test                      # every model, 3 runs each
-npm run image-test -- --runs=1          # quicker
-npm run image-test -- --only=gemini     # one provider (gemini or openai)
-npm run image-test -- --occasion="a dinner" --weather="rainy 14°C" --time="Friday evening"
-npm run image-test -- --pose="walking towards the camera mid-step, arms swinging naturally"
-npm run image-test -- --dry-run         # check inputs and show the prompt, no API calls, no cost
+npm run image-test -- --dry-run
+npm run image-test -- --only=gemini --runs=1
+npm run image-test
 ```
-Results land in `image-test/results/<date-time>/`: every image, `report.md` (seconds, tokens, estimated cost) and
-`index.html` (open it to compare the outputs side by side with your reference photos).
+- `--dry-run` reads the garments (well under one cent) and shows the outfit and prompt, without generating images.
+- Each run picks the outfit with a random seed and prints it; `--seed=<number>` repeats the same outfit.
+- Other options: `--runs=1`, `--only=gemini` / `--only=openai`, `--occasion="a dinner"`, `--weather="rainy 14°C"`,
+  `--time="Friday evening"`, `--pose="walking towards the camera mid-step"`, `--reader-model=<gemini model>`.
 
-Prices used for the estimate are in `scripts/image-test.mjs` (`PRICES`) with their sources; check them against the
-providers' pricing pages before trusting the totals.
+Results land in `image-test/results/<date-time>/`: every image, `wardrobe.json` (what was read and chosen),
+`report.md` (seconds, tokens, estimated cost) and `index.html` (open it to compare everything side by side).
+Prices for the estimates are in `scripts/image-test.mjs` (`PRICES`) with their sources; check them before trusting totals.
