@@ -131,7 +131,12 @@ const range = (a, b) => (a === b ? `${a}` : b === a + 1 ? `${a} and ${b}` : `${a
 
 function buildPrompt(template, faces, outfits, outfit, opts) {
   const f = faces.length;
-  const garments = outfit.items.map((x) => `  - the ${x.description} (${x.category}) from image ${f + x.photo + 1}`).join('\n');
+  const lines = outfit.items.map((x) => `  - the ${x.description} (${x.category}) from image ${f + x.photo + 1}`);
+  // The photo must show the feet, so without identified shoes the model may choose plain ones (the only free choice).
+  if (!outfit.items.some((x) => x.category === 'shoes')) {
+    lines.push('  - shoes: none were identified in the photos, so add simple, neutral shoes that suit this outfit (the only item you may choose yourself)');
+  }
+  const garments = lines.join('\n');
   return template.replace('{{FACE_IMAGES}}', range(1, f)).replace('{{BODY_IMAGES}}', range(f + 1, f + outfits.length))
     .replace('{{GARMENTS}}', garments)
     .replace('{{OCCASION}}', opts.occasion).replace('{{WEATHER}}', opts.weather).replace('{{TIME}}', opts.time)
