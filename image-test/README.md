@@ -13,7 +13,11 @@ OPENAI_API_KEY=...
 The Gemini key is always needed (it reads the garments); the OpenAI key only for the OpenAI models.
 
 ## 2. Photos in `image-test/inputs/` (git-ignored, they stay on your Mac)
-- `face-front.jpg`, `face-left.jpg`, `face-right.jpg`: face close-ups, as in onboarding.
+- Face close-ups, either:
+  - `face-front.jpg`, `face-left.jpg`, `face-right.jpg` (the onboarding photos), or
+  - frames from a short video of you turning your head: `npm run faces-from-video -- ~/Downloads/face.mov --frames=5`
+    writes `face-1.jpg` … `face-5.jpg` (existing face photos are moved to a `previous-faces-…` folder, not deleted).
+    Move those back and delete the face-N files to return to the photos.
 - Any other photos, any file names: you head to toe, each in a different outfit. 2 to 4 is a good start.
   The script reads what you wear in each and mixes items across photos (e.g. the blazer from one, the jeans from another).
 - JPG, PNG or WebP. iPhone HEIC is skipped (AirDrop > Options > Most Compatible gives JPG).

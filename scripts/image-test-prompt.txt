@@ -2,7 +2,7 @@ Create a photorealistic, full-body photo of this exact, real person, wearing the
 
 IDENTITY — the highest priority, above pose, styling and image quality
 - This must be a photo of this specific real person, not of a similar-looking model. Someone who knows them must recognise them instantly.
-- Images {{FACE_IMAGES}} are close-ups of their face (front, left and right). Copy the face from them with full fidelity.
+- Images {{FACE_IMAGES}} are close-ups of their face from different angles. Copy the face from them with full fidelity.
 - Images {{BODY_IMAGES}} show the same person head to toe. Cross-check the face against these photos too: the close-ups were taken near the camera and can exaggerate the nose and the centre of the face, while these show the true proportions at a normal distance. The final face must match both.
 - Keep every identifying detail exactly as in the photos: face shape and width, jawline, nose shape and size, eye shape, eye colour and spacing, eyebrows, ears, skin tone and texture (including freckles, lines and marks), hairline (including any recession at the temples), hair colour, length, texture and parting, facial hair shape, length, density and any grey, and glasses (frame shape, thickness and colour) if they wear them.
 - Keep their real age, build, height and body proportions from the head-to-toe photos.

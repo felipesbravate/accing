@@ -79,9 +79,11 @@ async function shrink(img) {
   }
 }
 
-const FACES = [['face-front', 'face close-up, front'], ['face-left', 'face close-up, left side'], ['face-right', 'face close-up, right side']];
+const FACE_LABELS = { 'face-front': 'face close-up, front', 'face-left': 'face close-up, left side', 'face-right': 'face close-up, right side' };
+const MAX_FACES = 8;
 
-/** Faces first (fixed names, as captured in onboarding), then every other photo as a head-to-toe outfit photo. */
+/** Faces first (every file starting with "face-": the three onboarding photos or frames from a video), then every
+ *  other photo as a head-to-toe outfit photo. */
 async function loadInputs() {
   if (!existsSync(INPUTS)) throw new Error(`Missing folder ${INPUTS}`);
   const all = (await readdir(INPUTS)).filter((f) => !f.startsWith('.')).sort();
@@ -89,11 +91,13 @@ async function loadInputs() {
   if (heic.length) console.warn(`Skipping ${heic.join(', ')}: HEIC is not supported. Export as JPG (AirDrop > Options > Most Compatible).`);
   const files = all.filter((f) => MIME[extname(f).toLowerCase()]);
   const load = async (f) => shrink({ file: f, bytes: await readFile(join(INPUTS, f)), mime: MIME[extname(f).toLowerCase()] });
+  const order = (f) => { const k = f.toLowerCase().replace(/\.[^.]+$/, ''); const fixed = Object.keys(FACE_LABELS).indexOf(k); return fixed >= 0 ? fixed : 10 + (parseInt(k.replace(/\D+/g, ''), 10) || 0); };
+  const faceFiles = files.filter((f) => /^face-/i.test(f)).sort((a, b) => order(a) - order(b));
+  if (!faceFiles.length) throw new Error('Add face photos to image-test/inputs: face-front/face-left/face-right, or face-1, face-2… (npm run faces-from-video makes these from a video)');
+  if (faceFiles.length > MAX_FACES) throw new Error(`Use at most ${MAX_FACES} face photos (found ${faceFiles.length})`);
   const faces = [];
-  for (const [name, label] of FACES) {
-    const f = files.find((x) => x.toLowerCase().startsWith(name + '.'));
-    if (!f) throw new Error(`Missing ${name}.jpg in image-test/inputs (the onboarding face photos: face-front, face-left, face-right)`);
-    faces.push({ ...(await load(f)), label });
+  for (const [i, f] of faceFiles.entries()) {
+    faces.push({ ...(await load(f)), label: FACE_LABELS[f.toLowerCase().replace(/\.[^.]+$/, '')] || `face close-up ${i + 1} of ${faceFiles.length}` });
   }
   const outfitFiles = files.filter((f) => !faces.some((x) => x.file === f));
   if (!outfitFiles.length) throw new Error('Add head-to-toe photos of the same person in different outfits to image-test/inputs (any file names)');
