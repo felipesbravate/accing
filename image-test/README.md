@@ -41,3 +41,20 @@ npm run image-test
 Results land in `image-test/results/<date-time>/`: every image, `wardrobe.json` (what was read and chosen),
 `report.md` (seconds, tokens, estimated cost) and `index.html` (open it to compare everything side by side).
 Prices for the estimates are in `scripts/image-test.mjs` (`PRICES`) with their sources; check them before trusting totals.
+
+## 4. Face check (runs automatically after every image test)
+Two layers, because one number is not enough: on 2026-10-27 ArcFace ranked first the image friends liked least.
+1. **Identity gate (ArcFace).** Similarity between the generated face and your average face photo, computed on your Mac.
+   Below `0.4` = a different person (calibration: a different man scored 0.07, every real likeness 0.55–0.72).
+   It only gates; it does not say which image looks most like you.
+2. **Look check.** Gemini Flash-Lite (~$0.002 per image) compares the result with your real photos on what ArcFace
+   cannot see: hair colour and grey, apparent age, beard, glasses, expression, and anything invented (tattoos, logos, watches).
+
+Each image gets PASS or FAIL with reasons in `report.md` and `index.html`.
+
+Setup once: `npm install`. The first check downloads the face model (~280 MB) into `image-test/models/` (git-ignored).
+- `npm run face-check` re-checks every results folder (also older ones); `npm run face-check -- image-test/results/<folder>` one folder.
+- Options: `--min-identity=0.45`, `--no-look` (free, identity only), `--no-identity`; `npm run image-test -- --no-check` skips it.
+
+Licence: the ArcFace model (InsightFace buffalo_l) is for non-commercial research only. Fine for this test; the product
+needs InsightFace's commercial licence or a differently licensed model.

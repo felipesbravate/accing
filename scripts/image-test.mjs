@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { existsSync } from 'node:fs';
 import { extname, join, resolve } from 'node:path';
 import { CATEGORIES, composeOutfit, normaliseReading } from './image-test-lib.mjs';
+import { checkFaces, checkTable, MIN_IDENTITY } from './face-check/index.mjs';
 
 const ROOT = resolve(import.meta.dirname, '..');
 const INPUTS = join(ROOT, 'image-test', 'inputs');
@@ -40,7 +41,7 @@ const OPENAI_BASE = process.env.OPENAI_BASE_URL || 'https://api.openai.com';
 const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
 
 function args() {
-  const out = { runs: 3, only: null, dryRun: false, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
+  const out = { runs: 3, only: null, dryRun: false, check: true, minIdentity: MIN_IDENTITY, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
     expression: 'relaxed and neutral, the same natural expression as in the face photos (no smile they do not have)', occasion: 'an office day', weather: 'sunny 24°C', time: 'Monday morning',
     pose: 'a natural fashion lookbook pose: body turned about 15 degrees from the camera, weight on one leg with the other knee slightly bent, shoulders relaxed, one hand casually in a pocket or resting on the hip and the other loose at the side, chin level, eyes to the camera' };
   for (const a of process.argv.slice(2)) {
@@ -48,6 +49,8 @@ function args() {
     if (k === 'runs') out.runs = Math.max(1, Math.min(10, parseInt(v, 10) || 3));
     else if (k === 'only') out.only = v;
     else if (k === 'dry-run') out.dryRun = true;
+    else if (k === 'no-check') out.check = false;
+    else if (k === 'min-identity') { out.minIdentity = Number(v); if (!(out.minIdentity > 0 && out.minIdentity < 1)) throw new Error('--min-identity must be between 0 and 1'); }
     else if (k === 'seed') out.seed = parseInt(v, 10) || 1;
     else if (k === 'reader-model') out.reader = v;
     else if (k === 'detail') { if (!['default', 'max'].includes(v)) throw new Error('--detail must be max or default'); out.detail = v; }
@@ -166,7 +169,7 @@ function buildPrompt(template, faces, outfits, outfit, opts) {
   const lines = outfit.items.map((x) => `  - the ${x.description} (${x.category}) from image ${f + x.photo + 1}`);
   // The photo must show the feet, so without identified shoes the model may choose plain ones (the only free choice).
   if (!outfit.items.some((x) => x.category === 'shoes')) {
-    lines.push('  - shoes: none were identified in the photos, so add simple, neutral shoes that suit this outfit (the only item you may choose yourself)');
+    lines.push('  - shoes: none were identified in the photos, so add simple, neutral shoes that suit this outfit, plain with no logos or brand marks (the only item you may choose yourself)');
   }
   const garments = lines.join('\n');
   return template.replace('{{FACE_IMAGES}}', range(1, f)).replace('{{BODY_IMAGES}}', range(f + 1, f + outfits.length))
@@ -329,6 +332,16 @@ async function main() {
     }
   }
 
+  // Two-layer face check: identity gate (ArcFace) + look check (hair, age, invented tattoos/logos).
+  const done = rows.filter((r) => !r.error);
+  let check = null;
+  if (opts.check && done.length) {
+    console.log(`\nChecking faces (identity gate ≥ ${opts.minIdentity}, then hair/age/added items)…`);
+    check = await checkFaces({ faces, lookRefs: images, images: done.map((r) => ({ file: r.file, bytes: r.image, mime: 'image/png' })), minIdentity: opts.minIdentity });
+    check.results.forEach((c, i) => { done[i].check = c; console.log(`  ${c.pass ? 'PASS' : 'FAIL'}  ${c.file}  identity ${fmt(c.identity)}${c.reasons.length ? '  ' + c.reasons.join('; ') : ''}`); });
+    console.log(`Look check cost: ~$${check.lookCost.toFixed(4)}`);
+  }
+
   const lines = ['# Image test ' + stamp, '', `Occasion: ${opts.occasion} · Weather: ${opts.weather} · Time: ${opts.time}`, '', `Pose: ${opts.pose}`, '', `Seed: ${seed} (repeat with --seed=${seed}) · Gemini size: ${opts.size} · Photo detail: ${opts.detail}`, '',
     '## Garments read', '', ...readings.map((r, i) => `- Photo ${i + 1} (${outfits[i].file}): ${r.items.map((x) => `${x.description} [${x.category}]`).join('; ') || 'nothing recognised'}`), '',
     '## Outfit asked for', '', ...outfit.items.map((x) => `- ${x.description} (${x.category}) from photo ${x.photo + 1}`), '',
@@ -340,6 +353,11 @@ async function main() {
     const ok = rows.filter((r) => r.m === m && !r.error);
     const avg = (f) => (ok.length ? ok.reduce((s, r) => s + (f(r) || 0), 0) / ok.length : null);
     lines.push(`| ${m.key} | ${ok.length}/${opts.runs} | ${fmt(avg((r) => r.seconds), 1)} | ${fmt(avg((r) => r.cost))} |`);
+  }
+  if (check) {
+    lines.push('', '## Face check', '', `Identity: ArcFace similarity to the average face photo; below ${opts.minIdentity} = a different person. It only gates: it does not rank likeness.`,
+      `Look check: hair, age, facial hair, glasses, expression and anything invented, by gemini-3.1-flash-lite (~$${check.lookCost.toFixed(4)} total).`, '', ...checkTable(check.results));
+    for (const c of check.results) if (c.reasons.length || c.warnings.length) lines.push(`- ${c.file}: ${[...c.reasons, ...c.warnings.map((w) => 'warning: ' + w)].join('; ')}`);
   }
   lines.push('', 'Score each image 1–5: face (would a friend recognise you?), body, garments exact, full frame. Below 4 on face fails.', '',
     'Costs are estimates from the PRICES table in scripts/image-test.mjs; check them on the providers\' pricing pages.');
@@ -355,7 +373,7 @@ figure{margin:0;width:240px}img{width:240px;height:360px;object-fit:contain;back
 <h2>Outfit asked for</h2><p>${outfit.items.map((x) => `${esc(x.description)} <small>(photo ${x.photo + 1})</small>`).join(' + ')}</p>
 ${models.map((m) => `<h2>${esc(m.key)}</h2><div class="row">${rows.filter((r) => r.m === m).map((r) => r.error
     ? `<figure><div class="err">${esc(r.error)}</div><figcaption>run ${r.run}</figcaption></figure>`
-    : `<figure><img src="${esc(r.file)}"><figcaption>run ${r.run} · ${r.seconds.toFixed(1)}s · ~$${fmt(r.cost)}</figcaption></figure>`).join('')}</div>`).join('')}`;
+    : `<figure><img src="${esc(r.file)}"><figcaption>run ${r.run} · ${r.seconds.toFixed(1)}s · ~$${fmt(r.cost)}${r.check ? `<br><b style="color:${r.check.pass ? '#1b7f3b' : '#b3261e'}">${r.check.pass ? 'PASS' : 'FAIL'}</b> · identity ${fmt(r.check.identity)}${r.check.reasons.length ? '<br>' + esc(r.check.reasons.join('; ')) : ''}` : ''}</figcaption></figure>`).join('')}</div>`).join('')}`;
   await writeFile(join(out, 'index.html'), html);
   console.log(`\nDone. Open ${join(out, 'index.html')} to compare, and ${join(out, 'report.md')} for the numbers.`);
 }

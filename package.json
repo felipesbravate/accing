@@ -10,7 +10,8 @@
     "start": "next start",
     "test": "node --test \"tests/**/*.test.js\"",
     "image-test": "node --env-file-if-exists=.env.local scripts/image-test.mjs",
-    "faces-from-video": "node scripts/faces-from-video.mjs"
+    "faces-from-video": "node scripts/faces-from-video.mjs",
+    "face-check": "node --env-file-if-exists=.env.local scripts/face-check.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
@@ -19,6 +20,10 @@
     "next": "^15.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "onnxruntime-node": "^1.31.1",
+    "sharp": "^0.35.5"
   },
   "engines": {
     "node": ">=20"

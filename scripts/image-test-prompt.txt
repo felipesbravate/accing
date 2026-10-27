@@ -6,6 +6,7 @@ IDENTITY — the highest priority, above pose, styling and image quality
 - Images {{BODY_IMAGES}} show the same person head to toe. Cross-check the face against these photos too: the close-ups were taken near the camera and can exaggerate the nose and the centre of the face, while these show the true proportions at a normal distance. The final face must match both.
 - Keep every identifying detail exactly as in the photos: face shape and width, jawline, nose shape and size, eye shape, eye colour and spacing, eyebrows, ears, skin tone and texture (including freckles, lines and marks), hairline (including any recession at the temples), hair colour, length, texture and parting, facial hair shape, length, density and any grey, and glasses (frame shape, thickness and colour) if they wear them.
 - Keep their real age, build, height and body proportions from the head-to-toe photos.
+- Never add anything their body does not have in the photos: no tattoos, piercings, scars or marks, and no extra grey or colour in the hair or beard.
 - Do not beautify, idealise, smooth the skin, slim, age, de-age, tidy the beard or hair, or change makeup. When unsure, copy the photos more literally.
 - Expression: {{EXPRESSION}}
 
@@ -14,8 +15,8 @@ OUTFIT
 {{GARMENTS}}
 - From each of those photos take only the named item; ignore every other piece of clothing in it.
 - Reproduce each garment exactly: colour, pattern, fabric texture, fit, length, buttons, zips, seams and any logos.
-- Do not add, remove or swap any clothing, shoes, jewellery, bags or accessories.
-- Style it naturally for {{OCCASION}} on a {{WEATHER}} {{TIME}}. Styling may only change how items are worn (sleeves rolled, jacket open), never which items.
+- Do not add, remove or swap any clothing, shoes, jewellery, watches, bags or accessories, and never add brand logos, wordmarks or text that the photos do not show.
+- Style it naturally for {{OCCASION}} on a {{WEATHER}} {{TIME}}. Styling may only change how items are worn (jacket open or closed), never which items. Keep sleeves down.
 
 PHOTO
 - Head-to-toe, full body visible including shoes, centred with space above the head and below the feet. The face must be sharp and clearly lit.
