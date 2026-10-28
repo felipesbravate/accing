@@ -863,6 +863,15 @@ PHOTO
   }
   const anchorMode = !base && (opts.anchor ?? opts.realFace === false) && looks.length > 1;
   const rejected = [];
+  // A look that fails its checks on every try is dropped, not shown (Felipe, 2026-10-28): the last try used to be kept
+  // unchecked, which let through a pink jacket, an extra jacket over a cardigan and an invented t-shirt print. Five
+  // right looks beat six with one wrong.
+  const dropped = [];
+  const dropLook = async (look, r, reasons) => {
+    await rm(join(out, r.file), { force: true }).catch(() => {});
+    dropped.push({ look, tries: r.attempt || opts.anchorTries, reasons });
+    console.log(`  look ${look.n} dropped: it failed the checks on all ${opts.anchorTries} tries (last: ${reasons.join('; ')})`);
+  };
   if (base) {
     // BASE PHOTO MODE: every look is the person's own photo with only the clothes changed, so face, body, hair and pose
     // are real. The face is then put back from the base photo itself (same light, same angle), and the background
@@ -911,13 +920,14 @@ PHOTO
           r.attempt = attempt;
           if (!r.error && shownAt == null) shownAt = (performance.now() - t0) / 1000;
           const last = attempt === opts.anchorTries;
-          if (r.error || last) { ready(r); break; }
+          if (r.error) { ready(r); break; }
           if (!opts.check) { remember(r); ready(r); break; }
           const why = await lookProblems(look, r, baseGeometry, baseRefs);
           if (!why.length) { remember(r); ready(r); break; }
           const rej = r.file.replace(/\.png$/, `-rejected-${attempt}.png`);
           await writeFile(join(out, rej), r.image);
           rejected.push({ file: rej, reasons: why, cost: r.cost });
+          if (last) { await dropLook(look, r, why); break; }
           console.log(`  look ${look.n} rejected (${why.join('; ')}), making it again…`);
         }
       }
@@ -971,7 +981,8 @@ PHOTO
             } : null;
             const r = await generate(m, look, run, name(m, look, run), edit.images, edit.prompt, edit.label, { ...opts, faceCount: 1 }, lock);
             const last = attempt === opts.anchorTries;
-            if (r.error || !opts.check || last) { rows.push(r); break; }
+            r.attempt = attempt;
+            if (r.error || !opts.check) { rows.push(r); break; }
             const img = { file: r.file, bytes: r.image, mime: 'image/png' };
             const [pose, face] = await Promise.all([
               poseCheck(anchorImg, img).catch((e) => ({ same: true, note: `pose check failed: ${e.message}` })),
@@ -985,6 +996,7 @@ PHOTO
             const rej = r.file.replace(/\.png$/, `-rejected-${attempt}.png`);
             await writeFile(join(out, rej), r.image);
             rejected.push({ file: rej, reasons, cost: r.cost });
+            if (last) { await dropLook(look, r, reasons); break; }
             console.log(`  look ${look.n} rejected (${reasons.join('; ')}), making it again…`);
           }
         }
@@ -996,12 +1008,14 @@ PHOTO
         for (let attempt = 1; attempt <= opts.anchorTries; attempt++) {
           const r = await generate(m, look, run, name(m, look, run), look.images, look.prompt, look.label, opts, withFacePass(m));
           const last = attempt === opts.anchorTries;
-          if (r.error || !opts.check || last) { rows.push(r); break; }
+          r.attempt = attempt;
+          if (r.error || !opts.check) { rows.push(r); break; }
           const why = await lookProblems(look, r);
           if (!why.length) { rows.push(r); break; }
           const rej = r.file.replace(/\.png$/, `-rejected-${attempt}.png`);
           await writeFile(join(out, rej), r.image);
           rejected.push({ file: rej, reasons: why, cost: r.cost });
+          if (last) { await dropLook(look, r, why); break; }
           console.log(`  look ${look.n} rejected (${why.join('; ')}), making it again…`);
         }
       }
@@ -1030,6 +1044,7 @@ PHOTO
     ...(anchorMode ? [`Same face, pose and shadow: look 1 was generated from the face photos${opts.check ? ' and had to pass the face check' : ''}; looks 2–${looks.length} are edits of it where only the clothes change, each checked for the same pose as look 1 and remade if it differs.`,
       ...(rejected.length ? ['', `Attempts rejected before one passed (${rejected.length}, ~$${fmt(rejected.reduce((s, r) => s + (r.cost || 0), 0))}):`, ...rejected.map((r) => `- ${r.file}: ${r.reasons.join('; ')}`)] : []), ''] : []),
     ...(!anchorMode && rejected.length ? [`Attempts rejected before one passed (${rejected.length}, ~$${fmt(rejected.reduce((s, r) => s + (r.cost || 0), 0))}):`, ...rejected.map((r) => `- ${r.file}: ${r.reasons.join('; ')}`), ''] : []),
+    ...(dropped.length ? ['## Dropped looks', '', `Failed the checks on every try, so not shown (their tries are the *-rejected-* files):`, ...dropped.map((d) => `- Look ${d.look.n}: ${(d.look.items || []).map((x) => x.description).join(' + ')} — last problem: ${d.reasons.join('; ')}`), ''] : []),
     ...(rows.some((r) => r.refused) ? ['## Refused by OpenAI (safety)', '', 'Skipped without retrying: the same garments are refused every time (usually sheer or revealing clothes).', '', ...rows.filter((r) => r.refused).map((r) => `- Look ${r.look.n}: ${(r.look.items || []).map((x) => x.description).join(' + ')}`), ''] : []),
     ...(prepRows.length ? ['## Base photo preparation', '', ...prepRows.map((r) => `- ${r.file}: ${r.m.key}, ${r.seconds.toFixed(1)}s, ~$${fmt(r.cost)}, identity ${fmt(r.identity)} — ${r.reasons.length ? 'rejected: ' + r.reasons.join('; ') : 'kept'}`), ''] : []),
     '## Results', '',

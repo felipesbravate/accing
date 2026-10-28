@@ -24,6 +24,8 @@ The Gemini key is always needed (it reads the garments); the OpenAI key only for
   layered garment and always kept together in a look.
 - A garment that repeats across looks is painted like the first accepted look that wore it (that look is sent as an
   extra image), so its light and colour stay the same. `--no-same-light` turns this off.
+- A look that fails the checks on every try (3 by default) is dropped, not shown, and listed under "Dropped looks" in
+  the report; its tries stay as the `*-rejected-*` files.
 - Sheer or revealing garments can be refused by OpenAI's safety system. That look is skipped (not retried) and listed
   under "Refused by OpenAI (safety)" in the report; the other looks still run.
 - JPG, PNG or WebP. iPhone HEIC is skipped (AirDrop > Options > Most Compatible gives JPG).
