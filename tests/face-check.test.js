@@ -80,8 +80,6 @@ test('a cropped or seated photo cannot be used', () => {
   assert.equal(r.usable, false);
   assert.deepEqual(r.blocking, ['the whole body, head to feet, is not in the photo', 'the person is not standing']);
 });
-  assert.deepEqual(r.blocking, ['the whole body, head to feet, is not in the photo', 'the person is not standing']);
-});
 
 import { parseCsv, summarise } from '../scripts/score-summary.mjs';
 
