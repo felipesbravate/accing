@@ -239,3 +239,21 @@ export function mergeLayers(items) {
   }
   return out;
 }
+
+/**
+ * Which garment to ask a new photo of, when a look failed on every try: the one garment every try's problems name.
+ * Thais, 2026-10-28: her beige jacket was photographed in pink room light, so every look with it was rejected as
+ * "pink" or "two-tone" while GPT painted it beige, its real colour. No prompt fixes that; a daylight photo does.
+ * items: the look's garments; reasonsPerTry: one string per failed try. Returns { item, hint } or null.
+ */
+export function blameGarment(items, reasonsPerTry) {
+  if (!reasonsPerTry.length) return null;
+  const strip = /\b(metallic|silver|gold(en)?|black|white|off-white|cream|ivory|beige|tan|camel|brown|grey|gray|charcoal|navy|blue|light|dark|pale|red|pink|blush|green|olive|khaki|yellow|orange|purple|lilac|burgundy|nude|with|and|the|worn|over|under|layered)\b/gi;
+  const words = (d) => d.toLowerCase().replace(/t-shirt/g, 'tshirt').replace(strip, ' ').replace(/[^a-z ]+/g, ' ').split(/\s+/).filter((w) => w.length > 3);
+  const names = (r, item) => { const w = words(item.description.split(',')[0]); const t = r.toLowerCase().replace(/t-shirt/g, 'tshirt'); return w.length && w.filter((x) => t.includes(x)).length / w.length >= 0.6; };
+  const blamed = items.filter((x) => reasonsPerTry.every((r) => names(r, x)));
+  if (blamed.length !== 1) return null;
+  const all = reasonsPerTry.join(' ').toLowerCase();
+  const light = /colou?r|pink|tone|tint|shade|lighter|darker|light /.test(all);
+  return { item: blamed[0], hint: light ? 'in daylight, with nothing over it' : 'flat or worn, fully visible, with nothing over it' };
+}

@@ -77,3 +77,21 @@ test('looks differ by more than their shoes while other garments are left', () =
   const dresses = looks.filter((l) => l.items.some((x) => x.description === 'white shirt dress')).length;
   assert.ok(dresses <= 2, `shirt dress in ${dresses} of 6 looks`);
 });
+
+test('a look that failed every try on one garment asks for a new photo of it', async () => {
+  const { blameGarment } = await import('../scripts/image-test-lib.mjs');
+  const items = [
+    { description: 'light beige cotton button-up casual jacket', category: 'outerwear', photo: 0 },
+    { description: 'olive green long-sleeved button-down shirt, worn layered over black t-shirt', category: 'top', photo: 2 },
+    { description: 'dark grey wide-leg cropped jeans', category: 'bottom', photo: 2 },
+  ];
+  const tries = [
+    'outfit: different cotton button-up casual jacket: the jacket in the photo is beige, while the reference shows a light pink jacket',
+    'outfit: different cotton button-up casual jacket: two-tone pink and beige in the reference',
+    'outfit: different cotton button-up casual jacket: light cream instead of two-tone',
+  ];
+  const b = blameGarment(items, tries);
+  assert.equal(b.item.category, 'outerwear');
+  assert.match(b.hint, /daylight/);
+  assert.equal(blameGarment(items, [...tries, 'outfit: different wide-leg cropped jeans: clean hem']), null);
+});
