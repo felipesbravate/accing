@@ -51,7 +51,7 @@ const OPENAI_BASE = process.env.OPENAI_BASE_URL || 'https://api.openai.com';
 const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
 
 function args() {
-  const out = { runs: 3, looks: 1, cleanRefs: true, realFace: null, openaiSize: null, flex: false, garmentCrops: true, prep: true, reprep: false, prepModel: null, proFace: false, body: null, background: '#F9F9FB', poseRef: true, facePasses: 2, faceLock: true, clean: true, anchor: null, anchorTries: 3, only: null, dryRun: false, check: true, minIdentity: MIN_IDENTITY, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
+  const out = { runs: 3, looks: 1, cleanRefs: true, realFace: null, openaiSize: null, flex: false, garmentCrops: true, autoBase: true, prep: true, reprep: false, prepModel: null, proFace: false, body: null, background: '#F9F9FB', poseRef: true, facePasses: 2, faceLock: true, clean: true, anchor: null, anchorTries: 3, only: null, dryRun: false, check: true, minIdentity: MIN_IDENTITY, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
     expression: 'copy it exactly from the front face photo, including any slight smile; no smile or seriousness that photo does not have', occasion: 'an office day', weather: 'sunny 24°C', time: 'Monday morning',
     shoes: 'plain white leather low-top sneakers with white soles and white laces',
     pose: 'relaxed standing pose: body turned about 15 degrees so their left shoulder is slightly closer to the camera, head turned back to face the camera, chin level, eyes looking into the lens; weight on the back (right) leg, front (left) knee slightly relaxed, feet about hip-width apart; both arms hanging loosely at the sides, elbows very slightly bent, hands open and relaxed beside the thighs, never in pockets; shoulders relaxed and level' };
@@ -70,6 +70,7 @@ function args() {
     else if (k === 'hd') out.openaiSize = '1536x2304';
     else if (k === 'flex') out.flex = true;
     else if (k === 'no-garment-crops') out.garmentCrops = false;
+    else if (k === 'no-auto-base') out.autoBase = false;
     else if (k === 'no-anchor') out.anchor = false;
     else if (k === 'anchor') out.anchor = true;
     else if (k === 'no-clean-refs') out.cleanRefs = false;
@@ -413,7 +414,8 @@ const fmt = (x, d = 3) => (x == null ? '–' : typeof x === 'number' ? x.toFixed
 
 async function main() {
   const opts = args();
-  const { faces, outfits, base, images } = await loadInputs();
+  const { faces, outfits, base: photoBase, images } = await loadInputs();
+  let base = photoBase;
   console.log(`Faces: ${faces.map((x) => x.file).join(', ')}`);
   const resized = images.filter((x) => x.resized);
   if (resized.length) console.log(`Resized ${resized.length} photo(s) to max ${MAX_SIDE} px: ${resized.map((x) => `${x.file} ${x.resized}`).join(', ')}`);
@@ -680,6 +682,52 @@ async function main() {
   // Looks are generated fresh from the same pose reference, and the real face gives every one the same face. Editing
   // look 1 into the others (--anchor) kept old garments, invented ghosts and reshaped the body (2026-10-27), so it is
   // only the default when the real face is off.
+  // GENERATED BASE (default when there is no base photo, for GPT): fresh GPT looks were "very good" but each one drew a
+  // new face and a new stance (Juliana, 2026-10-28). So the first look is generated from the face photos a few times,
+  // the one closest to her face photos (and on the pose reference) becomes the base photo, and every look is then an
+  // edit of it with its face copied back pixel for pixel: same face, same pose, no full-body photo needed from the user.
+  // Saved in inputs/prepared/ and reused while the face and outfit photos stay the same. --no-auto-base turns it off.
+  if (!base && opts.autoBase && looks.length > 1 && models.some((m) => m.provider === 'openai')) {
+    const genModel = MODELS.find((x) => x.key === (opts.prepModel || 'openai-2.5-flare-high'));
+    const l1 = looks[0];
+    const hash = createHash('sha1');
+    for (const img of images) hash.update(img.bytes);
+    hash.update(l1.prompt).update(opts.openaiSize || '');
+    const cached = join(PREPARED_DIR, `generated-${hash.digest('hex').slice(0, 10)}.png`);
+    const idOf = async (img) => (await checkFaces({ faces, lookRefs: [], images: [img], look: false, minIdentity: 0, log: () => {} })).results[0].identity;
+    if (opts.prepared) base = { file: 'generated-base.png', bytes: await readFile(resolve(opts.prepared)), mime: 'image/png', generated: true };
+    else if (existsSync(cached) && !opts.reprep) {
+      console.log(`Generated base photo: using the one made earlier (${cached.replace(ROOT + '/', '')}; --reprep to make it again)`);
+      base = { file: 'generated-base.png', bytes: await readFile(cached), mime: 'image/png', generated: true };
+    } else {
+      console.log(`No base photo: generating look 1 ${opts.anchorTries} times with ${genModel.key} and keeping the one closest to the face photos as the base photo…`);
+      if (cleaner && l1.pose) l1.pose.geometry ??= await measurePose(cleaner, l1.pose.bytes).catch(() => null);
+      let best = null;
+      for (let attempt = 1; attempt <= opts.anchorTries; attempt++) {
+        const file = `base-generated-${attempt}.png`;
+        const r = await generate(genModel, { n: 0 }, 1, file, l1.images, l1.prompt, l1.label, { ...opts, faceCount: faces.length });
+        if (r.error) continue;
+        const img = { file, bytes: r.image, mime: 'image/png' };
+        const [id, look] = await Promise.all([idOf(img).catch(() => null),
+          checkFaces({ faces, lookRefs: images, images: [img], identity: false, log: () => {} }).then((x) => x.results[0]).catch(() => ({ reasons: [] }))]);
+        const left = dropGarments(look.reasons || []);
+        const g = r.clean?.pose, ref = l1.pose?.geometry;
+        const off = g && ref ? Math.max(Math.abs(g.stagger - ref.stagger), Math.abs(g.gap - ref.gap) / 2) : 0;
+        if (off > POSE_TOLERANCE) left.push(`pose differs from the pose reference (feet off by ${off.toFixed(3)} of the height)`);
+        if (id == null || id < opts.minIdentity) left.unshift(`identity ${id == null ? 'no face' : id.toFixed(3)}`);
+        console.log(`  generated base ${attempt}: identity ${id == null ? '–' : id.toFixed(3)}${left.length ? ' — rejected: ' + left.join('; ') : ' — ok'}`);
+        prepRows.push({ ...r, file, reasons: left, identity: id });
+        const score = (id ?? -1) - (left.length ? 1 : 0); // passing tries first, then the closest face
+        if (!best || score > best.score) best = { ...img, id, score, ok: !left.length };
+      }
+      if (!best) throw new Error('Could not generate a base photo (every try failed). Run again, or add a base photo (base.jpg).');
+      if (!best.ok) console.log(`  (no try passed every check; keeping the closest face, ${best.file})`);
+      await mkdir(PREPARED_DIR, { recursive: true });
+      await writeFile(cached, best.bytes);
+      console.log(`Kept ${best.file} (identity ${best.id?.toFixed(3)}) as the base photo; saved as ${cached.replace(ROOT + '/', '')}. Not her? Pick another with --prepared=<file>.`);
+      base = { file: 'generated-base.png', bytes: best.bytes, mime: 'image/png', generated: true };
+    }
+  }
   const anchorMode = !base && (opts.anchor ?? opts.realFace === false) && looks.length > 1;
   const rejected = [];
   if (base) {
@@ -690,7 +738,7 @@ async function main() {
     const baseReading = await readPhoto(base, 0, opts.reader).catch(() => ({ items: [] }));
     const takeOff = baseReading.items.filter((x) => ['outerwear', 'top', 'dress', 'bottom', 'shoes'].includes(x.category)).map((x) => x.description);
     console.log(`Base photo ${base.file}: wears ${takeOff.join('; ') || 'nothing recognised'}`);
-    const src = opts.prep ? await prepareBase(base, baseReading) : base;
+    const src = opts.prep && !base.generated ? await prepareBase(base, baseReading) : base;
     // Look check against her face photos and the (prepared) base photo only: her outfit photos are mirror selfies with
     // other hair and jewellery, and the check then "saw" a bun and a choker that were not there (2026-10-28).
     const baseRefs = [...faces, src];
@@ -707,6 +755,14 @@ async function main() {
       const edit = buildEdit(editTemplate, outfits, look, src, takeOff);
       look.editPrompt = edit.prompt;
       for (let run = 1; run <= opts.runs; run++) {
+        // A generated base photo already is look 1 (same garments): reuse it instead of paying for an edit of itself.
+        if (base.generated && look === looks[0] && run === 1) {
+          const file = name(m, look, run);
+          await writeFile(join(out, file), base.bytes);
+          console.log(`look ${look.n} · ${m.key}: the generated base photo (no extra call)`);
+          rows.push({ m, look, run, file, image: base.bytes, seconds: 0, cost: 0, attempt: 1, readySeconds: 0, tokens: {} });
+          continue;
+        }
         // Wall time until this look is ready (all attempts, checks and clean-up): what a user would wait for it.
         const t0 = performance.now();
         const ready = (r) => { r.readySeconds = (performance.now() - t0) / 1000; rows.push(r); };

@@ -195,3 +195,11 @@ look n is shown", how long she would wait if she swipes after 5, 10, 20 or 30 se
 
 Look check (all modes): garments and shoes are never judged as "added" (the outfit check covers them). Fresh looks may
 differ from the pose reference by 2.5% of the height (was 1%: looks judged right were 1.5–2.3% off and all redone).
+
+## Generated base photo (automatic when there is no base photo, GPT)
+Fresh GPT looks were very good but each drew a new face and stance (Juliana, 2026-10-28). Without `base.*`, look 1 is
+now generated 3 times (GPT high), the try closest to the face photos (and on the pose reference) becomes the base photo,
+and looks 2+ are edits of it with its face copied back pixel for pixel. Look 1 is the base itself (no extra call).
+It is saved in `inputs/prepared/generated-*.png` and reused while the face and outfit photos stay the same;
+`--prepared=<file>` picks another try (`base-generated-N.png` in the results folder), `--reprep` makes new ones,
+`--no-auto-base` goes back to fresh looks.
