@@ -182,3 +182,13 @@ GPT image cost is computed from the tokens OpenAI reports (text in $5, image in 
 saved per image in `*.usage.json`, and the run prints its total (kept + rejected + base preparation).
 `--flex` asks for OpenAI's Flex tier (half price, slower, can be unavailable). When Flex is unavailable (429, not
 charged) or not offered for the model, that image falls back to standard and the log says so; flex images say "(flex)".
+
+## Garment close-ups (automatic)
+The garment reader also returns a box around each garment. Edits then send one close-up per garment (cut out, at most
+1024 px) instead of whole outfit photos: about 70% of a GPT look's cost was the photos sent in. Garments without a box
+are sent as their whole photo. Close-ups are saved as `garment-*.jpg` in the results folder; `--no-garment-crops` goes
+back to whole photos (compare input tokens in the report).
+
+## Swipe timing (base mode)
+Each look's ready time (all attempts, checks and clean-up) is measured. The report shows, for "look n+1 starts when
+look n is shown", how long she would wait if she swipes after 5, 10, 20 or 30 seconds.

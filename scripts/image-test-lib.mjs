@@ -133,6 +133,9 @@ export function composeLooks(wardrobe, { count = 1, seed = 1 } = {}) {
 }
 
 /** Turns the reader model's JSON (one photo) into wardrobe rows. Unknown categories become 'other'. */
+/** A garment box from the reader: [ymin, xmin, ymax, xmax] on a 0–1000 scale, at least 3% of the photo each way. */
+export const validBox = (b) => Array.isArray(b) && b.length === 4 && b.every((v) => Number.isFinite(v) && v >= 0 && v <= 1000) && b[2] - b[0] >= 30 && b[3] - b[1] >= 30;
+
 export function normaliseReading(json, photo) {
   const items = Array.isArray(json?.items) ? json.items : [];
   return items
@@ -142,5 +145,6 @@ export function normaliseReading(json, photo) {
       category: CATEGORIES.includes(x.category) ? x.category : 'other',
       description: x.description.trim().slice(0, 120),
       visibility: ['full', 'partial', 'hidden'].includes(x.visibility) ? x.visibility : 'partial',
+      ...(validBox(x.box) ? { box: x.box.map(Math.round) } : {}),
     }));
 }

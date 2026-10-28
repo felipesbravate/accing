@@ -51,7 +51,7 @@ const OPENAI_BASE = process.env.OPENAI_BASE_URL || 'https://api.openai.com';
 const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
 
 function args() {
-  const out = { runs: 3, looks: 1, cleanRefs: true, realFace: null, openaiSize: null, flex: false, prep: true, reprep: false, prepModel: null, proFace: false, body: null, background: '#F9F9FB', poseRef: true, facePasses: 2, faceLock: true, clean: true, anchor: null, anchorTries: 3, only: null, dryRun: false, check: true, minIdentity: MIN_IDENTITY, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
+  const out = { runs: 3, looks: 1, cleanRefs: true, realFace: null, openaiSize: null, flex: false, garmentCrops: true, prep: true, reprep: false, prepModel: null, proFace: false, body: null, background: '#F9F9FB', poseRef: true, facePasses: 2, faceLock: true, clean: true, anchor: null, anchorTries: 3, only: null, dryRun: false, check: true, minIdentity: MIN_IDENTITY, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
     expression: 'copy it exactly from the front face photo, including any slight smile; no smile or seriousness that photo does not have', occasion: 'an office day', weather: 'sunny 24°C', time: 'Monday morning',
     shoes: 'plain white leather low-top sneakers with white soles and white laces',
     pose: 'relaxed standing pose: body turned about 15 degrees so their left shoulder is slightly closer to the camera, head turned back to face the camera, chin level, eyes looking into the lens; weight on the back (right) leg, front (left) knee slightly relaxed, feet about hip-width apart; both arms hanging loosely at the sides, elbows very slightly bent, hands open and relaxed beside the thighs, never in pockets; shoulders relaxed and level' };
@@ -69,6 +69,7 @@ function args() {
     else if (k === 'openai-size') { if (!/^\d{3,4}x\d{3,4}$/.test(v)) throw new Error('--openai-size=WIDTHxHEIGHT, e.g. 1536x2304'); out.openaiSize = v; }
     else if (k === 'hd') out.openaiSize = '1536x2304';
     else if (k === 'flex') out.flex = true;
+    else if (k === 'no-garment-crops') out.garmentCrops = false;
     else if (k === 'no-anchor') out.anchor = false;
     else if (k === 'anchor') out.anchor = true;
     else if (k === 'no-clean-refs') out.cleanRefs = false;
@@ -181,6 +182,7 @@ For each item give:
 - category: one of ${CATEGORIES.join(', ')} (outerwear = jacket, blazer, coat; top = shirt, t-shirt, sweater, blouse; bottom = trousers, jeans, skirt, shorts)
 - description: 4 to 10 words with colour, pattern, material and cut, e.g. "brown houndstooth tweed single-breasted blazer"
 - visibility: "full" if the whole item is visible, "partial" if partly hidden or cropped, "hidden" if you can barely see it
+- box: a tight box around the item as [ymin, xmin, ymax, xmax] on a 0–1000 scale of the photo (for shoes, one box around both)
 Also say whether the person is visible head to toe (full_body), how many people are in the photo (people), and which mannequin build best matches their body, female or male (figure; used only to pick a pose reference).`;
 
 const READER_SCHEMA = {
@@ -193,6 +195,7 @@ const READER_SCHEMA = {
       category: { type: 'STRING', enum: CATEGORIES },
       description: { type: 'STRING' },
       visibility: { type: 'STRING', enum: ['full', 'partial', 'hidden'] },
+      box: { type: 'ARRAY', items: { type: 'INTEGER' } },
     }, required: ['category', 'description', 'visibility'] } },
   },
   required: ['full_body', 'people', 'items'],
@@ -254,15 +257,37 @@ function imageLabel(faces, outfit, i) {
 /** Look 2+ in anchor mode: image 1 is the accepted first look; the other images are only the photos this look takes
  *  garments from. Everything but the clothes is kept from image 1, so face, pose and shadow are the same in every look. */
 function buildEdit(template, outfits, look, anchor, takeOff = []) {
-  const used = [...new Set(look.items.map((x) => x.photo))].sort((a, b) => a - b);
-  const pos = (photo) => used.indexOf(photo) + 2;
-  const lines = look.items.map((x) => `  - the ${x.description} (${x.category}) from image ${pos(x.photo)}`);
+  // Each garment with a close-up crop is sent on its own; garments without one come from their whole photo.
+  const images = [anchor], labels = ['the finished photo to edit: keep everything except the clothes'], lines = [];
+  const photoImage = new Map();
+  for (const x of look.items) {
+    if (x.crop) {
+      images.push(x.crop); labels.push(`a close-up of the ${x.description} (${x.category}) alone: copy this garment exactly`);
+      lines.push(`  - the ${x.description} (${x.category}) shown in image ${images.length}`);
+      continue;
+    }
+    if (!photoImage.has(x.photo)) { images.push(outfits[x.photo]); photoImage.set(x.photo, images.length); labels.push(null); }
+    lines.push(`  - the ${x.description} (${x.category}) from image ${photoImage.get(x.photo)}`);
+  }
+  for (const [photo, n] of photoImage) labels[n - 1] = `take only the ${look.items.filter((x) => x.photo === photo && !x.crop).map((x) => x.description).join(' and the ')} from this photo`;
   if (!look.items.some((x) => x.category === 'shoes')) lines.push('  - shoes: keep the shoes from image 1 exactly as they are');
-  const images = [anchor, ...used.map((p) => outfits[p])];
-  const label = (i) => (i === 0 ? 'the finished photo to edit: keep everything except the clothes'
-    : `take only the ${look.items.filter((x) => x.photo === used[i - 1]).map((x) => x.description).join(' and the ')} from this photo`);
+  const label = (i) => labels[i];
   const off = takeOff.length ? `TAKE OFF what image 1 wears now: ${takeOff.join('; ')} (unless the same item is listed below).\n\n` : '';
   return { prompt: template.replace('{{GARMENTS}}', lines.join('\n')).replace('CHANGE THE CLOTHES TO', off + 'CHANGE THE CLOTHES TO'), images, label };
+}
+
+/** Close-up of one garment: its box from the reader plus 6% margin, at most GARMENT_SIDE px, JPEG. About 70% of a GPT
+ *  look's cost was the photos sent in (2026-10-28: ~4,900 image tokens per look); whole 2048 px outfit photos carried
+ *  the person, the other garments and background for nothing. */
+const GARMENT_SIDE = 1024;
+async function garmentCrop(photo, item) {
+  const sharp = (await import('sharp')).default;
+  const { width: W, height: H } = await sharp(photo.bytes).metadata();
+  const [y0, x0, y1, x1] = item.box, mx = (x1 - x0) * 0.06, my = (y1 - y0) * 0.06;
+  const left = Math.max(0, Math.floor((x0 - mx) / 1000 * W)), top = Math.max(0, Math.floor((y0 - my) / 1000 * H));
+  const width = Math.min(W - left, Math.ceil((x1 - x0 + 2 * mx) / 1000 * W)), height = Math.min(H - top, Math.ceil((y1 - y0 + 2 * my) / 1000 * H));
+  const bytes = await sharp(photo.bytes).extract({ left, top, width, height }).resize(GARMENT_SIDE, GARMENT_SIDE, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 90 }).toBuffer();
+  return { file: `garment-${item.photo + 1}-${item.category}.jpg`, bytes, mime: 'image/jpeg' };
 }
 
 async function callGemini(m, images, prompt, label, opts) {
@@ -460,6 +485,18 @@ async function main() {
       catch (e) { console.log(`(could not cut out ${o.file}: ${e.message})`); }
     }
     console.log(`Cut out ${outfits.length} outfit photo(s) onto a plain background.`);
+  }
+  // Garment close-ups for edits (base and anchor mode): one small image per garment instead of whole outfit photos.
+  if (opts.garmentCrops) {
+    let n = 0;
+    for (const x of wardrobe) {
+      if (!x.box) continue;
+      try { x.crop = await garmentCrop(outfits[x.photo], x); n++; await writeFile(join(out, `garment-${x.photo + 1}-${x.category}-${n}.jpg`), x.crop.bytes); }
+      catch (e) { console.log(`(no close-up for ${x.description}: ${e.message})`); }
+    }
+    const cropOf = new Map(wardrobe.filter((x) => x.crop).map((x) => [`${x.photo}|${x.description}`, x.crop]));
+    for (const l of looks) for (const x of l.items) x.crop ??= cropOf.get(`${x.photo}|${x.description}`);
+    console.log(`Garment close-ups: ${n} of ${wardrobe.length} (the rest are sent as whole photos; --no-garment-crops sends whole photos)`);
   }
   // Face fidelity: redraw the face of every first image at close-up size, and give every edited look that same face.
   let faceModel = null, reference = null;
@@ -663,13 +700,16 @@ async function main() {
       const edit = buildEdit(editTemplate, outfits, look, src, takeOff);
       look.editPrompt = edit.prompt;
       for (let run = 1; run <= opts.runs; run++) {
+        // Wall time until this look is ready (all attempts, checks and clean-up): what a user would wait for it.
+        const t0 = performance.now();
+        const ready = (r) => { r.readySeconds = (performance.now() - t0) / 1000; rows.push(r); };
         for (let attempt = 1; attempt <= opts.anchorTries; attempt++) {
           const r = await generate(m, look, run, name(m, look, run), edit.images, edit.prompt, edit.label, { ...opts, faceCount: 1 }, lockToBase);
           r.attempt = attempt;
           const last = attempt === opts.anchorTries;
-          if (r.error || !opts.check || last) { rows.push(r); break; }
+          if (r.error || !opts.check || last) { ready(r); break; }
           const why = await lookProblems(look, r, baseGeometry, baseRefs);
-          if (!why.length) { rows.push(r); break; }
+          if (!why.length) { ready(r); break; }
           const rej = r.file.replace(/\.png$/, `-rejected-${attempt}.png`);
           await writeFile(join(out, rej), r.image);
           rejected.push({ file: rej, reasons: why, cost: r.cost });
@@ -799,6 +839,19 @@ async function main() {
     lines.push('', '## Face check', '', `Identity: ArcFace similarity to the average face photo; below ${opts.minIdentity} = a different person. It only gates: it does not rank likeness.`,
       `Look check: hair, age, facial hair, glasses, expression and anything invented, by gemini-3.1-flash-lite (~$${check.lookCost.toFixed(4)} total).`, '', ...checkTable(check.results));
     for (const c of check.results) if (c.reasons.length || c.warnings.length) lines.push(`- ${c.file}: ${[...c.reasons, ...c.warnings.map((w) => 'warning: ' + w)].join('; ')}`);
+  }
+  // Swipe timing (lazy generation): look n+1 starts when look n is shown, so a user who swipes after d seconds waits
+  // max(0, ready time of look n+1 − d). Look 1 is made before she opens the app (or reused).
+  const timed = rows.filter((r) => r.readySeconds != null && !r.error);
+  if (timed.length > 1) {
+    lines.push('', '## Swipe timing (look n+1 starts when look n is shown)', '', '| Model | Ready times (s) | Wait if she swipes after 5 s | 10 s | 20 s | 30 s |', '|---|---|---|---|---|---|');
+    for (const m of models) {
+      const t = timed.filter((r) => r.m === m).sort((a, b) => a.look.n - b.look.n).map((r) => r.readySeconds);
+      if (t.length < 2) continue;
+      const wait = (d) => { const w = t.slice(1).map((x) => Math.max(0, x - d)); return `avg ${fmt(w.reduce((a, b) => a + b, 0) / w.length, 1)}, max ${fmt(Math.max(...w), 1)}`; };
+      lines.push(`| ${m.key} | ${t.map((x) => x.toFixed(1)).join(', ')} | ${wait(5)} | ${wait(10)} | ${wait(20)} | ${wait(30)} |`);
+      console.log(`Swipe timing ${m.key}: looks ready in ${t.map((x) => x.toFixed(0) + 's').join(', ')}; wait after a 10 s look: ${wait(10)} s`);
+    }
   }
   const spent = [...rows, ...rejected, ...prepRows].reduce((t, r) => t + (r.cost || 0), 0);
   lines.push('', `Total spent this run (kept + rejected + base preparation): ~$${fmt(spent)}. GPT costs are from the tokens OpenAI reported; usage per image is in the *.usage.json files.`);
