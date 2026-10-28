@@ -80,3 +80,17 @@ test('a cropped or seated photo cannot be used', () => {
   assert.equal(r.usable, false);
   assert.deepEqual(r.blocking, ['the whole body, head to feet, is not in the photo', 'the person is not standing']);
 });
+  assert.deepEqual(r.blocking, ['the whole body, head to feet, is not in the photo', 'the person is not standing']);
+});
+
+import { parseCsv, summarise } from '../scripts/score-summary.mjs';
+
+test('score summary: rates over scored looks, quoted fields, first attempts', () => {
+  const rows = parseCsv('file,look,model,attempt,auto_check,garments,face,clothes,pose,notes\n"a.png",1,"m",1,"pass","shirt, ""blue"" + jeans",1,1,1,""\n"b.png",2,"m",2,"pass","dress",1,0,1,"wrong length"\n"c.png",3,"m",1,"pass","skirt",,,,""\n');
+  assert.equal(rows[0].garments, 'shirt, "blue" + jeans');
+  const s = summarise(rows);
+  assert.equal(s.scored, 2); assert.equal(s.unscored, 1);
+  assert.equal(s.clothes, 0.5); assert.equal(s.allRight, 0.5);
+  assert.equal(s.keptOnFirstAttempt, 0.5); assert.equal(s.rightOnFirstAttempt, 0.5);
+  assert.deepEqual(s.clothesMisses, ['b.png: dress — wrong length']);
+});

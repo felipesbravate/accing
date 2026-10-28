@@ -12,7 +12,8 @@
     "image-test": "node --env-file-if-exists=.env.local scripts/image-test.mjs",
     "faces-from-video": "node scripts/faces-from-video.mjs",
     "face-check": "node --env-file-if-exists=.env.local scripts/face-check.mjs",
-    "make-pose-reference": "node --env-file-if-exists=.env.local scripts/make-pose-reference.mjs"
+    "make-pose-reference": "node --env-file-if-exists=.env.local scripts/make-pose-reference.mjs",
+    "score-summary": "node scripts/score-summary.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

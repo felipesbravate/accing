@@ -511,6 +511,17 @@ async function main() {
     }
   };
   // Everything a fresh look must pass: the pose reference's stance (measured), the face check, and exactly its outfit.
+  // In base mode the face is a pixel copy of the prepared photo, and logos, prints and earrings are on her real clothes
+  // and ears: on 2026-10-28 all 11 rejections in 3 runs were false alarms of this kind ("earrings", "Vans logo on the
+  // shoes", "Adidas logo"). So face-only findings (age, glasses, facial hair) and those items are not judged there;
+  // garments (incl. logos) are the outfit check's job. Identity, hair, body build, hands and other added items still are.
+  const realMark = /logo|print|text|wordmark|graphic|stripe|brand|earring|stud/i;
+  const baseReasons = (reasons) => reasons.flatMap((x) => {
+    if (/^(looks (older|younger)|glasses:|facial hair:)/.test(x)) return [];
+    if (!x.startsWith('added: ')) return [x];
+    const left = x.slice(7).split(', ').filter((a) => !realMark.test(a));
+    return left.length ? [`added: ${left.join(', ')}`] : [];
+  });
   const lookProblems = async (look, r, refGeometry = null, lookRefs = images) => {
     const why = [];
     if (cleaner && (refGeometry || look.pose) && r.clean?.pose) {
@@ -526,7 +537,7 @@ async function main() {
       checkFaces({ faces, lookRefs, images: [img], minIdentity: opts.minIdentity, background: opts.background, log: () => {} }).then((x) => x.results[0]),
       outfitCheck(img, look.items, look.items.some((x) => x.category === 'shoes') ? null : opts.shoes).catch((e) => ({ ok: true, note: `outfit check failed: ${e.message}` })),
     ]);
-    why.push(...face.reasons);
+    why.push(...(refGeometry ? baseReasons(face.reasons) : face.reasons));
     if (!fit.ok) why.push(`outfit: ${fit.note}`);
     return why;
   };
@@ -586,7 +597,7 @@ async function main() {
       // A clean background is the cleaner's job; everything else must be fixed.
       // The clothes are kept here and replaced in every look, so logos and prints on them are not judged: the check kept
       // reporting the real Adidas logo as "added" and rejected all 3 tries, the best at identity 0.752 (2026-10-28).
-      const clothesMark = /logo|print|text|wordmark|graphic|stripe|shirt|t-shirt|skirt|trousers|shoe|sneaker/i;
+      const clothesMark = /logo|print|text|wordmark|graphic|stripe|shirt|t-shirt|skirt|trousers|shoe|sneaker|earring|stud/i;
       const lookReasons = (look.reasons || []).filter((x) => !(x.startsWith('added:') && clothesMark.test(x)));
       const added = (look.look?.added || []).filter((x) => !clothesMark.test(x));
       const left = [...after.blocking, ...after.fixes.filter((f) => f !== 'room or objects in the background'), ...lookReasons.filter((x) => !x.startsWith('added:')), ...(added.length ? [`added: ${added.join(', ')}`] : [])];
@@ -634,6 +645,7 @@ async function main() {
       for (let run = 1; run <= opts.runs; run++) {
         for (let attempt = 1; attempt <= opts.anchorTries; attempt++) {
           const r = await generate(m, look, run, name(m, look, run), edit.images, edit.prompt, edit.label, { ...opts, faceCount: 1 }, lockToBase);
+          r.attempt = attempt;
           const last = attempt === opts.anchorTries;
           if (r.error || !opts.check || last) { rows.push(r); break; }
           const why = await lookProblems(look, r, baseGeometry, baseRefs);
@@ -739,6 +751,7 @@ async function main() {
   if (opts.check && done.length) {
     console.log(`\nChecking faces (identity gate ≥ ${opts.minIdentity}, then hair/age/added items)…`);
     check = await checkFaces({ faces, lookRefs: finalRefs, images: done.map((r) => ({ file: r.file, bytes: r.image, mime: 'image/png' })), minIdentity: opts.minIdentity, background: opts.background });
+    if (base) for (const c of check.results) { c.reasons = baseReasons(c.reasons); c.pass = c.reasons.length === 0 && c.identity != null; }
     check.results.forEach((c, i) => { done[i].check = c; console.log(`  ${c.pass ? 'PASS' : 'FAIL'}  ${c.file}  identity ${fmt(c.identity)}${c.reasons.length ? '  ' + c.reasons.join('; ') : ''}`); });
     console.log(`Look check cost: ~$${check.lookCost.toFixed(4)}`);
   }
@@ -770,6 +783,11 @@ async function main() {
   lines.push('', 'Score each image 1–5: face (would a friend recognise you?), body, garments exact, full frame. Below 4 on face fails.', '',
     'Costs are estimates from the PRICES table in scripts/image-test.mjs; check them on the providers\' pricing pages.');
   await writeFile(join(out, 'report.md'), lines.join('\n') + '\n');
+  // Scoring sheet: fill face / clothes / pose with 1 (right) or 0 (wrong) per look, then npm run score-summary.
+  // "attempt" is the try that was kept (1 = right first time by the automatic checks).
+  const csv = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  await writeFile(join(out, 'scores.csv'), ['file,look,model,attempt,auto_check,garments,face,clothes,pose,notes',
+    ...done.map((r) => [r.file, r.look.n, r.m.key, r.attempt ?? '', r.check ? (r.check.pass ? 'pass' : 'fail') : '', r.look.items.map((x) => x.description).join(' + '), '', '', '', ''].map(csv).join(','))].join('\n') + '\n');
 
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const html = `<!doctype html><meta charset="utf-8"><title>Image test ${stamp}</title>

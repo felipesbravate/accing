@@ -168,3 +168,11 @@ Setup once: `npm install`. The first check downloads the face model (~280 MB) in
 
 Licence: the ArcFace model (InsightFace buffalo_l) is for non-commercial research only. Fine for this test; the product
 needs InsightFace's commercial licence or a differently licensed model.
+
+## Scoring (first-attempt rate)
+Every run writes `scores.csv` in its results folder: one row per look with the garments and the attempt that was kept.
+Fill `face`, `clothes` and `pose` with 1 (right) or 0 (wrong), then `npm run score-summary` (or
+`npm run score-summary -- 2026-10-28` for some runs only) prints the rates and lists clothing misses.
+In base mode the look check no longer judges what is copied or real: age, glasses and facial hair (the face is a pixel
+copy), earrings, and logos or prints on the garments (the outfit check covers garments). All 11 rejections in three runs
+on 2026-10-28 were false alarms of this kind.
