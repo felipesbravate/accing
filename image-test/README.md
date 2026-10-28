@@ -217,3 +217,8 @@ The previous ones are kept as `pose-reference-female-*-house.png`. A new pose ma
   length, closures, pockets, pattern), not only by name. A plain V-neck tank had come out as a racerback and passed.
 - **Camera:** base photos ask for hip height, ~4 m, long lens (85 mm look), no wide-angle distortion (feet looked big,
   legs short). New method → a new generated base is made once.
+
+## Several people
+Put each person's photos in `image-test/inputs/people/<name>/` (face-front, face-left, face-right + outfit photos,
+optional base.*) and run with `--person=<name>`. Results go to `results/<time>-<name>/`. Generated base photos are
+cached per face photos in `inputs/prepared/`, so each person gets their own.
