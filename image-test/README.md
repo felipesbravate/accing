@@ -22,6 +22,8 @@ The Gemini key is always needed (it reads the garments); the OpenAI key only for
   The script reads what you wear in each and mixes items across photos (e.g. the blazer from one, the jeans from another).
 - Layers: two tops worn one over the other in the same photo (a tee over a lace long-sleeve) are read as one
   layered garment and always kept together in a look.
+- A garment that repeats across looks is painted like the first accepted look that wore it (that look is sent as an
+  extra image), so its light and colour stay the same. `--no-same-light` turns this off.
 - Sheer or revealing garments can be refused by OpenAI's safety system. That look is skipped (not retried) and listed
   under "Refused by OpenAI (safety)" in the report; the other looks still run.
 - JPG, PNG or WebP. iPhone HEIC is skipped (AirDrop > Options > Most Compatible gives JPG).

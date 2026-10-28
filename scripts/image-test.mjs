@@ -54,7 +54,7 @@ const OPENAI_BASE = process.env.OPENAI_BASE_URL || 'https://api.openai.com';
 const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
 
 function args() {
-  const out = { runs: 3, looks: 1, cleanRefs: true, person: null, bodyCard: true, blankFace: true, realFace: null, openaiSize: null, flex: false, garmentCrops: true, autoBase: true, prep: true, reprep: false, prepModel: null, proFace: false, body: null, background: '#F9F9FB', poseRef: true, facePasses: 2, faceLock: true, clean: true, anchor: null, anchorTries: 3, only: null, dryRun: false, check: true, minIdentity: MIN_IDENTITY, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
+  const out = { runs: 3, looks: 1, sameLight: true, cleanRefs: true, person: null, bodyCard: true, blankFace: true, realFace: null, openaiSize: null, flex: false, garmentCrops: true, autoBase: true, prep: true, reprep: false, prepModel: null, proFace: false, body: null, background: '#F9F9FB', poseRef: true, facePasses: 2, faceLock: true, clean: true, anchor: null, anchorTries: 3, only: null, dryRun: false, check: true, minIdentity: MIN_IDENTITY, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
     expression: 'copy it exactly from the front face photo, including any slight smile; no smile or seriousness that photo does not have', occasion: 'an office day', weather: 'sunny 24°C', time: 'Monday morning',
     shoes: 'plain white leather low-top sneakers with white soles and white laces',
     pose: HOUSE_POSE };
@@ -75,6 +75,7 @@ function args() {
     else if (k === 'no-garment-crops') out.garmentCrops = false;
     else if (k === 'no-auto-base') out.autoBase = false;
     else if (k === 'no-body-card') out.bodyCard = false;
+    else if (k === 'no-same-light') out.sameLight = false;
     else if (k === 'no-blank-face') out.blankFace = false;
     else if (k === 'no-anchor') out.anchor = false;
     else if (k === 'anchor') out.anchor = true;
@@ -305,11 +306,27 @@ function imageLabel(faces, outfit, i) {
 
 /** Look 2+ in anchor mode: image 1 is the accepted first look; the other images are only the photos this look takes
  *  garments from. Everything but the clothes is kept from image 1, so face, pose and shadow are the same in every look. */
-function buildEdit(template, outfits, look, anchor, takeOff = []) {
+function buildEdit(template, outfits, look, anchor, takeOff = [], rendered = new Map()) {
   // Each garment with a close-up crop is sent on its own; garments without one come from their whole photo.
   const images = [anchor], labels = ['the finished photo to edit: keep everything except the clothes'], lines = [];
   const photoImage = new Map();
+  // A garment already painted in an accepted look of this run is sent again as that look, so it gets the same light,
+  // shading and colour every time (2026-10-28: the same shirt dress came out with different light in looks 1 and 2).
+  const earlier = new Map();
   for (const x of look.items) {
+    const prev = rendered.get(x.description);
+    if (!prev) continue;
+    if (!earlier.has(prev.n)) { images.push({ file: prev.file, bytes: prev.bytes, mime: 'image/png' }); earlier.set(prev.n, { at: images.length, items: [] }); labels.push(null); }
+    earlier.get(prev.n).items.push(x.description);
+  }
+  for (const { at, items } of earlier.values()) labels[at - 1] = `an earlier finished photo of this person already wearing the ${items.join(' and the ')}: paint ${items.length > 1 ? 'them' : 'it'} with exactly the same light, shading, colour, texture and drape as here; take nothing else from this photo`;
+  const seenIn = (x) => [...earlier.entries()].find(([, e]) => e.items.includes(x.description))?.[1].at;
+  for (const x of look.items) {
+    if (x.crop && seenIn(x)) {
+      images.push(x.crop); labels.push(`a close-up of the ${x.description} (${x.category}) alone: copy this garment exactly`);
+      lines.push(`  - the ${x.description} (${x.category}) shown in image ${images.length}; it already appears in image ${seenIn(x)}: make it look exactly as it does there (same light, shading and colour)`);
+      continue;
+    }
     if (x.crop) {
       images.push(x.crop); labels.push(`a close-up of the ${x.description} (${x.category}) alone: copy this garment exactly`);
       lines.push(`  - the ${x.description} (${x.category}) shown in image ${images.length}`);
@@ -867,8 +884,12 @@ PHOTO
       const fl = await faceLock({ model: faceModel, source: src.bytes, target: bytes, reference });
       return { bytes: fl.bytes, face: { locked: fl.locked, before: fl.before, after: fl.after, reason: fl.reason, exact: fl.exact } };
     } : null;
+    const renderedBy = new Map(); // model -> garment description -> the first accepted look that wears it
     for (const look of looks) for (const m of models) {
-      const edit = buildEdit(editTemplate, outfits, look, src, takeOff);
+      if (!renderedBy.has(m)) renderedBy.set(m, new Map());
+      const rendered = renderedBy.get(m);
+      const edit = buildEdit(editTemplate, outfits, look, src, takeOff, opts.sameLight ? rendered : new Map());
+      const remember = (r) => { for (const x of look.items) if (!rendered.has(x.description)) rendered.set(x.description, { n: look.n, file: r.file, bytes: r.image }); };
       look.editPrompt = edit.prompt;
       for (let run = 1; run <= opts.runs; run++) {
         // A generated base photo already is look 1 (same garments): reuse it instead of paying for an edit of itself.
@@ -890,9 +911,10 @@ PHOTO
           r.attempt = attempt;
           if (!r.error && shownAt == null) shownAt = (performance.now() - t0) / 1000;
           const last = attempt === opts.anchorTries;
-          if (r.error || !opts.check || last) { ready(r); break; }
+          if (r.error || last) { ready(r); break; }
+          if (!opts.check) { remember(r); ready(r); break; }
           const why = await lookProblems(look, r, baseGeometry, baseRefs);
-          if (!why.length) { ready(r); break; }
+          if (!why.length) { remember(r); ready(r); break; }
           const rej = r.file.replace(/\.png$/, `-rejected-${attempt}.png`);
           await writeFile(join(out, rej), r.image);
           rejected.push({ file: rej, reasons: why, cost: r.cost });

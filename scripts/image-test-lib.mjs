@@ -151,7 +151,7 @@ export function composeLooks(wardrobe, { count = 1, seed = 1, occasion = '', wea
  * because the occasion only reached the image prompt, never the choice of garments.
  */
 const OCCASIONS = [
-  { name: 'work', words: /office|work|meeting|interview|business|conference|client|presentation|job/i, min: 3, max: 5, maxExposure: 'low' },
+  { name: 'work', words: /office|work|meeting|interview|business|conference|client|presentation|job/i, min: 3, max: 5, maxExposure: 'medium' }, // sleeveless and knee-length are fine at work (Felipe, 2026-10-28)
   { name: 'formal', words: /wedding|gala|black.?tie|ceremony|funeral|opera|theatre|theater/i, min: 4, max: 5, maxExposure: 'medium' },
   { name: 'evening', words: /dinner|date|party|night ?out|drinks|cocktail|bar|club|evening|restaurant/i, min: 3, max: 5, maxExposure: 'high' },
   { name: 'sport', words: /gym|run|sport|workout|training|yoga|hike|hiking|padel|tennis/i, min: 1, max: 2, maxExposure: 'high' },

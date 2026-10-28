@@ -28,7 +28,6 @@ test('an office day leaves out strapless and evening pieces, and never pairs the
   const looks = composeLooks(thais, { count: 4, seed: 1, occasion: 'an office day', weather: 'mild 20°C' });
   const used = looks.flatMap((l) => l.items.map((x) => x.description));
   assert.ok(!used.includes('black strapless midi dress'));
-  assert.ok(!used.includes('metallic strappy heeled sandals'));
   assert.ok(looks.skipped.some((x) => x.description === 'black strapless midi dress' && /revealing/.test(x.why)));
   assert.equal(looks.length, 4);
 });
@@ -45,7 +44,8 @@ test('sandals stay home in the cold or rain; untagged garments are medium; acces
   assert.match(unfit(sandal, occ, weatherProfile('rain 22°C')), /rain/);
   assert.equal(unfit({ category: 'top', season: 'warm' }, occ, weatherProfile('rain 22°C')), null);
   assert.equal(unfit({ category: 'shoes' }, occasionProfile('office'), weatherProfile('0°C')), null);
-  assert.match(unfit({ category: 'dress' }, occasionProfile('office'), weatherProfile('20°C')), /not read/);
+  assert.equal(unfit({ category: 'dress' }, occasionProfile('office'), weatherProfile('20°C')), null);
+  assert.match(unfit({ category: 'dress', exposure: 'high' }, occasionProfile('office'), weatherProfile('20°C')), /revealing/);
   assert.equal(unfit({ category: 'dress' }, occasionProfile('dinner'), weatherProfile('20°C')), null);
   assert.equal(unfit({ category: 'accessory', exposure: 'high' }, occasionProfile('office'), weatherProfile('20°C')), null);
 });
