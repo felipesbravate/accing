@@ -68,6 +68,7 @@ function args() {
     else if (k === 'no-check') out.check = false;
     else if (k === 'no-prep') out.prep = false;
     else if (k === 'reprep') out.reprep = true;
+    else if (k === 'prepared') out.prepared = v;
     else if (k === 'prep-model') out.prepModel = v;
     else if (k === 'openai-size') { if (!/^\d{3,4}x\d{3,4}$/.test(v)) throw new Error('--openai-size=WIDTHxHEIGHT, e.g. 1536x2304'); out.openaiSize = v; }
     else if (k === 'hd') out.openaiSize = '1536x2304';
@@ -542,6 +543,13 @@ async function main() {
     const template = await readFile(BASE_PREP_PROMPT_FILE, 'utf8');
     const hash = createHash('sha1').update(orig.bytes).update(template).update(opts.openaiSize || '').digest('hex').slice(0, 10);
     const cached = join(PREPARED_DIR, `${orig.file.replace(/\.[^.]+$/, '')}-${hash}.png`);
+    if (opts.prepared) {
+      console.log(`Base photo: using ${opts.prepared} as the prepared version (--prepared)`);
+      const bytes = await readFile(resolve(opts.prepared));
+      await mkdir(PREPARED_DIR, { recursive: true });
+      await writeFile(cached, bytes); // later runs reuse it without --prepared
+      return { ...orig, file: 'base-prepared.png', bytes, mime: 'image/png', prepared: true };
+    }
     if (existsSync(cached) && !opts.reprep) {
       console.log(`Base photo: using the prepared version made earlier (${cached.replace(ROOT + '/', '')}; --reprep to make it again)`);
       return { ...orig, file: 'base-prepared.png', bytes: await readFile(cached), mime: 'image/png', prepared: true };
@@ -576,7 +584,12 @@ async function main() {
         checkFaces({ faces, lookRefs: [...faces, orig], images: [img], identity: false, log: () => {} }).then((x) => x.results[0]).catch(() => ({ reasons: [] })),
       ]);
       // A clean background is the cleaner's job; everything else must be fixed.
-      const left = [...after.blocking, ...after.fixes.filter((f) => f !== 'room or objects in the background'), ...look.reasons];
+      // The clothes are kept here and replaced in every look, so logos and prints on them are not judged: the check kept
+      // reporting the real Adidas logo as "added" and rejected all 3 tries, the best at identity 0.752 (2026-10-28).
+      const clothesMark = /logo|print|text|wordmark|graphic|stripe|shirt|t-shirt|skirt|trousers|shoe|sneaker/i;
+      const lookReasons = (look.reasons || []).filter((x) => !(x.startsWith('added:') && clothesMark.test(x)));
+      const added = (look.look?.added || []).filter((x) => !clothesMark.test(x));
+      const left = [...after.blocking, ...after.fixes.filter((f) => f !== 'room or objects in the background'), ...lookReasons.filter((x) => !x.startsWith('added:')), ...(added.length ? [`added: ${added.join(', ')}`] : [])];
       if (id == null || id < minId) left.unshift(`identity ${id == null ? 'no face' : id.toFixed(3)} < ${minId.toFixed(3)}`);
       console.log(`  prepared base ${attempt}: identity ${id == null ? '–' : id.toFixed(3)} (original photo ${origId == null ? '–' : origId.toFixed(3)})${left.length ? ' — rejected: ' + left.join('; ') : ' — ok'}`);
       prepRows.push({ ...r, file, reasons: left, identity: id });
