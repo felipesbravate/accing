@@ -77,6 +77,9 @@ The base photo decides how good every look can be. Take it like this:
 - the house pose: body turned about 15°, arms loose at the sides, hands open, never in pockets
 Keep her `face-*` photos and the garment photos in the folder as before. Remove `base.*` to go back to generating.
 
+Face lock in base mode (pasting the base photo's face back) runs for Gemini only by default: on GPT edits it made the
+face soft and noisy (2026-10-28) while GPT's edit already kept her face. `--real-face` forces it on.
+
 ### Base photo preparation (automatic, once per photo)
 Any photo works as the base, including a mirror selfie: it is read first.
 - Unusable (only part of the body, face covered, more than one person, sitting, blurry): the run stops and says why.

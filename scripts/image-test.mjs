@@ -600,6 +600,8 @@ async function main() {
     const baseRefs = [...faces, src];
     finalRefs = baseRefs;
     const baseGeometry = cleaner ? await measurePose(cleaner, src.bytes).catch(() => null) : null;
+    // Face lock (paste the base photo's face back) only where the face step applies (Gemini by default): on GPT edits it
+    // warped and resampled the face into a soft, noisy blur (2026-10-28), while GPT's edit already kept her face.
     const lockToBase = faceModel && opts.faceLock ? async (bytes) => {
       const fl = await faceLock({ model: faceModel, source: src.bytes, target: bytes, reference });
       return { bytes: fl.bytes, face: { locked: fl.locked, before: fl.before, after: fl.after, reason: fl.reason } };
@@ -609,7 +611,7 @@ async function main() {
       look.editPrompt = edit.prompt;
       for (let run = 1; run <= opts.runs; run++) {
         for (let attempt = 1; attempt <= opts.anchorTries; attempt++) {
-          const r = await generate(m, look, run, name(m, look, run), edit.images, edit.prompt, edit.label, { ...opts, faceCount: 1 }, lockToBase);
+          const r = await generate(m, look, run, name(m, look, run), edit.images, edit.prompt, edit.label, { ...opts, faceCount: 1 }, faceStepFor(m) ? lockToBase : null);
           const last = attempt === opts.anchorTries;
           if (r.error || !opts.check || last) { rows.push(r); break; }
           const why = await lookProblems(look, r, baseGeometry, baseRefs);
