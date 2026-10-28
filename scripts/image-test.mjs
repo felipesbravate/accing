@@ -245,7 +245,7 @@ const READER_SCHEMA = {
       formality: { type: 'INTEGER' },
       exposure: { type: 'STRING', enum: ['low', 'medium', 'high'] },
       season: { type: 'STRING', enum: ['warm', 'any', 'cold'] },
-    }, required: ['category', 'description', 'visibility'] } },
+    }, required: ['category', 'description', 'visibility', 'formality', 'exposure', 'season'] } },
   },
   required: ['full_body', 'people', 'items'],
 };

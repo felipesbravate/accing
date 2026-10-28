@@ -39,18 +39,21 @@ test('an evening allows the strapless dress, with the heels before the combat bo
   if (d.includes('black strapless midi dress')) assert.ok(!d.includes('black combat boots'));
 });
 
-test('sandals stay home in the cold or rain; untagged items always pass', () => {
+test('sandals stay home in the cold or rain; untagged garments are medium; accessories pass', () => {
   const occ = occasionProfile(''), sandal = { category: 'shoes', season: 'warm' };
   assert.match(unfit(sandal, occ, weatherProfile('8°C')), /warm-weather/);
   assert.match(unfit(sandal, occ, weatherProfile('rain 22°C')), /rain/);
   assert.equal(unfit({ category: 'top', season: 'warm' }, occ, weatherProfile('rain 22°C')), null);
-  assert.equal(unfit({ category: 'dress' }, occasionProfile('office'), weatherProfile('0°C')), null);
+  assert.equal(unfit({ category: 'shoes' }, occasionProfile('office'), weatherProfile('0°C')), null);
+  assert.match(unfit({ category: 'dress' }, occasionProfile('office'), weatherProfile('20°C')), /not read/);
+  assert.equal(unfit({ category: 'dress' }, occasionProfile('dinner'), weatherProfile('20°C')), null);
+  assert.equal(unfit({ category: 'accessory', exposure: 'high' }, occasionProfile('office'), weatherProfile('20°C')), null);
 });
 
 test('a skirt worn under an open shirt dress stays with the dress, and covers it', () => {
   const out = mergeLayers([
     { photo: 3, category: 'dress', description: 'white sleeveless shirt dress', exposure: 'high', box: [150, 300, 750, 650] },
-    { photo: 3, category: 'bottom', description: 'black mini skirt', exposure: 'high', box: [380, 420, 520, 560] },
+    { photo: 3, category: 'bottom', description: 'black mini skirt worn under the shirt dress', exposure: 'high', box: [380, 420, 520, 560] },
     { photo: 3, category: 'shoes', description: 'beige sandals', box: [880, 330, 980, 640] },
   ]);
   assert.equal(out.length, 2);

@@ -159,6 +159,7 @@ const OCCASIONS = [
   { name: 'casual', words: /casual|weekend|errand|shopping|park|home|coffee|brunch|walk|school|university|class|travel|airport|museum|friends/i, min: 1, max: 4, maxExposure: 'high' },
 ];
 const EXPOSURE = { low: 0, medium: 1, high: 2 };
+const GARMENTS = ['outerwear', 'top', 'bottom', 'dress', 'shoes'];
 export function occasionProfile(text = '') {
   return OCCASIONS.find((o) => o.words.test(text)) || { name: 'any', min: 1, max: 5, maxExposure: 'high' };
 }
@@ -172,7 +173,11 @@ export function weatherProfile(text = '') {
 }
 /** Why an item cannot be worn for this occasion and weather, or null. Items without tags pass (old readings). */
 export function unfit(x, occ, wx) {
-  if (x.exposure && EXPOSURE[x.exposure] > EXPOSURE[occ.maxExposure]) return `too revealing for ${occ.name}`;
+  if (!GARMENTS.includes(x.category)) return null; // accessories are not part of looks
+  // 2026-10-28: the reader left exposure out for a shirt dress open to the thigh, and it passed "an office day".
+  // A garment with no exposure counts as medium: it passes casual and evening rules, not work.
+  const exposure = x.exposure || (x.category === 'shoes' ? 'low' : 'medium');
+  if (EXPOSURE[exposure] > EXPOSURE[occ.maxExposure]) return `${x.exposure ? 'too revealing' : 'exposure not read; left out'} for ${occ.name}`;
   if (x.formality && (x.formality < occ.min - 1 || x.formality > occ.max + 1)) return `${x.formality < occ.min ? 'too casual' : 'too dressy'} for ${occ.name}`;
   if (x.season === 'warm' && (wx.cold || (wx.wet && x.category === 'shoes'))) return `warm-weather only (${wx.cold ? `${Math.round(wx.celsius)}°C` : 'rain'})`;
   if (x.season === 'cold' && wx.hot) return `cold-weather only (${Math.round(wx.celsius)}°C)`;
@@ -222,7 +227,7 @@ export function mergeLayers(items) {
       // a tee under a slip dress); otherwise the larger box is the outer layer.
       const [outer, inner] = withDress ? (a.category === 'dress' ? [a, b] : [b, a]) : area(a.box) >= area(b.box) ? [a, b] : [b, a];
       const exposure = ['low', 'medium', 'high'].find((e) => [a.exposure, b.exposure].includes(e));
-      out[i] = { ...outer, ...(exposure ? { exposure } : {}), description: `${outer.description}, worn ${withDress ? (inner.category === 'top' ? 'with' : 'over') : 'layered over'} ${inner.description}`.slice(0, 200), layered: [outer.description, inner.description],
+      out[i] = { ...outer, ...(exposure ? { exposure } : {}), description: `${outer.description}, worn ${withDress ? (inner.category === 'top' ? 'with' : 'over') : 'layered over'} ${inner.description.replace(/,?\s*(worn )?(under|beneath|inside|underneath)\b.*$/i, '')}`.slice(0, 200), layered: [outer.description, inner.description],
         box: [Math.min(a.box[0], b.box[0]), Math.min(a.box[1], b.box[1]), Math.max(a.box[2], b.box[2]), Math.max(a.box[3], b.box[3])],
         visibility: a.visibility === 'full' || b.visibility === 'full' ? 'full' : a.visibility };
       out.splice(j, 1); j = i;
