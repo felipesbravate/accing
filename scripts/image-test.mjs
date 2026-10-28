@@ -97,10 +97,10 @@ function args() {
 
 const MAX_PHOTOS = 10;
 const HOUSE_POSE = 'relaxed standing pose: body turned about 15 degrees so their left shoulder is slightly closer to the camera, head turned back to face the camera, chin level, eyes looking into the lens; weight on the back (right) leg, front (left) knee slightly relaxed, feet about hip-width apart; both arms hanging loosely at the sides, elbows very slightly bent, hands open and relaxed beside the thighs, never in pockets; shoulders relaxed and level';
-// Women: Felipe's own mannequins (2026-10-28), described to match them: a model stance with the left leg crossed in
-// front, feet flat or heels raised (the first flat one, a stiff frontal stance, came out "totally wrong"). The words go with the mannequin image, so keep both in step.
+// Women: Felipe's own mannequins (2026-10-28), described to match them. Flat: a relaxed contrapposto (weight on the
+// right leg, left knee soft, foot turned out). Heels: the left leg crossed in front. Keep words and images in step.
 const FEMALE_POSES = {
-  flat: 'fashion-model pose facing the camera, head straight, chin level; weight on the right leg, the left leg crossed in front of it with the knee turned in and the left foot set just in front of the right foot, both feet flat on the floor; both arms hanging loosely at the sides, hands open and relaxed beside the thighs, never in pockets; shoulders relaxed and down',
+  flat: 'relaxed model stance facing the camera, head straight, chin level; weight on the right leg, which is straight; the left knee softly bent and the left foot set a little to the side with the toes turned out; hips slightly shifted over the standing leg; both arms hanging a little away from the body, elbows soft, hands relaxed with the fingers gently curled beside the thighs, never in pockets; shoulders relaxed, down and level',
   heels: 'fashion-model pose facing the camera, head straight, chin level; weight on the right leg, the left leg crossed in front of it with the knee turned in and the left foot set just in front of the right foot, heels raised; both arms hanging loosely at the sides, hands open and relaxed beside the thighs, never in pockets; shoulders relaxed and down',
 };
 const BASE_POSE_TOLERANCE = 0.04; // edits of a base photo: GPT moved the feet 1–7% of the height on edits that looked right (2026-10-28)
@@ -701,10 +701,36 @@ async function main() {
   if (!base && opts.autoBase && looks.length > 1 && models.some((m) => m.provider === 'openai')) {
     const genModel = MODELS.find((x) => x.key === (opts.prepModel || 'openai-2.5-flare-high'));
     const l1 = looks[0];
+    // The mannequin is the image being edited (image 1), not one reference among many: as a reference GPT gave every
+    // look a stiff, symmetric stance instead of Felipe's relaxed mannequin ("totally wrong", 2026-10-28), while edits keep
+    // the pose of image 1 almost exactly (base mode).
+    const canvas = (() => {
+      const f = faces.length, imgs = [...(l1.pose ? [l1.pose] : []), ...faces, ...outfits], o = l1.pose ? 1 : 0;
+      const garments = l1.items.map((x) => `  - the ${x.description} (${x.category}) from image ${o + f + 1 + x.photo}`);
+      if (!l1.items.some((x) => x.category === 'shoes')) garments.push(`  - shoes: exactly these: ${opts.shoes}. Nothing on them: no logo, stripe, emblem, tab or text`);
+      const faceRange = `${o + 1} to ${o + f}`, bodyRange = `${o + f + 1} to ${o + f + outfits.length}`;
+      const prompt = `${l1.pose ? `Edit image 1. It shows a faceless mannequin. Replace the mannequin with the real person from the other photos, dressed in the garments below.
+KEEP IMAGE 1'S POSE EXACTLY, as if the person stepped into the mannequin's place: the same stance, the weight on the same leg, the same bend of each knee, where each foot stands and how it turns, the arms' distance from the body, the elbows, the hands and fingers, the shoulders, the head angle; the same framing and size in the frame. In words: ${poseText(feetFor(l1.items))}.
+` : `Photo of the real person from the photos, standing: ${opts.pose}.\n`}
+THE PERSON (full fidelity, a friend must recognise them instantly)
+- Face, hair, skin and expression: from the face photos, images ${faceRange}. ${opts.identityCard ? 'What they look like: ' + opts.identityCard : ''}
+- Body build and proportions: from the full-body photos, images ${bodyRange} (only the body there: ignore those photos' pose, background and other clothes).
+- Expression: ${opts.expression}
+
+GARMENTS
+${garments.join('\n')}
+- Reproduce each garment exactly: colour, pattern, fabric, fit, length, buttons, seams. Nothing else: no jewellery, watches, bags, tattoos, logos or text that the photos do not show.
+
+PHOTO
+- Plain light grey seamless studio background, soft even front light, one soft shadow under the feet. Full body head to feet, sharp, realistic photo.`;
+      const label = (k) => (l1.pose && k === 0 ? 'the mannequin to replace: keep its pose and framing exactly' : k < o + f ? faces[k - o].label : `full-body photo of the person (body build only; take the garments named in the prompt)`);
+      return { images: imgs, prompt, label };
+    })();
+    await writeFile(join(out, 'prompt-base.txt'), canvas.prompt);
     // Keyed on the face photos and size only: one base per person, whatever the outfit, occasion or seed.
     const hash = createHash('sha1');
     for (const img of faces) hash.update(img.bytes);
-    hash.update(opts.openaiSize || '').update(l1.pose?.bytes || '').update(opts.pose); // a new pose makes a new base
+    hash.update(opts.openaiSize || '').update(l1.pose?.bytes || '').update(opts.pose).update('canvas-1'); // a new pose or method makes a new base
     const cached = join(PREPARED_DIR, `generated-${hash.digest('hex').slice(0, 10)}.png`);
     const idOf = async (img) => (await checkFaces({ faces, lookRefs: [], images: [img], look: false, minIdentity: 0, log: () => {} })).results[0].identity;
     const outfitKey = (items) => items.map((x) => x.description).sort().join(' + ');
@@ -723,7 +749,7 @@ async function main() {
       let best = null;
       for (let attempt = 1; attempt <= opts.anchorTries; attempt++) {
         const file = `base-generated-${attempt}.png`;
-        const r = await generate(genModel, { n: 0 }, 1, file, l1.images, l1.prompt, l1.label, { ...opts, faceCount: faces.length });
+        const r = await generate(genModel, { n: 0 }, 1, file, canvas.images, canvas.prompt, canvas.label, { ...opts, faceCount: faces.length });
         if (r.error) continue;
         const img = { file, bytes: r.image, mime: 'image/png' };
         const [id, look] = await Promise.all([idOf(img).catch(() => null),
