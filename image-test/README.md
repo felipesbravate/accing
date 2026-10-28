@@ -209,3 +209,11 @@ Women now stand in a fashion-model pose (Felipe's pick), men keep the house pose
 The female mannequins are made from a photo with that pose: `npm run make-pose-reference -- --body=female --feet=flat
 --from=image-test/inputs/pose-sources/female-model.png`, then `--body=female --feet=heels` (an edit of the flat one).
 The previous ones are kept as `pose-reference-female-*-house.png`. A new pose makes a new generated base photo.
+
+## 2026-10-28: show early, garments by eye, camera
+- **Show early:** a look counts as shown when its first image is painted (~1 s after GPT); checks run while she looks
+  at it and a rejected look is replaced later. The swipe table uses that time and lists replacements.
+- **Outfit check by eye:** garments with a close-up are compared to it (neckline, straps and back, collar, sleeves,
+  length, closures, pockets, pattern), not only by name. A plain V-neck tank had come out as a racerback and passed.
+- **Camera:** base photos ask for hip height, ~4 m, long lens (85 mm look), no wide-angle distortion (feet looked big,
+  legs short). New method → a new generated base is made once.

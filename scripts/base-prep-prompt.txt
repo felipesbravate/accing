@@ -7,7 +7,7 @@ CHANGE
 - Hands: empty. Remove everything the person holds or carries (phone, bag, cup, keys) and anything only there because of it.
 - Pose: {{POSE}}{{POSE_IMAGE_RULE}}
 - Head facing the camera, eyes looking straight into the lens, with the natural relaxed expression of the face photos.
-- Camera: not a mirror selfie. A photo taken by a camera on a tripod at chest height, about 3 m away, straight on; no mirror, no mirror frame, no reflection.
+- Camera: not a mirror selfie. A photo taken by a camera on a tripod at hip height, about 4 m away, straight on, with a long lens (85 mm look): natural proportions, no wide-angle distortion, feet their natural size; no mirror, no mirror frame, no reflection.
 - Background: remove the room and every object. Plain light grey seamless studio backdrop, soft even front light, one soft shadow under the feet.
 - Framing: the whole body from head to feet, centred, top of the head about 8% below the top edge, soles about 6% above the bottom edge. Portrait.
 

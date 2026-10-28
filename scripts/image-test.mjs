@@ -719,9 +719,10 @@ THE PERSON (full fidelity, a friend must recognise them instantly)
 
 GARMENTS
 ${garments.join('\n')}
-- Reproduce each garment exactly: colour, pattern, fabric, fit, length, buttons, seams. Nothing else: no jewellery, watches, bags, tattoos, logos or text that the photos do not show.
+- Reproduce each garment exactly: colour, pattern, fabric, fit, length, neckline, straps and back construction, collar, sleeves, buttons, seams. Nothing else: no jewellery, watches, bags, tattoos, logos or text that the photos do not show.
 
 PHOTO
+- Camera at hip height, straight on, about 4 m away with a long lens (85 mm look): natural proportions, no wide-angle distortion, no looking down at the person; feet their natural size, legs their real length.
 - Plain light grey seamless studio background, soft even front light, one soft shadow under the feet. Full body head to feet, sharp, realistic photo.`;
       const label = (k) => (l1.pose && k === 0 ? 'the mannequin to replace: keep its pose and framing exactly' : k < o + f ? faces[k - o].label : `full-body photo of the person (body build only; take the garments named in the prompt)`);
       return { images: imgs, prompt, label };
@@ -730,7 +731,7 @@ PHOTO
     // Keyed on the face photos and size only: one base per person, whatever the outfit, occasion or seed.
     const hash = createHash('sha1');
     for (const img of faces) hash.update(img.bytes);
-    hash.update(opts.openaiSize || '').update(l1.pose?.bytes || '').update(opts.pose).update('canvas-1'); // a new pose or method makes a new base
+    hash.update(opts.openaiSize || '').update(l1.pose?.bytes || '').update(opts.pose).update('canvas-2'); // a new pose or method makes a new base
     const cached = join(PREPARED_DIR, `generated-${hash.digest('hex').slice(0, 10)}.png`);
     const idOf = async (img) => (await checkFaces({ faces, lookRefs: [], images: [img], look: false, minIdentity: 0, log: () => {} })).results[0].identity;
     const outfitKey = (items) => items.map((x) => x.description).sort().join(' + ');
@@ -804,15 +805,19 @@ PHOTO
           const file = name(m, look, run);
           await writeFile(join(out, file), base.bytes);
           console.log(`look ${look.n} · ${m.key}: the generated base photo (no extra call)`);
-          rows.push({ m, look, run, file, image: base.bytes, seconds: 0, cost: 0, attempt: 1, readySeconds: 0, tokens: {} });
+          rows.push({ m, look, run, file, image: base.bytes, seconds: 0, cost: 0, attempt: 1, readySeconds: 0, shownSeconds: 0, tokens: {} });
           continue;
         }
         // Wall time until this look is ready (all attempts, checks and clean-up): what a user would wait for it.
+        // Show early: the look is shown as soon as its first image is painted (face lock + background, ~1 s after GPT);
+        // the checks run while she looks at it, and a rejected look is replaced when the next try is ready.
         const t0 = performance.now();
-        const ready = (r) => { r.readySeconds = (performance.now() - t0) / 1000; rows.push(r); };
+        let shownAt = null;
+        const ready = (r) => { r.readySeconds = (performance.now() - t0) / 1000; r.shownSeconds = shownAt ?? r.readySeconds; rows.push(r); };
         for (let attempt = 1; attempt <= opts.anchorTries; attempt++) {
           const r = await generate(m, look, run, name(m, look, run), edit.images, edit.prompt, edit.label, { ...opts, faceCount: 1 }, lockToBase);
           r.attempt = attempt;
+          if (!r.error && shownAt == null) shownAt = (performance.now() - t0) / 1000;
           const last = attempt === opts.anchorTries;
           if (r.error || !opts.check || last) { ready(r); break; }
           const why = await lookProblems(look, r, baseGeometry, baseRefs);
@@ -949,15 +954,17 @@ PHOTO
   }
   // Swipe timing (lazy generation): look n+1 starts when look n is shown, so a user who swipes after d seconds waits
   // max(0, ready time of look n+1 − d). Look 1 is made before she opens the app (or reused).
-  const timed = rows.filter((r) => r.readySeconds != null && !r.error);
+  const timed = rows.filter((r) => r.shownSeconds != null && !r.error);
   if (timed.length > 1) {
-    lines.push('', '## Swipe timing (look n+1 starts when look n is shown)', '', '| Model | Ready times (s) | Wait if she swipes after 5 s | 10 s | 20 s | 30 s |', '|---|---|---|---|---|---|');
+    lines.push('', '## Swipe timing (look n+1 starts when look n is shown; a look is shown before its checks finish)', '', '| Model | Shown after (s) | Wait if she swipes after 5 s | 10 s | 20 s | 30 s |', '|---|---|---|---|---|---|');
     for (const m of models) {
-      const t = timed.filter((r) => r.m === m).sort((a, b) => a.look.n - b.look.n).map((r) => r.readySeconds);
+      const t = timed.filter((r) => r.m === m).sort((a, b) => a.look.n - b.look.n).map((r) => r.shownSeconds);
+      const replaced = timed.filter((r) => r.m === m && r.attempt > 1).map((r) => `look ${r.look.n} replaced at ${r.readySeconds.toFixed(0)} s`);
       if (t.length < 2) continue;
       const wait = (d) => { const w = t.slice(1).map((x) => Math.max(0, x - d)); return `avg ${fmt(w.reduce((a, b) => a + b, 0) / w.length, 1)}, max ${fmt(Math.max(...w), 1)}`; };
       lines.push(`| ${m.key} | ${t.map((x) => x.toFixed(1)).join(', ')} | ${wait(5)} | ${wait(10)} | ${wait(20)} | ${wait(30)} |`);
-      console.log(`Swipe timing ${m.key}: looks ready in ${t.map((x) => x.toFixed(0) + 's').join(', ')}; wait after a 10 s look: ${wait(10)} s`);
+      if (replaced.length) lines.push('', `Replaced after a failed check: ${replaced.join(', ')}.`);
+      console.log(`Swipe timing ${m.key}: looks shown after ${t.map((x) => x.toFixed(0) + 's').join(', ')}; wait after a 10 s look: ${wait(10)} s`);
     }
   }
   const spent = [...rows, ...rejected, ...prepRows].reduce((t, r) => t + (r.cost || 0), 0);

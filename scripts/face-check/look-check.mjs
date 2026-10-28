@@ -95,25 +95,31 @@ export async function poseCheck(anchor, image, { model = LOOK_MODEL, key = proce
 }
 
 // Outfit check: the look must show exactly its garments. Seen 2026-10-27: edited looks kept look 1's blazer.
-const OUTFIT_SCHEMA = { type: 'OBJECT', properties: { missing: { type: 'ARRAY', items: { type: 'STRING' } }, extra: { type: 'ARRAY', items: { type: 'STRING' } } }, required: ['missing', 'extra'] };
+const OUTFIT_SCHEMA = { type: 'OBJECT', properties: { missing: { type: 'ARRAY', items: { type: 'STRING' } }, different: { type: 'ARRAY', items: { type: 'STRING' } }, extra: { type: 'ARRAY', items: { type: 'STRING' } } }, required: ['missing', 'different', 'extra'] };
 
-/** image: { bytes, mime }; items: [{ category, description }]; defaultShoes: text when the look names no shoes. */
+/** image: { bytes, mime }; items: [{ category, description, crop? }]; defaultShoes: text when the look names no shoes.
+ *  Garments with a close-up (crop) are compared by eye, not only by name: on 2026-10-28 a plain V-neck tank came out with
+ *  racerback straps and the name-only check passed it. */
 export async function outfitCheck(image, items, defaultShoes, { model = LOOK_MODEL, key = process.env.GEMINI_API_KEY } = {}) {
   if (!key) throw new Error('GEMINI_API_KEY is not set');
-  const list = [...items.map((x) => `${x.description} (${x.category})`), ...(defaultShoes ? [`${defaultShoes} (shoes)`] : [])];
-  const prompt = `The person in this photo should wear exactly these garments and nothing else:\n${list.map((x) => '- ' + x).join('\n')}
+  const refs = items.filter((x) => x.crop);
+  const list = [...items.map((x) => `${x.description} (${x.category})${x.crop ? ` — reference image ${refs.indexOf(x) + 2}` : ''}`), ...(defaultShoes ? [`${defaultShoes} (shoes)`] : [])];
+  const prompt = `Image 1 is a photo of a person. ${refs.length ? `Images 2 to ${refs.length + 1} are close-ups of the real garments they should wear. ` : ''}The person should wear exactly these garments and nothing else:\n${list.map((x) => '- ' + x).join('\n')}
 missing: any garment from the list that is not visible or is clearly a different garment (other colour, cut or type).
+different: for each garment that has a reference image, any visible difference from it in the photo: neckline, straps or back construction, collar, sleeves, length, fit, closures (buttons, zips, drawstring), pockets, pattern, colour or fabric. Name the garment and the difference, e.g. "white tank top: racerback straps instead of plain straps". Ignore folds, lighting and the angle of view.
 extra: any outerwear, top, bottom, dress or shoes the person wears that is not on the list (e.g. a jacket or blazer that should not be there). Ignore belts, jewellery, underwear and small details. Empty lists if it matches.`;
+  const part = (img) => ({ inlineData: { mimeType: img.mime, data: img.bytes.toString('base64') } });
   const res = await fetch(`${GEMINI_BASE}/v1beta/models/${model}:generateContent`, {
     method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
-    body: JSON.stringify({ contents: [{ role: 'user', parts: [{ inlineData: { mimeType: image.mime, data: image.bytes.toString('base64') } }, { text: prompt }] }],
+    body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'Image 1 (the photo):' }, part(image), ...refs.flatMap((x, i) => [{ text: `Image ${i + 2} (${x.description}):` }, part(x.crop)]), { text: prompt }] }],
       generationConfig: { responseMimeType: 'application/json', responseSchema: OUTFIT_SCHEMA, temperature: 0 } }),
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(`${res.status}: ${json.error?.message || 'no details'}`);
   const r = JSON.parse(json.candidates?.[0]?.content?.parts?.map((p) => p.text).join('') || '{}');
   const missing = Array.isArray(r.missing) ? r.missing : [], extra = Array.isArray(r.extra) ? r.extra : [];
-  return { ok: !missing.length && !extra.length, missing, extra, note: [...missing.map((x) => 'missing ' + x), ...extra.map((x) => 'extra ' + x)].join(', ') };
+  const different = Array.isArray(r.different) ? r.different : [];
+  return { ok: !missing.length && !extra.length && !different.length, missing, extra, different, note: [...missing.map((x) => 'missing ' + x), ...extra.map((x) => 'extra ' + x), ...different.map((x) => 'different ' + x)].join(', ') };
 }
 
 // Photo check for the base photo (before and after preparing it). Seen 2026-10-28: a mirror selfie as base photo made
