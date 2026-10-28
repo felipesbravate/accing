@@ -97,10 +97,10 @@ function args() {
 
 const MAX_PHOTOS = 10;
 const HOUSE_POSE = 'relaxed standing pose: body turned about 15 degrees so their left shoulder is slightly closer to the camera, head turned back to face the camera, chin level, eyes looking into the lens; weight on the back (right) leg, front (left) knee slightly relaxed, feet about hip-width apart; both arms hanging loosely at the sides, elbows very slightly bent, hands open and relaxed beside the thighs, never in pockets; shoulders relaxed and level';
-// Women: Felipe's own mannequins (2026-10-28), described to match them. Flat feet: relaxed, facing the camera.
-// Heels: a model stance with the left leg crossed in front. The words go with the mannequin image, so keep both in step.
+// Women: Felipe's own mannequins (2026-10-28), described to match them: a model stance with the left leg crossed in
+// front, feet flat or heels raised (the first flat one, a stiff frontal stance, came out "totally wrong"). The words go with the mannequin image, so keep both in step.
 const FEMALE_POSES = {
-  flat: 'relaxed standing pose facing the camera straight on, head straight, chin level; weight slightly on the right leg, the left knee softly relaxed, feet about hip-width apart with the toes turned slightly out; both arms hanging loosely at the sides, hands open and relaxed beside the thighs, never in pockets; shoulders relaxed, down and level',
+  flat: 'fashion-model pose facing the camera, head straight, chin level; weight on the right leg, the left leg crossed in front of it with the knee turned in and the left foot set just in front of the right foot, both feet flat on the floor; both arms hanging loosely at the sides, hands open and relaxed beside the thighs, never in pockets; shoulders relaxed and down',
   heels: 'fashion-model pose facing the camera, head straight, chin level; weight on the right leg, the left leg crossed in front of it with the knee turned in and the left foot set just in front of the right foot, heels raised; both arms hanging loosely at the sides, hands open and relaxed beside the thighs, never in pockets; shoulders relaxed and down',
 };
 const BASE_POSE_TOLERANCE = 0.04; // edits of a base photo: GPT moved the feet 1–7% of the height on edits that looked right (2026-10-28)
