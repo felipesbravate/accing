@@ -54,7 +54,7 @@ function args() {
   const out = { runs: 3, looks: 1, cleanRefs: true, realFace: null, openaiSize: null, flex: false, garmentCrops: true, autoBase: true, prep: true, reprep: false, prepModel: null, proFace: false, body: null, background: '#F9F9FB', poseRef: true, facePasses: 2, faceLock: true, clean: true, anchor: null, anchorTries: 3, only: null, dryRun: false, check: true, minIdentity: MIN_IDENTITY, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
     expression: 'copy it exactly from the front face photo, including any slight smile; no smile or seriousness that photo does not have', occasion: 'an office day', weather: 'sunny 24°C', time: 'Monday morning',
     shoes: 'plain white leather low-top sneakers with white soles and white laces',
-    pose: 'relaxed standing pose: body turned about 15 degrees so their left shoulder is slightly closer to the camera, head turned back to face the camera, chin level, eyes looking into the lens; weight on the back (right) leg, front (left) knee slightly relaxed, feet about hip-width apart; both arms hanging loosely at the sides, elbows very slightly bent, hands open and relaxed beside the thighs, never in pockets; shoulders relaxed and level' };
+    pose: HOUSE_POSE };
   for (const a of process.argv.slice(2)) {
     const [k, ...rest] = a.replace(/^--/, '').split('='); const v = rest.join('=');
     if (k === 'runs') out.runs = Math.max(1, Math.min(10, parseInt(v, 10) || 3));
@@ -96,6 +96,8 @@ function args() {
 }
 
 const MAX_PHOTOS = 10;
+const HOUSE_POSE = 'relaxed standing pose: body turned about 15 degrees so their left shoulder is slightly closer to the camera, head turned back to face the camera, chin level, eyes looking into the lens; weight on the back (right) leg, front (left) knee slightly relaxed, feet about hip-width apart; both arms hanging loosely at the sides, elbows very slightly bent, hands open and relaxed beside the thighs, never in pockets; shoulders relaxed and level';
+const FEMALE_MODEL_POSE = 'relaxed fashion-model pose: body turned about 25 degrees from the camera, head turned back to face the camera with the chin slightly lowered; weight on the back leg, the front foot placed a little in front and slightly across toward the centre line, knees close together, hips gently shifted; both arms hanging loosely close to the body, hands open and relaxed beside the thighs, never in pockets; shoulders relaxed, down and level';
 const BASE_POSE_TOLERANCE = 0.04; // edits of a base photo: GPT moved the feet 1–7% of the height on edits that looked right (2026-10-28)
 const POSE_TOLERANCE = 0.025; // was 0.01: GPT looks Felipe judged right were 0.015–0.023 off and were all redone (2026-10-28)
 // Feet position difference allowed (share of the height) between a fresh look and the pose reference or look 1.
@@ -438,6 +440,8 @@ async function main() {
   // look (heels raise the feet), sent with the first image of each look set.
   const votes = readings.map((r) => r.figure).filter(Boolean);
   const body = opts.body || (votes.filter((v) => v === 'male').length > votes.length / 2 ? 'male' : 'female');
+  // Women stand in a fashion-model pose (Felipe, 2026-10-28), men in the house pose; --pose=... overrides both.
+  if (body === 'female' && opts.pose === HOUSE_POSE) opts.pose = FEMALE_MODEL_POSE;
   const warned = new Set();
   const poseFor = async (look) => {
     if (!opts.poseRef) return null;
@@ -618,7 +622,7 @@ async function main() {
   let finalRefs = images;
   const prepareBase = async (orig, reading) => {
     const template = await readFile(BASE_PREP_PROMPT_FILE, 'utf8');
-    const hash = createHash('sha1').update(orig.bytes).update(template).update(opts.openaiSize || '').digest('hex').slice(0, 10);
+    const hash = createHash('sha1').update(orig.bytes).update(template).update(opts.openaiSize || '').update(opts.pose).update((await poseFor({ items: reading.items }))?.bytes || '').digest('hex').slice(0, 10);
     const cached = join(PREPARED_DIR, `${orig.file.replace(/\.[^.]+$/, '')}-${hash}.png`);
     if (opts.prepared) {
       console.log(`Base photo: using ${opts.prepared} as the prepared version (--prepared)`);
@@ -693,7 +697,7 @@ async function main() {
     // Keyed on the face photos and size only: one base per person, whatever the outfit, occasion or seed.
     const hash = createHash('sha1');
     for (const img of faces) hash.update(img.bytes);
-    hash.update(opts.openaiSize || '');
+    hash.update(opts.openaiSize || '').update(l1.pose?.bytes || '').update(opts.pose); // a new pose makes a new base
     const cached = join(PREPARED_DIR, `generated-${hash.digest('hex').slice(0, 10)}.png`);
     const idOf = async (img) => (await checkFaces({ faces, lookRefs: [], images: [img], look: false, minIdentity: 0, log: () => {} })).results[0].identity;
     const outfitKey = (items) => items.map((x) => x.description).sort().join(' + ');

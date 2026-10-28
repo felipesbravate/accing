@@ -31,10 +31,15 @@ const FEET_TEXT = {
 /** Shoes decide the feet: heels raise them, everything else (or no shoes read) keeps them flat. */
 export const feetFor = (items) => (items.some((x) => x.category === 'shoes' && /\b(high[- ]?heel|heels?|heeled|stiletto|pumps?|wedges?|platform)\b/i.test(x.description) && !/\bflat\b/i.test(x.description)) ? 'heels' : 'flat');
 
-async function make(body, feet, pose, key) {
+async function make(body, feet, pose, key, fromFile = null) {
   const other = poseReferencePath(body, feet === 'flat' ? 'heels' : 'flat');
-  const fromOther = existsSync(other);
-  const prompt = fromOther
+  const fromOther = !fromFile && existsSync(other);
+  // --from=<photo>: copy the pose of a photo you like (2026-10-28: a fashion-model pose for women).
+  const bare = feet === 'flat' && !process.argv.includes('--sneakers');
+  const fromPrompt = `Image 1 shows a person standing in a pose. Make a photo of ${BODY_TEXT[body]}: plain, smooth, matte light grey, no face, no hair, no clothes, no details, standing in EXACTLY the pose of image 1: the same body turn, head angle, shoulders, arms, hands, hips, legs and where each foot stands. ${bare ? 'Bare feet, no shoes: each whole sole, heel to toes, flat on the floor, toes relaxed.' : FEET_TEXT[feet]} Copy only the pose: not the person's look, clothes, shoes or body shape.
+Full body from head to feet. Camera straight on at chest height, the figure centred, top of the head about 8% below the top edge, soles about 6% above the bottom edge.
+Pure white seamless background, soft even studio light, one soft shadow on the floor under the feet. Portrait 2:3. No text, no props.`;
+  const prompt = fromFile ? fromPrompt : fromOther
     ? `Edit image 1. Change ONLY the feet: ${FEET_EDIT[feet === 'flat' && process.argv.includes('--sneakers') ? 'flatShoes' : feet]}
 Keep everything else exactly as in image 1: the mannequin, its pose and turn, arms, hands, legs and where the feet stand, the framing, the white background and the soft floor shadow.`
     : `A photo of ${BODY_TEXT[body]}: plain, smooth, matte light grey, no face, no hair, no clothes, no details.
@@ -42,8 +47,9 @@ Full body from head to feet. Pose, exactly: ${pose}. ${FEET_TEXT[feet]}
 Camera straight on at chest height, the figure centred, top of the head about 8% below the top edge, soles about 6% above the bottom edge.
 Pure white seamless background, soft even studio light, one soft shadow on the floor under the feet. Portrait 2:3. No text, no props.`;
   const base = process.env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com';
-  console.log(`Generating the ${body} pose reference, feet ${feet}${fromOther ? ' (edit of the ' + (feet === 'flat' ? 'heels' : 'flat') + ' one, same pose)' : ''}…`);
-  const parts = fromOther ? [{ inlineData: { mimeType: 'image/png', data: (await readFile(other)).toString('base64') } }, { text: prompt }] : [{ text: prompt }];
+  console.log(`Generating the ${body} pose reference, feet ${feet}${fromFile ? ` (pose copied from ${fromFile})` : fromOther ? ' (edit of the ' + (feet === 'flat' ? 'heels' : 'flat') + ' one, same pose)' : ''}…`);
+  const source = fromFile ? { mime: /\.jpe?g$/i.test(fromFile) ? 'image/jpeg' : 'image/png', bytes: await readFile(resolve(fromFile)) } : fromOther ? { mime: 'image/png', bytes: await readFile(other) } : null;
+  const parts = source ? [{ inlineData: { mimeType: source.mime, data: source.bytes.toString('base64') } }, { text: prompt }] : [{ text: prompt }];
   const res = await fetch(`${base}/v1beta/models/gemini-3.1-flash-image-preview:generateContent`, {
     method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
     body: JSON.stringify({ contents: [{ role: 'user', parts }],
@@ -56,7 +62,7 @@ Pure white seamless background, soft even studio light, one soft shadow on the f
   await mkdir(POSE_DIR, { recursive: true });
   const file = poseReferencePath(body, feet);
   await writeFile(file, Buffer.from((part.inlineData || part.inline_data).data, 'base64'));
-  await writeFile(file.replace(/\.png$/, '.txt'), `${body}, feet ${feet}: ${pose}\n`);
+  await writeFile(file.replace(/\.png$/, '.txt'), `${body}, feet ${feet}: ${fromFile ? `pose copied from ${fromFile}` : pose}\n`);
   console.log(`Saved ${file} (~$0.10).`);
 }
 
@@ -73,6 +79,7 @@ async function main() {
     const body = arg('body'), feet = arg('feet') || 'flat';
     if (!BODIES.includes(body) || !FEET.includes(feet)) throw new Error('Use --body=female|male and --feet=flat|heels, or --all');
     todo = [[body, feet]];
+    if (arg('from')) { await make(body, feet, pose, key, arg('from')); console.log('Open it in scripts/assets/. For the other feet, run again without --from: it is made as an edit of this one.'); return; }
   }
   if (!todo.length) { console.log('All pose references exist. Delete one to make it again.'); return; }
   for (const [b, f] of todo) await make(b, f, pose, key);

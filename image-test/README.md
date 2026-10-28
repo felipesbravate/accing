@@ -203,3 +203,9 @@ and looks 2+ are edits of it with its face copied back pixel for pixel. Look 1 i
 It is saved in `inputs/prepared/generated-*.png` and reused while the face photos stay the same (any outfit, seed or occasion; look 1 is only free when it wears the same outfit as the base);
 `--prepared=<file>` picks another try (`base-generated-N.png` in the results folder), `--reprep` makes new ones,
 `--no-auto-base` goes back to fresh looks.
+
+## Female model pose (2026-10-28)
+Women now stand in a fashion-model pose (Felipe's pick), men keep the house pose; `--pose=...` overrides both.
+The female mannequins are made from a photo with that pose: `npm run make-pose-reference -- --body=female --feet=flat
+--from=image-test/inputs/pose-sources/female-model.png`, then `--body=female --feet=heels` (an edit of the flat one).
+The previous ones are kept as `pose-reference-female-*-house.png`. A new pose makes a new generated base photo.
