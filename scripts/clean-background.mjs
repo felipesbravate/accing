@@ -17,7 +17,7 @@ const SEG_SIZE = 1024;
 export const BACKGROUND = '#F9F9FB';
 export const hexToRgb = (hex) => { const m = /^#?([0-9a-f]{6})$/i.exec(hex || ''); if (!m) throw new Error(`Not a colour: ${hex} (use #RRGGBB)`); const n = parseInt(m[1], 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
 // Shadow, as darkness 0–1 (measured on the chosen image): pool ~0.09 at its centre, contact up to ~0.35.
-export const SHADOW = { pool: 0.12, poolWidth: 1.45, poolHeight: 0.042, poolBehind: 0.012,
+export const SHADOW = { pool: 0.12, poolWidth: 0.85, poolHeight: 0.042, poolBehind: 0.012,
   contact: 0.38, contactBlur: 0.004, contactDrop: 0.002, cast: 0.22, castBlur: 0.012, castBehind: 0.014 };
 
 async function deps() {
@@ -111,9 +111,13 @@ export async function cleanBackground(c, input, { background = BACKGROUND } = {}
   const soft = (buf, sigma) => c.sharp(buf, { raw: { width, height, channels: 1 } }).blur(Math.max(0.5, ph * sigma)).extractChannel(0).raw().toBuffer();
   const [contact, cast] = await Promise.all([soft(shoes, SHADOW.contactBlur), soft(behind, SHADOW.castBlur)]);
 
-  // Pool: a soft ellipse centred on the feet, slightly behind them (higher in the image).
+  // Pool: a soft ellipse centred on the feet, slightly behind them (higher in the image). It never reaches further left
+  // or right than the person's own outline (arms, shoulders, a wide skirt): any crop that keeps the person keeps the
+  // whole shadow. 2026-10-28: at 1.45x the feet it ran ~3x the feet wide and the carousel crop cut it into hard edges.
+  let px0 = width, px1 = 0;
+  for (let i = 0; i < n; i++) if (mask[i] > 0.5) { const x = i % width; if (x < px0) px0 = x; if (x > px1) px1 = x; }
   const fw = Math.max(1, fx1 - fx0), cx = (fx0 + fx1) / 2, cy = bottom - ph * SHADOW.poolBehind;
-  const ax = (fw / 2) * SHADOW.poolWidth, ay = ph * SHADOW.poolHeight;
+  const ax = Math.max(1, Math.min((fw / 2) * SHADOW.poolWidth, Math.min(cx - px0, px1 - cx) / 2)), ay = ph * SHADOW.poolHeight;
 
   const out = Buffer.alloc(n * 3);
   for (let i = 0; i < n; i++) {
