@@ -323,12 +323,12 @@ function buildEdit(template, outfits, look, anchor, takeOff = [], rendered = new
   const seenIn = (x) => [...earlier.entries()].find(([, e]) => e.items.includes(x.description))?.[1].at;
   for (const x of look.items) {
     if (x.crop && seenIn(x)) {
-      images.push(x.crop); labels.push(`a close-up of the ${x.description} (${x.category}) alone: copy this garment exactly`);
+      images.push(x.crop); labels.push(`a close-up of the ${x.description} (${x.category}): copy only this garment exactly; ignore any other garment, bag, strap or hand in this close-up`);
       lines.push(`  - the ${x.description} (${x.category}) shown in image ${images.length}; it already appears in image ${seenIn(x)}: make it look exactly as it does there (same light, shading and colour)`);
       continue;
     }
     if (x.crop) {
-      images.push(x.crop); labels.push(`a close-up of the ${x.description} (${x.category}) alone: copy this garment exactly`);
+      images.push(x.crop); labels.push(`a close-up of the ${x.description} (${x.category}): copy only this garment exactly; ignore any other garment, bag, strap or hand in this close-up`);
       lines.push(`  - the ${x.description} (${x.category}) shown in image ${images.length}`);
       continue;
     }
