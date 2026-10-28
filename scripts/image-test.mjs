@@ -19,11 +19,14 @@ import { MODELS_DIR as FACE_MODELS_DIR } from './face-check/index.mjs';
 import './net.mjs'; // retry requests whose connection fails
 
 const ROOT = resolve(import.meta.dirname, '..');
-const INPUTS = join(ROOT, 'image-test', 'inputs');
+// --person=<name>: use image-test/inputs/people/<name>/ (face-*, outfit photos, optional base.*) instead of inputs/,
+// so several people can be tested without moving files around.
+const PERSON = process.argv.find((a) => a.startsWith('--person='))?.slice(9) || null;
+const INPUTS = PERSON ? join(ROOT, 'image-test', 'inputs', 'people', PERSON) : join(ROOT, 'image-test', 'inputs');
 const RESULTS = join(ROOT, 'image-test', 'results');
 const PROMPT_FILE = join(ROOT, 'scripts', 'image-test-prompt.txt');
 const BASE_PREP_PROMPT_FILE = join(ROOT, 'scripts', 'base-prep-prompt.txt');
-const PREPARED_DIR = join(INPUTS, 'prepared'); // prepared base photos, reused while the base photo and the prompt stay the same
+const PREPARED_DIR = join(ROOT, 'image-test', 'inputs', 'prepared'); // prepared base photos, reused while the base photo and the prompt stay the same
 const EDIT_PROMPT_FILE = join(ROOT, 'scripts', 'image-edit-prompt.txt');
 
 // Models compared. Edit freely.
@@ -51,7 +54,7 @@ const OPENAI_BASE = process.env.OPENAI_BASE_URL || 'https://api.openai.com';
 const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
 
 function args() {
-  const out = { runs: 3, looks: 1, cleanRefs: true, realFace: null, openaiSize: null, flex: false, garmentCrops: true, autoBase: true, prep: true, reprep: false, prepModel: null, proFace: false, body: null, background: '#F9F9FB', poseRef: true, facePasses: 2, faceLock: true, clean: true, anchor: null, anchorTries: 3, only: null, dryRun: false, check: true, minIdentity: MIN_IDENTITY, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
+  const out = { runs: 3, looks: 1, cleanRefs: true, person: null, realFace: null, openaiSize: null, flex: false, garmentCrops: true, autoBase: true, prep: true, reprep: false, prepModel: null, proFace: false, body: null, background: '#F9F9FB', poseRef: true, facePasses: 2, faceLock: true, clean: true, anchor: null, anchorTries: 3, only: null, dryRun: false, check: true, minIdentity: MIN_IDENTITY, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
     expression: 'copy it exactly from the front face photo, including any slight smile; no smile or seriousness that photo does not have', occasion: 'an office day', weather: 'sunny 24°C', time: 'Monday morning',
     shoes: 'plain white leather low-top sneakers with white soles and white laces',
     pose: HOUSE_POSE };
@@ -131,7 +134,7 @@ const MAX_FACES = 8;
 /** Faces first (every file starting with "face-": the three onboarding photos or frames from a video), then every
  *  other photo as a head-to-toe outfit photo. */
 async function loadInputs() {
-  if (!existsSync(INPUTS)) throw new Error(`Missing folder ${INPUTS}`);
+  if (!existsSync(INPUTS)) throw new Error(`Missing folder ${INPUTS}${PERSON ? ' (make it and put that person\'s face-* and outfit photos in it)' : ''}`);
   const all = (await readdir(INPUTS)).filter((f) => !f.startsWith('.')).sort();
   const heic = all.filter((f) => /\.(heic|heif)$/i.test(f));
   if (heic.length) console.warn(`Skipping ${heic.join(', ')}: HEIC is not supported. Export as JPG (AirDrop > Options > Most Compatible).`);
@@ -477,7 +480,7 @@ async function main() {
   if (opts.dryRun) { console.log('\n--- prompt (look 1) ---\n' + looks[0].prompt + '\n\nDry run: no images generated. Use the same --seed to generate these looks.'); return; }
 
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-  const out = join(RESULTS, stamp);
+  const out = join(RESULTS, PERSON ? `${stamp}-${PERSON.replace(/[^\w-]+/g, '_')}` : stamp);
   await mkdir(out, { recursive: true });
   // Everything printed also goes to run.log (rejection reasons and timings were lost when only the terminal had them).
   const logPath = join(out, 'run.log');
