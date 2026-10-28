@@ -229,7 +229,7 @@ For each item give:
 - exposure: how much skin the item shows as worn: "low" (covered), "medium" (sleeveless, knee-length, a short slit), "high" (strapless, plunging neckline, cut-outs, sheer, mini length, open to the thigh, crop top)
 - season: "warm" if only for warm weather (sandals, linen, sleeveless, shorts), "cold" if only for cold weather (wool coat, heavy knit, lined boots), else "any"
 List items worn under or inside others too, e.g. a skirt or shorts under an open shirt dress, a t-shirt under a sheer top: each as its own item with its own box.
-Colours: name the colour as it looks in the photo (metallic gold vs silver, cream vs white); when unsure, use the broader word ("metallic").
+Colours: name the garment's own colour (metallic gold vs silver, cream vs white), as it would look in daylight: ignore coloured room light, e.g. a beige jacket lit pink on one side and yellow on the other is beige. When unsure, use the broader word ("metallic").
 Also say whether the person is visible head to toe (full_body), how many people are in the photo (people), and which mannequin build best matches their body, female or male (figure; used only to pick a pose reference).`;
 
 const READER_SCHEMA = {

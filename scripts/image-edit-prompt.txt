@@ -9,7 +9,7 @@ KEEP EXACTLY AS IN IMAGE 1
 CHANGE THE CLOTHES TO
 {{GARMENTS}}
 - From each of those photos take only the named item; ignore every other piece of clothing in it, and ignore the person in it.
-- Reproduce each garment exactly: colour, pattern, fabric texture, fit, length, neckline, straps and back construction, collar, sleeves, buttons, zips, seams and any logos. Copy the garment's own design from its image, never from a similar garment. If a garment's written name and its image disagree (a colour, a detail), the image is right.
+- Reproduce each garment exactly: colour, pattern, fabric texture, fit, length, neckline, straps and back construction, collar, sleeves, buttons, zips, seams and any logos. Copy the garment's own design from its image, never from a similar garment. If a garment's written name and its image disagree (a colour, a detail), the image is right, with one exception: close-ups are often lit by coloured room light (pink, yellow or blue tints, one side warmer than the other). Remove that tint and paint the garment's own colour in image 1's neutral light.
 - Remove every garment from image 1 that is not in this list. Do not add anything else: no tattoos, jewellery, watches, bags, logos or text.
 - Each garment must sit naturally on the same body in the same pose, with natural folds; sleeves down, hands not in pockets.
 - Same image size and orientation as image 1.
