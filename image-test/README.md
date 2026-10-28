@@ -77,8 +77,12 @@ The base photo decides how good every look can be. Take it like this:
 - the house pose: body turned about 15°, arms loose at the sides, hands open, never in pockets
 Keep her `face-*` photos and the garment photos in the folder as before. Remove `base.*` to go back to generating.
 
-Face lock in base mode (pasting the base photo's face back) runs for Gemini only by default: on GPT edits it made the
-face soft and noisy (2026-10-28) while GPT's edit already kept her face. `--real-face` forces it on.
+Face lock in base mode: the prepared base photo's face is copied back onto every look. Without it GPT redrew the face
+on each edit and it drifted; resampled, it went soft (both 2026-10-28). It now copies pixel for pixel when the head has
+the same size and angle as in the base photo (the log says "pixel copy"), and only resamples when the head moved.
+`--hd` makes GPT images 1536x2304 instead of 1024x1536 (face ~170 px wide instead of ~115; ~2.25× the cost); use it
+with `--reprep` so the base photo is prepared at the same size. The preparation now makes all 3 tries and keeps the
+passing one closest to her face photos.
 
 ### Base photo preparation (automatic, once per photo)
 Any photo works as the base, including a mirror selfie: it is read first.

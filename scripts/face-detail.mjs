@@ -194,10 +194,18 @@ export async function faceLock({ model, source, target, reference }) {
   const [s, t] = await Promise.all([findFace(model, source), findFace(model, target)]);
   if (!s.face || !t.face) return { bytes: target, locked: false, reason: `no face found in ${s.face ? 'the edited look' : 'look 1'}` };
   const before = reference ? cosine(await embedAt(model, t.img, t.face.landmarks), reference) : null;
-  const M = similarity(s.face.landmarks, t.face.landmarks);
+  let M = similarity(s.face.landmarks, t.face.landmarks);
+  // Same head size and angle (base mode keeps the pose): copy pixel for pixel, shifted by whole pixels. Resampling a
+  // ~120 px face made it soft and smeared (2026-10-28).
+  const scale = Math.hypot(M[0], M[1]), angle = Math.abs(Math.atan2(M[1], M[0])) * 180 / Math.PI;
+  const exact = Math.abs(scale - 1) < 0.04 && angle < 2;
+  if (exact) {
+    const cs = s.face.landmarks.reduce((a, p) => [a[0] + p[0] / 5, a[1] + p[1] / 5], [0, 0]), ct = t.face.landmarks.reduce((a, p) => [a[0] + p[0] / 5, a[1] + p[1] / 5], [0, 0]);
+    M = [1, 0, Math.round(ct[0] - cs[0]), Math.round(ct[1] - cs[1])];
+  }
   const merged = blendFace(t.img, s.img, M, t.face.box);
   const bytes = await encode(merged);
   let after = null;
   if (reference) { const c = await findFace(model, bytes); if (c.face) after = cosine(await embedAt(model, c.img, c.face.landmarks), reference); }
-  return { bytes, locked: true, before, after };
+  return { bytes, locked: true, exact, scale, angle, before, after };
 }

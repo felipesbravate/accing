@@ -47,12 +47,15 @@ const PRICES = {
   'openai-2.5-flare-high': { imageInputPerM: 8, textInputPerM: 5, outputPerImage: 0.05268 * 1.5 },
 };
 
+// OpenAI output cost scales with pixels (estimate): 1536x2304 ≈ 2.25× the 1024x1536 price.
+const sizeFactor = (size) => { const [w, h] = String(size).split('x').map(Number); return w && h ? (w * h) / (1024 * 1536) : 1; };
+
 const GEMINI_BASE = process.env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com';
 const OPENAI_BASE = process.env.OPENAI_BASE_URL || 'https://api.openai.com';
 const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
 
 function args() {
-  const out = { runs: 3, looks: 1, cleanRefs: true, realFace: null, prep: true, reprep: false, prepModel: null, proFace: false, body: null, background: '#F9F9FB', poseRef: true, facePasses: 2, faceLock: true, clean: true, anchor: null, anchorTries: 3, only: null, dryRun: false, check: true, minIdentity: MIN_IDENTITY, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
+  const out = { runs: 3, looks: 1, cleanRefs: true, realFace: null, openaiSize: null, prep: true, reprep: false, prepModel: null, proFace: false, body: null, background: '#F9F9FB', poseRef: true, facePasses: 2, faceLock: true, clean: true, anchor: null, anchorTries: 3, only: null, dryRun: false, check: true, minIdentity: MIN_IDENTITY, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
     expression: 'copy it exactly from the front face photo, including any slight smile; no smile or seriousness that photo does not have', occasion: 'an office day', weather: 'sunny 24°C', time: 'Monday morning',
     shoes: 'plain white leather low-top sneakers with white soles and white laces',
     pose: 'relaxed standing pose: body turned about 15 degrees so their left shoulder is slightly closer to the camera, head turned back to face the camera, chin level, eyes looking into the lens; weight on the back (right) leg, front (left) knee slightly relaxed, feet about hip-width apart; both arms hanging loosely at the sides, elbows very slightly bent, hands open and relaxed beside the thighs, never in pockets; shoulders relaxed and level' };
@@ -66,6 +69,8 @@ function args() {
     else if (k === 'no-prep') out.prep = false;
     else if (k === 'reprep') out.reprep = true;
     else if (k === 'prep-model') out.prepModel = v;
+    else if (k === 'openai-size') { if (!/^\d{3,4}x\d{3,4}$/.test(v)) throw new Error('--openai-size=WIDTHxHEIGHT, e.g. 1536x2304'); out.openaiSize = v; }
+    else if (k === 'hd') out.openaiSize = '1536x2304';
     else if (k === 'no-anchor') out.anchor = false;
     else if (k === 'anchor') out.anchor = true;
     else if (k === 'no-clean-refs') out.cleanRefs = false;
@@ -331,7 +336,8 @@ async function callOpenAI(m, images, prompt, label, opts) {
   const form = new FormData();
   form.append('model', m.model);
   form.append('prompt', prompt + '\n\nThe images are given in order: ' + images.map((x, i) => `${i + 1} = ${label(i)}`).join('; ') + '.');
-  form.append('size', m.size);
+  const size = opts.openaiSize || m.size;
+  form.append('size', size);
   form.append('quality', m.quality);
   form.append('output_format', 'png');
   form.append('n', '1');
@@ -349,7 +355,7 @@ async function callOpenAI(m, images, prompt, label, opts) {
   return {
     image: Buffer.from(b64, 'base64'),
     tokens: { input: u.input_tokens ?? null, inputImage: imgIn, output: u.output_tokens ?? null },
-    cost: p ? p.outputPerImage + (imgIn || 0) / 1e6 * p.imageInputPerM + (txtIn || 0) / 1e6 * p.textInputPerM : null,
+    cost: p ? p.outputPerImage * sizeFactor(size) + (imgIn || 0) / 1e6 * p.imageInputPerM + (txtIn || 0) / 1e6 * p.textInputPerM : null,
   };
 }
 
@@ -494,7 +500,7 @@ async function main() {
       }
       await writeFile(join(out, file), r.image);
       if (r.usage) await writeFile(join(out, file.replace(/\.png$/, '.usage.json')), JSON.stringify(r.usage, null, 2));
-      const faceNote = r.face ? (r.face.pass ? `, face ${fmt(r.face.before)}→${fmt(r.face.after)} (${r.face.kept})` : r.face.locked ? `, face locked ${fmt(r.face.before)}→${fmt(r.face.after)}` : `, face not locked: ${r.face.reason}`) : '';
+      const faceNote = r.face ? (r.face.pass ? `, face ${fmt(r.face.before)}→${fmt(r.face.after)} (${r.face.kept})` : r.face.locked ? `, face locked${r.face.exact ? " (pixel copy)" : r.face.exact === false ? " (resampled: head moved or turned)" : ""} ${fmt(r.face.before)}→${fmt(r.face.after)}` : `, face not locked: ${r.face.reason}`) : '';
       console.log(`${post ? '  ' : ''}${seconds.toFixed(1)}s, ~$${fmt(r.cost)}${faceNote}${r.clean ? `, background ${Math.round(r.clean.before)}→${opts.background} in ${r.clean.seconds.toFixed(1)}s` : ''}`);
       return { m, look, run, seconds, file, ...r };
     } catch (e) {
@@ -534,7 +540,7 @@ async function main() {
   let finalRefs = images;
   const prepareBase = async (orig, reading) => {
     const template = await readFile(BASE_PREP_PROMPT_FILE, 'utf8');
-    const hash = createHash('sha1').update(orig.bytes).update(template).digest('hex').slice(0, 10);
+    const hash = createHash('sha1').update(orig.bytes).update(template).update(opts.openaiSize || '').digest('hex').slice(0, 10);
     const cached = join(PREPARED_DIR, `${orig.file.replace(/\.[^.]+$/, '')}-${hash}.png`);
     if (existsSync(cached) && !opts.reprep) {
       console.log(`Base photo: using the prepared version made earlier (${cached.replace(ROOT + '/', '')}; --reprep to make it again)`);
@@ -557,6 +563,7 @@ async function main() {
       .replace('{{POSE_IMAGE_LINE}}', poseRef ? ` Image ${imgs.length} is a faceless mannequin showing the pose.` : '')
       .replace('{{POSE_IMAGE_RULE}}', poseRef ? ` Copy the stance of the mannequin in image ${imgs.length} (only its pose: not its body, size or shape).` : '');
     const label = (k) => (k === 0 ? 'the photo to prepare' : k <= faces.length ? faces[k - 1].label : 'pose reference: a faceless mannequin; copy only its pose');
+    // Every try is made and the passing one closest to her face photos is kept: this photo is the face of every look.
     let best = null;
     for (let attempt = 1; attempt <= opts.anchorTries; attempt++) {
       const file = `base-prepared-${attempt}.png`;
@@ -573,11 +580,12 @@ async function main() {
       if (id == null || id < minId) left.unshift(`identity ${id == null ? 'no face' : id.toFixed(3)} < ${minId.toFixed(3)}`);
       console.log(`  prepared base ${attempt}: identity ${id == null ? '–' : id.toFixed(3)} (original photo ${origId == null ? '–' : origId.toFixed(3)})${left.length ? ' — rejected: ' + left.join('; ') : ' — ok'}`);
       prepRows.push({ ...r, file, reasons: left, identity: id });
-      if (!left.length) { best = img; break; }
+      if (!left.length && (!best || id > best.id)) best = { ...img, id };
     }
     if (!best) throw new Error(`Could not prepare the base photo in ${opts.anchorTries} tries (attempts are in ${out}). Try a photo without a mirror, or --no-prep to use it as it is.`);
     await mkdir(PREPARED_DIR, { recursive: true });
     await writeFile(cached, best.bytes);
+    console.log(`Kept ${best.file} (identity ${best.id.toFixed(3)})`);
     console.log(`Base photo prepared and saved as ${cached.replace(ROOT + '/', '')}`);
     return { ...orig, file: 'base-prepared.png', bytes: best.bytes, mime: 'image/png', prepared: true };
   };
@@ -600,18 +608,19 @@ async function main() {
     const baseRefs = [...faces, src];
     finalRefs = baseRefs;
     const baseGeometry = cleaner ? await measurePose(cleaner, src.bytes).catch(() => null) : null;
-    // Face lock (paste the base photo's face back) only where the face step applies (Gemini by default): on GPT edits it
-    // warped and resampled the face into a soft, noisy blur (2026-10-28), while GPT's edit already kept her face.
+    // Face lock: the prepared base photo's face is copied back onto every look. Without it GPT redrew the face on every
+    // edit and it drifted ("weird volume", 2026-10-28); with it the faces matched but were soft, because the copy was
+    // resampled. faceLock now copies pixel for pixel when the head has not moved or turned (base mode keeps the pose).
     const lockToBase = faceModel && opts.faceLock ? async (bytes) => {
       const fl = await faceLock({ model: faceModel, source: src.bytes, target: bytes, reference });
-      return { bytes: fl.bytes, face: { locked: fl.locked, before: fl.before, after: fl.after, reason: fl.reason } };
+      return { bytes: fl.bytes, face: { locked: fl.locked, before: fl.before, after: fl.after, reason: fl.reason, exact: fl.exact } };
     } : null;
     for (const look of looks) for (const m of models) {
       const edit = buildEdit(editTemplate, outfits, look, src, takeOff);
       look.editPrompt = edit.prompt;
       for (let run = 1; run <= opts.runs; run++) {
         for (let attempt = 1; attempt <= opts.anchorTries; attempt++) {
-          const r = await generate(m, look, run, name(m, look, run), edit.images, edit.prompt, edit.label, { ...opts, faceCount: 1 }, faceStepFor(m) ? lockToBase : null);
+          const r = await generate(m, look, run, name(m, look, run), edit.images, edit.prompt, edit.label, { ...opts, faceCount: 1 }, lockToBase);
           const last = attempt === opts.anchorTries;
           if (r.error || !opts.check || last) { rows.push(r); break; }
           const why = await lookProblems(look, r, baseGeometry, baseRefs);
