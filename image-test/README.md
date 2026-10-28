@@ -200,6 +200,6 @@ differ from the pose reference by 2.5% of the height (was 1%: looks judged right
 Fresh GPT looks were very good but each drew a new face and stance (Juliana, 2026-10-28). Without `base.*`, look 1 is
 now generated 3 times (GPT high), the try closest to the face photos (and on the pose reference) becomes the base photo,
 and looks 2+ are edits of it with its face copied back pixel for pixel. Look 1 is the base itself (no extra call).
-It is saved in `inputs/prepared/generated-*.png` and reused while the face and outfit photos stay the same;
+It is saved in `inputs/prepared/generated-*.png` and reused while the face photos stay the same (any outfit, seed or occasion; look 1 is only free when it wears the same outfit as the base);
 `--prepared=<file>` picks another try (`base-generated-N.png` in the results folder), `--reprep` makes new ones,
 `--no-auto-base` goes back to fresh looks.
