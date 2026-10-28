@@ -224,6 +224,11 @@ For each item give:
 - description: 4 to 10 words with colour, pattern, material and cut, e.g. "brown houndstooth tweed single-breasted blazer"
 - visibility: "full" if the whole item is visible, "partial" if partly hidden or cropped, "hidden" if you can barely see it
 - box: a tight box around the item as [ymin, xmin, ymax, xmax] on a 0–1000 scale of the photo (for shoes, one box around both)
+- formality: 1 lounge/beach/sport, 2 casual (t-shirt, jeans, sneakers), 3 smart casual (blouse, chinos, loafers), 4 business (tailoring, shirt dress with sleeves, pumps), 5 formal/evening (gown, strapless or sequinned dress, stilettos)
+- exposure: how much skin the item shows as worn: "low" (covered), "medium" (sleeveless, knee-length, a short slit), "high" (strapless, plunging neckline, cut-outs, sheer, mini length, open to the thigh, crop top)
+- season: "warm" if only for warm weather (sandals, linen, sleeveless, shorts), "cold" if only for cold weather (wool coat, heavy knit, lined boots), else "any"
+List items worn under or inside others too, e.g. a skirt or shorts under an open shirt dress, a t-shirt under a sheer top: each as its own item with its own box.
+Colours: name the colour as it looks in the photo (metallic gold vs silver, cream vs white); when unsure, use the broader word ("metallic").
 Also say whether the person is visible head to toe (full_body), how many people are in the photo (people), and which mannequin build best matches their body, female or male (figure; used only to pick a pose reference).`;
 
 const READER_SCHEMA = {
@@ -237,6 +242,9 @@ const READER_SCHEMA = {
       description: { type: 'STRING' },
       visibility: { type: 'STRING', enum: ['full', 'partial', 'hidden'] },
       box: { type: 'ARRAY', items: { type: 'INTEGER' } },
+      formality: { type: 'INTEGER' },
+      exposure: { type: 'STRING', enum: ['low', 'medium', 'high'] },
+      season: { type: 'STRING', enum: ['warm', 'any', 'cold'] },
     }, required: ['category', 'description', 'visibility'] } },
   },
   required: ['full_body', 'people', 'items'],
@@ -478,7 +486,8 @@ async function main() {
   if (identityCard && !existsSync(join(INPUTS, 'identity.txt'))) console.log(`Identity card: ${identityCard}\n  (saved as image-test/inputs/identity-read.txt; correct it and save it as identity.txt to use your own words)`);
   readings.forEach((r, i) => console.log(`  photo ${i + 1} = image ${faces.length + i + 1}, ${outfits[i].file}: ${r.items.map((x) => `${x.description} [${x.category}${x.visibility === 'full' ? '' : ', ' + x.visibility}]`).join('; ') || 'nothing recognised'}`));
   const seed = opts.seed ?? (Date.now() % 100000);
-  const looks = composeLooks(wardrobe, { count: opts.looks, seed });
+  const looks = composeLooks(wardrobe, { count: opts.looks, seed, occasion: opts.occasion, weather: opts.weather });
+  if (looks.skipped.length) console.log(`Left out for "${opts.occasion}" / "${opts.weather}" (${looks.occasion.name}): ${looks.skipped.map((x) => `${x.description} (${x.why})`).join('; ')}`);
   if (looks.length < opts.looks) console.warn(`Only ${looks.length} different look(s) are possible from these photos (asked for ${opts.looks}).`);
   // Pose reference (npm run make-pose-reference): a mannequin in the house pose, matching the body and the shoes of the
   // look (heels raise the feet), sent with the first image of each look set.
@@ -991,7 +1000,8 @@ PHOTO
   }
 
   const lines = ['# Image test ' + stamp, '', `Occasion: ${opts.occasion} · Weather: ${opts.weather} · Time: ${opts.time}`, '', `Pose: ${opts.pose}`, '', `Seed: ${seed} (repeat with --seed=${seed}) · Gemini size: ${opts.size} · Photo detail: ${opts.detail}`, '',
-    '## Garments read', '', ...readings.map((r, i) => `- Photo ${i + 1} (${outfits[i].file}): ${r.items.map((x) => `${x.description} [${x.category}]`).join('; ') || 'nothing recognised'}`), '',
+    '## Garments read', '', ...readings.map((r, i) => `- Photo ${i + 1} (${outfits[i].file}): ${r.items.map((x) => `${x.description} [${[x.category, x.formality && `formality ${x.formality}`, x.exposure && `exposure ${x.exposure}`, x.season && x.season !== 'any' && x.season].filter(Boolean).join(', ')}]`).join('; ') || 'nothing recognised'}`), '',
+    `Occasion rules: ${looks.occasion.name} (formality ${looks.occasion.min}–${looks.occasion.max}, exposure up to ${looks.occasion.maxExposure})${looks.skipped.length ? ` · left out: ${looks.skipped.map((x) => `${x.description} (${x.why})`).join('; ')}` : ''}`, '',
     ...(opts.identityCard ? ['## Identity card (read from the face photos)', '', opts.identityCard, ''] : []),
     '## Looks asked for', '', ...looks.map((l) => `- Look ${l.n}: ${l.items.map((x) => `${x.description} (${x.category}, photo ${x.photo + 1})`).join(' + ')}`), '',
     `Reading cost: ~$${readCost.toFixed(4)}`, '',

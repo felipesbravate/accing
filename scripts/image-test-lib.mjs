@@ -101,8 +101,11 @@ export function composeOutfit(wardrobe, { seed = 1 } = {}) {
  * with or without outerwear), new combinations first, each next look chosen to reuse as few already-used garments
  * as possible. Fewer looks come back when the wardrobe cannot make `count` different ones.
  */
-export function composeLooks(wardrobe, { count = 1, seed = 1 } = {}) {
-  const items = dedupeWardrobe(wardrobe).filter((x) => x.visibility !== 'hidden');
+export function composeLooks(wardrobe, { count = 1, seed = 1, occasion = '', weather = '' } = {}) {
+  const all = dedupeWardrobe(wardrobe).filter((x) => x.visibility !== 'hidden');
+  const occ = occasionProfile(occasion), wx = weatherProfile(weather);
+  const skipped = [];
+  const items = all.filter((x) => { const why = unfit(x, occ, wx); if (why) skipped.push({ description: x.description, why }); return !why; });
   const photoKeys = new Map();
   for (const x of withKeys(wardrobe)) {
     if (!photoKeys.has(x.photo)) photoKeys.set(x.photo, new Set());
@@ -113,24 +116,70 @@ export function composeLooks(wardrobe, { count = 1, seed = 1 } = {}) {
   const bases = [];
   for (const t of of('top')) for (const b of of('bottom')) bases.push([t, b]);
   for (const d of of('dress')) bases.push([d]);
-  if (!bases.length) throw new Error('No outfit possible: the photos need at least a top and bottoms, or a dress, that are clearly visible.');
+  if (!bases.length) {
+    if (skipped.length) throw new Error(`No outfit fits "${occasion}" / "${weather}": ${skipped.map((x) => `${x.description} (${x.why})`).join('; ')}. Add photos of other outfits or change the occasion.`);
+    throw new Error('No outfit possible: the photos need at least a top and bottoms, or a dress, that are clearly visible.');
+  }
   const shoes = of('shoes'), outer = of('outerwear'), rand = seededRandom(seed);
   const candidates = [];
   for (const base of bases) for (const s of shoes.length ? shoes.map((x) => [x]) : [[]]) for (const o of [[], ...outer.map((x) => [x])]) {
     const chosen = [...o, ...base, ...s];
-    candidates.push({ chosen, fresh: isNew(chosen), full: chosen.filter((x) => x.visibility === 'full').length, tie: rand() });
+    // Items that clash in formality (a strapless evening dress with combat boots) rank last; cold days prefer a layer.
+    const f = chosen.map((x) => x.formality).filter(Boolean), clash = f.length > 1 ? Math.max(0, Math.max(...f) - Math.min(...f) - 1) : 0;
+    const fitScore = clash + chosen.reduce((n, x) => n + offTarget(x, occ), 0) + (wx.cold && !o.length ? 1 : 0) + (wx.hot && o.length ? 1 : 0);
+    candidates.push({ chosen, fresh: isNew(chosen), fit: fitScore, full: chosen.filter((x) => x.visibility === 'full').length, tie: rand() });
   }
   const looks = [], used = new Map();
   while (looks.length < count && candidates.length) {
     const reuse = (c) => c.chosen.reduce((n, x) => n + (used.get(x.key) || 0), 0);
-    candidates.sort((a, b) => (b.fresh - a.fresh) || (reuse(a) - reuse(b)) || (b.full - a.full) || (a.tie - b.tie));
+    // Fit to the occasion and variety weigh the same: a better-fitting look does not repeat the same garments 4 times.
+    candidates.sort((a, b) => (a.fit + reuse(a) - b.fit - reuse(b)) || (b.fresh - a.fresh) || (b.full - a.full) || (a.tie - b.tie));
     const pick = candidates.shift();
     pick.chosen.forEach((x) => used.set(x.key, (used.get(x.key) || 0) + 1));
     const out = pick.chosen.map(({ key, seenIn, ...x }) => x);
-    looks.push({ items: out, distinctPhotos: new Set(out.map((x) => x.photo)).size, newCombination: pick.fresh });
+    looks.push({ items: out, distinctPhotos: new Set(out.map((x) => x.photo)).size, newCombination: pick.fresh, fit: pick.fit });
   }
+  looks.skipped = skipped;
+  looks.occasion = occ;
   return looks;
 }
+
+/**
+ * What an occasion allows, from its words (rule-based, Phase 1). formality: 1 lounge/beach, 2 casual, 3 smart casual,
+ * 4 business, 5 formal/evening. maxExposure: the most skin a garment may show (low, medium, high).
+ * 2026-10-28: "an office day" got a strapless sweetheart dress with combat boots and a shirt dress open to the thigh,
+ * because the occasion only reached the image prompt, never the choice of garments.
+ */
+const OCCASIONS = [
+  { name: 'work', words: /office|work|meeting|interview|business|conference|client|presentation|job/i, min: 3, max: 5, maxExposure: 'low' },
+  { name: 'formal', words: /wedding|gala|black.?tie|ceremony|funeral|opera|theatre|theater/i, min: 4, max: 5, maxExposure: 'medium' },
+  { name: 'evening', words: /dinner|date|party|night ?out|drinks|cocktail|bar|club|evening|restaurant/i, min: 3, max: 5, maxExposure: 'high' },
+  { name: 'sport', words: /gym|run|sport|workout|training|yoga|hike|hiking|padel|tennis/i, min: 1, max: 2, maxExposure: 'high' },
+  { name: 'beach', words: /beach|pool|swim/i, min: 1, max: 2, maxExposure: 'high' },
+  { name: 'casual', words: /casual|weekend|errand|shopping|park|home|coffee|brunch|walk|school|university|class|travel|airport|museum|friends/i, min: 1, max: 4, maxExposure: 'high' },
+];
+const EXPOSURE = { low: 0, medium: 1, high: 2 };
+export function occasionProfile(text = '') {
+  return OCCASIONS.find((o) => o.words.test(text)) || { name: 'any', min: 1, max: 5, maxExposure: 'high' };
+}
+/** Temperature (°C or °F) and rain/snow from free text such as "mild 20°C" or "rainy, 55F". */
+export function weatherProfile(text = '') {
+  const m = String(text).match(/(-?\d+(?:[.,]\d+)?)\s*°?\s*([cf])\b/i);
+  let c = m ? parseFloat(m[1].replace(',', '.')) : null;
+  if (c != null && m[2].toLowerCase() === 'f') c = (c - 32) * 5 / 9;
+  if (c == null) c = /freez|snow|cold|chilly|winter/i.test(text) ? 5 : /hot|heat|summer|scorch/i.test(text) ? 30 : null;
+  return { celsius: c, cold: c != null && c <= 13, hot: c != null && c >= 25, wet: /rain|shower|storm|snow|wet|drizzle/i.test(text) };
+}
+/** Why an item cannot be worn for this occasion and weather, or null. Items without tags pass (old readings). */
+export function unfit(x, occ, wx) {
+  if (x.exposure && EXPOSURE[x.exposure] > EXPOSURE[occ.maxExposure]) return `too revealing for ${occ.name}`;
+  if (x.formality && (x.formality < occ.min - 1 || x.formality > occ.max + 1)) return `${x.formality < occ.min ? 'too casual' : 'too dressy'} for ${occ.name}`;
+  if (x.season === 'warm' && (wx.cold || (wx.wet && x.category === 'shoes'))) return `warm-weather only (${wx.cold ? `${Math.round(wx.celsius)}°C` : 'rain'})`;
+  if (x.season === 'cold' && wx.hot) return `cold-weather only (${Math.round(wx.celsius)}°C)`;
+  return null;
+}
+/** How far an allowed item is from the occasion's formality range (0 inside it). */
+const offTarget = (x, occ) => (!x.formality ? 0 : x.formality < occ.min ? occ.min - x.formality : x.formality > occ.max ? x.formality - occ.max : 0);
 
 /** Turns the reader model's JSON (one photo) into wardrobe rows. Unknown categories become 'other'. */
 /** A garment box from the reader: [ymin, xmin, ymax, xmax] on a 0–1000 scale, at least 3% of the photo each way. */
@@ -146,6 +195,9 @@ export function normaliseReading(json, photo) {
       description: x.description.trim().slice(0, 120),
       visibility: ['full', 'partial', 'hidden'].includes(x.visibility) ? x.visibility : 'partial',
       ...(validBox(x.box) ? { box: x.box.map(Math.round) } : {}),
+      ...(Number.isInteger(x.formality) && x.formality >= 1 && x.formality <= 5 ? { formality: x.formality } : {}),
+      ...(['low', 'medium', 'high'].includes(x.exposure) ? { exposure: x.exposure } : {}),
+      ...(['warm', 'any', 'cold'].includes(x.season) ? { season: x.season } : {}),
     }));
 }
 
@@ -161,10 +213,16 @@ export function mergeLayers(items) {
   for (let i = 0; i < out.length; i++) {
     for (let j = i + 1; j < out.length; j++) {
       const a = out[i], b = out[j];
-      if (!a.box || !b.box || a.photo !== b.photo || a.category !== b.category || !['top', 'bottom'].includes(a.category)) continue;
+      if (!a.box || !b.box || a.photo !== b.photo) continue;
+      const sameLayer = a.category === b.category && ['top', 'bottom'].includes(a.category);
+      const withDress = [a, b].some((x) => x.category === 'dress') && [a, b].some((x) => ['top', 'bottom'].includes(x.category));
+      if (!sameLayer && !withDress) continue;
       if (overlap(a.box, b.box) < 0.5) continue;
-      const [outer, inner] = area(a.box) >= area(b.box) ? [a, b] : [b, a];
-      out[i] = { ...outer, description: `${outer.description}, worn layered over ${inner.description}`.slice(0, 200), layered: [outer.description, inner.description],
+      // With a dress, the dress is the garment and the other is worn with it (a mini skirt under an open shirt dress,
+      // a tee under a slip dress); otherwise the larger box is the outer layer.
+      const [outer, inner] = withDress ? (a.category === 'dress' ? [a, b] : [b, a]) : area(a.box) >= area(b.box) ? [a, b] : [b, a];
+      const exposure = ['low', 'medium', 'high'].find((e) => [a.exposure, b.exposure].includes(e));
+      out[i] = { ...outer, ...(exposure ? { exposure } : {}), description: `${outer.description}, worn ${withDress ? (inner.category === 'top' ? 'with' : 'over') : 'layered over'} ${inner.description}`.slice(0, 200), layered: [outer.description, inner.description],
         box: [Math.min(a.box[0], b.box[0]), Math.min(a.box[1], b.box[1]), Math.max(a.box[2], b.box[2]), Math.max(a.box[3], b.box[3])],
         visibility: a.visibility === 'full' || b.visibility === 'full' ? 'full' : a.visibility };
       out.splice(j, 1); j = i;
