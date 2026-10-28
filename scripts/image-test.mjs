@@ -96,7 +96,8 @@ function args() {
 
 const MAX_PHOTOS = 10;
 const BASE_POSE_TOLERANCE = 0.04; // edits of a base photo: GPT moved the feet 1–7% of the height on edits that looked right (2026-10-28)
-const POSE_TOLERANCE = 0.01; // feet position difference allowed between look 1 and an edit, as a share of the height
+const POSE_TOLERANCE = 0.025; // was 0.01: GPT looks Felipe judged right were 0.015–0.023 off and were all redone (2026-10-28)
+// Feet position difference allowed (share of the height) between a fresh look and the pose reference or look 1.
 
 // Phone photos are 4–11 MB and often stored sideways with a rotation flag (EXIF orientation). Every photo is turned
 // upright and, if large, resized to max 2048 px like the app would. Seen 2026-10-27: macOS sips dropped the rotation
@@ -363,6 +364,7 @@ export const openaiCost = (u, tier = 'standard') => {
   return (txt * p.textIn + img * p.imageIn + (u.output_tokens ?? 0) * p.out) / 1e6;
 };
 
+let flexRefused = false;
 async function callOpenAI(m, images, prompt, label, opts) {
   const key = process.env.OPENAI_API_KEY;
   if (!key) throw new Error('OPENAI_API_KEY is not set in .env.local');
@@ -382,12 +384,14 @@ async function callOpenAI(m, images, prompt, label, opts) {
     const res = await fetch(`${OPENAI_BASE}/v1/images/edits`, { method: 'POST', headers: { authorization: `Bearer ${key}` }, body: form, signal: AbortSignal.timeout(tier === 'flex' ? 900_000 : 300_000) });
     return { res, json: await res.json().catch(() => ({})) };
   };
-  let tier = opts.flex ? 'flex' : 'standard';
+  let tier = opts.flex && !flexRefused ? 'flex' : 'standard';
   let { res, json } = await send(tier);
   // Flex: 429 "resource unavailable" is not charged; fall back to standard so the run finishes. Flex not offered for
   // this model (400 mentioning service_tier/flex): say so once and use standard.
   if (tier === 'flex' && !res.ok && (res.status === 429 || /service.?tier|flex/i.test(json.error?.message || ''))) {
     console.log(`(flex unavailable: ${res.status} ${json.error?.message || ''}; using standard) `);
+    // 2026-10-28: the Images API answered 400 "Unknown parameter: 'service_tier'": Flex does not exist for image edits.
+    if (res.status === 400) { flexRefused = true; console.log('(Flex is not offered for image edits: standard for the rest of this run) '); }
     tier = 'standard';
     ({ res, json } = await send(tier));
   }
@@ -573,6 +577,9 @@ async function main() {
   // shoes", "Adidas logo"). So face-only findings (age, glasses, facial hair) and those items are not judged there;
   // garments (incl. logos) are the outfit check's job. Identity, hair, body build, hands and other added items still are.
   const realMark = /logo|print|text|wordmark|graphic|stripe|brand|earring|stud/i;
+  // Garments and shoes are the outfit check's job in every mode (2026-10-28: "added: white sneakers" — the shoes the look asked for).
+  const garmentWord = /sneaker|shoe|boot|trainer|sandal|loafer|heel|shirt|t-shirt|tee|top|hoodie|sweater|jacket|coat|blazer|trousers|pants|jeans|joggers|shorts|skirt|dress|sock/i;
+  const dropGarments = (reasons) => reasons.flatMap((x) => { if (!x.startsWith('added: ')) return [x]; const left = x.slice(7).split(', ').filter((a) => !garmentWord.test(a)); return left.length ? [`added: ${left.join(', ')}`] : []; });
   const baseReasons = (reasons) => reasons.flatMap((x) => {
     if (/^(looks (older|younger)|glasses:|facial hair:)/.test(x)) return [];
     if (!x.startsWith('added: ')) return [x];
@@ -594,7 +601,7 @@ async function main() {
       checkFaces({ faces, lookRefs, images: [img], minIdentity: opts.minIdentity, background: opts.background, log: () => {} }).then((x) => x.results[0]),
       outfitCheck(img, look.items, look.items.some((x) => x.category === 'shoes') ? null : opts.shoes).catch((e) => ({ ok: true, note: `outfit check failed: ${e.message}` })),
     ]);
-    why.push(...(refGeometry ? baseReasons(face.reasons) : face.reasons));
+    why.push(...dropGarments(refGeometry ? baseReasons(face.reasons) : face.reasons));
     if (!fit.ok) why.push(`outfit: ${fit.note}`);
     return why;
   };
@@ -811,7 +818,7 @@ async function main() {
   if (opts.check && done.length) {
     console.log(`\nChecking faces (identity gate ≥ ${opts.minIdentity}, then hair/age/added items)…`);
     check = await checkFaces({ faces, lookRefs: finalRefs, images: done.map((r) => ({ file: r.file, bytes: r.image, mime: 'image/png' })), minIdentity: opts.minIdentity, background: opts.background });
-    if (base) for (const c of check.results) { c.reasons = baseReasons(c.reasons); c.pass = c.reasons.length === 0 && c.identity != null; }
+    for (const c of check.results) { c.reasons = dropGarments(base ? baseReasons(c.reasons) : c.reasons); c.pass = c.reasons.length === 0 && c.identity != null; }
     check.results.forEach((c, i) => { done[i].check = c; console.log(`  ${c.pass ? 'PASS' : 'FAIL'}  ${c.file}  identity ${fmt(c.identity)}${c.reasons.length ? '  ' + c.reasons.join('; ') : ''}`); });
     console.log(`Look check cost: ~$${check.lookCost.toFixed(4)}`);
   }

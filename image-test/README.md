@@ -180,7 +180,7 @@ on 2026-10-28 were false alarms of this kind.
 ## Cost and Flex
 GPT image cost is computed from the tokens OpenAI reports (text in $5, image in $8, image out $30 per 1M; Flex at half),
 saved per image in `*.usage.json`, and the run prints its total (kept + rejected + base preparation).
-`--flex` asks for OpenAI's Flex tier (half price, slower, can be unavailable). When Flex is unavailable (429, not
+`--flex` asks for OpenAI's Flex tier — tested 2026-10-28: the Images API answers 400 "Unknown parameter: 'service_tier'", so Flex does not exist for image edits; the script then uses standard for the rest of the run. Was: (half price, slower, can be unavailable). When Flex is unavailable (429, not
 charged) or not offered for the model, that image falls back to standard and the log says so; flex images say "(flex)".
 
 ## Garment close-ups (automatic)
@@ -192,3 +192,6 @@ back to whole photos (compare input tokens in the report).
 ## Swipe timing (base mode)
 Each look's ready time (all attempts, checks and clean-up) is measured. The report shows, for "look n+1 starts when
 look n is shown", how long she would wait if she swipes after 5, 10, 20 or 30 seconds.
+
+Look check (all modes): garments and shoes are never judged as "added" (the outfit check covers them). Fresh looks may
+differ from the pose reference by 2.5% of the height (was 1%: looks judged right were 1.5–2.3% off and all redone).
