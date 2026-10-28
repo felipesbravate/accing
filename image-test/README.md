@@ -83,6 +83,9 @@ the same size and angle as in the base photo (the log says "pixel copy"), and on
 `--hd` makes GPT images 1536x2304 instead of 1024x1536 (face ~170 px wide instead of ~115; ~2.25× the cost); use it
 with `--reprep` so the base photo is prepared at the same size. The preparation now makes all 3 tries and keeps the
 passing one closest to her face photos.
+`--prepared=<file>` uses a base photo you picked (e.g. a `base-prepared-N.png` from a results folder) and saves it as
+the prepared version for later runs. Logos and prints on the base photo's clothes are not judged during preparation
+(the clothes are replaced in every look anyway).
 
 ### Base photo preparation (automatic, once per photo)
 Any photo works as the base, including a mirror selfie: it is read first.
