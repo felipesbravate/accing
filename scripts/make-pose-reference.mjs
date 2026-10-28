@@ -50,20 +50,40 @@ Pure white seamless background, soft even studio light, one soft shadow on the f
   console.log(`Generating the ${body} pose reference, feet ${feet}${fromFile ? ` (pose copied from ${fromFile})` : fromOther ? ' (edit of the ' + (feet === 'flat' ? 'heels' : 'flat') + ' one, same pose)' : ''}…`);
   const source = fromFile ? { mime: /\.jpe?g$/i.test(fromFile) ? 'image/jpeg' : 'image/png', bytes: await readFile(resolve(fromFile)) } : fromOther ? { mime: 'image/png', bytes: await readFile(other) } : null;
   const parts = source ? [{ inlineData: { mimeType: source.mime, data: source.bytes.toString('base64') } }, { text: prompt }] : [{ text: prompt }];
-  const res = await fetch(`${base}/v1beta/models/gemini-3.1-flash-image-preview:generateContent`, {
-    method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
-    body: JSON.stringify({ contents: [{ role: 'user', parts }],
-      generationConfig: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: '2:3', imageSize: '2K' } } }),
-  });
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(`Gemini ${res.status}: ${json.error?.message || 'no details'}`);
-  const part = json.candidates?.[0]?.content?.parts?.find((p) => p.inlineData || p.inline_data);
-  if (!part) throw new Error('Gemini returned no image; run it again');
+  // --openai: GPT Image (high) instead of Gemini. Gemini got a fashion-model pose "super wrong" (2026-10-28); GPT
+  // followed poses and garments much more closely in the image tests.
+  let bytes;
+  if (process.argv.includes('--openai')) {
+    const okey = process.env.OPENAI_API_KEY;
+    if (!okey) throw new Error('OPENAI_API_KEY is not set in .env.local');
+    const form = new FormData();
+    form.append('model', 'gpt-image-2.5-flare'); form.append('prompt', prompt); form.append('size', '1024x1536');
+    form.append('quality', 'high'); form.append('output_format', 'png'); form.append('n', '1');
+    if (source) form.append('image[]', new Blob([source.bytes], { type: source.mime }), 'source');
+    const url = `${process.env.OPENAI_BASE_URL || 'https://api.openai.com'}/v1/images/${source ? 'edits' : 'generations'}`;
+    const res = await fetch(url, { method: 'POST', headers: { authorization: `Bearer ${okey}`, ...(source ? {} : { 'content-type': 'application/json' }) },
+      body: source ? form : JSON.stringify({ model: 'gpt-image-2.5-flare', prompt, size: '1024x1536', quality: 'high', output_format: 'png', n: 1 }) });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(`OpenAI ${res.status}: ${json.error?.message || 'no details'}`);
+    if (!json.data?.[0]?.b64_json) throw new Error('OpenAI returned no image; run it again');
+    bytes = Buffer.from(json.data[0].b64_json, 'base64');
+  } else {
+    const res = await fetch(`${base}/v1beta/models/gemini-3.1-flash-image-preview:generateContent`, {
+      method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
+      body: JSON.stringify({ contents: [{ role: 'user', parts }],
+        generationConfig: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: '2:3', imageSize: '2K' } } }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(`Gemini ${res.status}: ${json.error?.message || 'no details'}`);
+    const part = json.candidates?.[0]?.content?.parts?.find((p) => p.inlineData || p.inline_data);
+    if (!part) throw new Error('Gemini returned no image; run it again');
+    bytes = Buffer.from((part.inlineData || part.inline_data).data, 'base64');
+  }
   await mkdir(POSE_DIR, { recursive: true });
   const file = poseReferencePath(body, feet);
-  await writeFile(file, Buffer.from((part.inlineData || part.inline_data).data, 'base64'));
+  await writeFile(file, bytes);
   await writeFile(file.replace(/\.png$/, '.txt'), `${body}, feet ${feet}: ${fromFile ? `pose copied from ${fromFile}` : pose}\n`);
-  console.log(`Saved ${file} (~$0.10).`);
+  console.log(`Saved ${file} (~$${process.argv.includes('--openai') ? '0.10–0.20' : '0.10'}).`);
 }
 
 async function main() {
