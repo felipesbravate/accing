@@ -7,7 +7,7 @@ import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { appendFileSync, existsSync } from 'node:fs';
 import { extname, join, resolve } from 'node:path';
-import { CATEGORIES, composeLooks, normaliseReading } from './image-test-lib.mjs';
+import { CATEGORIES, composeLooks, mergeLayers, normaliseReading } from './image-test-lib.mjs';
 import { checkFaces, checkTable, MIN_IDENTITY } from './face-check/index.mjs';
 import { outfitCheck, photoCheck, poseCheck } from './face-check/look-check.mjs';
 import { createHash } from 'node:crypto';
@@ -260,7 +260,7 @@ async function readPhoto(img, index, model) {
   try { parsed = JSON.parse(text); } catch { throw new Error(`Could not understand the reading of ${img.file}: ${text.slice(0, 200)}`); }
   const u = json.usageMetadata || {};
   const cost = ((u.promptTokenCount || 0) * 0.25 + (u.candidatesTokenCount || 0) * 1.5) / 1e6; // gemini-3.1-flash-lite list price
-  return { fullBody: parsed.full_body !== false, people: parsed.people ?? 1, figure: parsed.figure, items: normaliseReading(parsed, index), cost };
+  return { fullBody: parsed.full_body !== false, people: parsed.people ?? 1, figure: parsed.figure, items: mergeLayers(normaliseReading(parsed, index)), cost };
 }
 
 async function readWardrobe(images, model) {
@@ -435,6 +435,8 @@ async function callOpenAI(m, images, prompt, label, opts) {
     tier = 'standard';
     ({ res, json } = await send(tier));
   }
+  // Refusals (2026-10-28: a sheer lace top, every run) are not retried: the same garments are refused again.
+  if (!res.ok && /safety system/i.test(json.error?.message || '')) throw Object.assign(new Error('refused by OpenAI\'s safety system (likely a sheer or revealing garment); look skipped'), { refused: true });
   if (!res.ok) throw new Error(`OpenAI ${res.status}: ${json.error?.message || JSON.stringify(json).slice(0, 300)}`);
   const b64 = json.data?.[0]?.b64_json;
   if (!b64) throw new Error('OpenAI returned no image');
@@ -617,8 +619,8 @@ async function main() {
       return { m, look, run, seconds, file, ...r };
     } catch (e) {
       const seconds = (performance.now() - t0) / 1000;
-      console.log(`FAILED after ${seconds.toFixed(1)}s: ${e.message}`);
-      return { m, look, run, seconds, error: e.message };
+      console.log(e.refused ? `REFUSED after ${seconds.toFixed(1)}s: OpenAI's safety system declined ${look.n ? `look ${look.n}` : 'this image'} (${(look.items || []).map((x) => x.description).join(' + ') || 'base photo'}); skipped, not retried` : `FAILED after ${seconds.toFixed(1)}s: ${e.message}`);
+      return { m, look, run, seconds, error: e.message, refused: !!e.refused };
     }
   };
   // Everything a fresh look must pass: the pose reference's stance (measured), the face check, and exactly its outfit.
@@ -900,7 +902,7 @@ PHOTO
         const last = attempt === opts.anchorTries;
         const file = name(m, looks[0], 1);
         const r = await generate(m, looks[0], 1, file, looks[0].images, looks[0].prompt, looks[0].label, opts, withFacePass(m));
-        if (r.error) { if (last) rows.push(r); continue; }
+        if (r.error) { if (last || r.refused) { rows.push(r); break; } continue; }
         if (!opts.check || last) { anchor = r; break; }
         // Look 1 must stand like the pose reference (2026-10-27: it came out facing the camera, stagger 0.000 vs the
         // mannequin's -0.021, and every edit copied that).
@@ -996,6 +998,7 @@ PHOTO
     ...(anchorMode ? [`Same face, pose and shadow: look 1 was generated from the face photos${opts.check ? ' and had to pass the face check' : ''}; looks 2–${looks.length} are edits of it where only the clothes change, each checked for the same pose as look 1 and remade if it differs.`,
       ...(rejected.length ? ['', `Attempts rejected before one passed (${rejected.length}, ~$${fmt(rejected.reduce((s, r) => s + (r.cost || 0), 0))}):`, ...rejected.map((r) => `- ${r.file}: ${r.reasons.join('; ')}`)] : []), ''] : []),
     ...(!anchorMode && rejected.length ? [`Attempts rejected before one passed (${rejected.length}, ~$${fmt(rejected.reduce((s, r) => s + (r.cost || 0), 0))}):`, ...rejected.map((r) => `- ${r.file}: ${r.reasons.join('; ')}`), ''] : []),
+    ...(rows.some((r) => r.refused) ? ['## Refused by OpenAI (safety)', '', 'Skipped without retrying: the same garments are refused every time (usually sheer or revealing clothes).', '', ...rows.filter((r) => r.refused).map((r) => `- Look ${r.look.n}: ${(r.look.items || []).map((x) => x.description).join(' + ')}`), ''] : []),
     ...(prepRows.length ? ['## Base photo preparation', '', ...prepRows.map((r) => `- ${r.file}: ${r.m.key}, ${r.seconds.toFixed(1)}s, ~$${fmt(r.cost)}, identity ${fmt(r.identity)} — ${r.reasons.length ? 'rejected: ' + r.reasons.join('; ') : 'kept'}`), ''] : []),
     '## Results', '',
     '| Look | Model | Run | Seconds | Input tokens | Output tokens | Est. cost (USD) | Face step | Result |', '|---|---|---|---|---|---|---|---|---|'];

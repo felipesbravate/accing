@@ -148,3 +148,27 @@ export function normaliseReading(json, photo) {
       ...(validBox(x.box) ? { box: x.box.map(Math.round) } : {}),
     }));
 }
+
+/** Layered garments worn together in one photo (a t-shirt over a lace long-sleeve, a shirt under a sweater) become one
+ *  item. Read as two, looks asked for one without the other and each garment's close-up showed the other, so the
+ *  outfit check rejected every try (3 runs in a row, 2026-10-28). Two items of the same category from the same photo
+ *  whose boxes mostly overlap (the overlap covers at least half of the smaller box) are merged; the larger box is
+ *  taken as the outer layer. Outerwear over a top stays separate: a jacket can come off. Needs boxes. */
+export function mergeLayers(items) {
+  const area = (b) => Math.max(0, b[2] - b[0]) * Math.max(0, b[3] - b[1]);
+  const overlap = (a, b) => area([Math.max(a[0], b[0]), Math.max(a[1], b[1]), Math.min(a[2], b[2]), Math.min(a[3], b[3])]) / Math.min(area(a), area(b) || 1);
+  const out = [...items];
+  for (let i = 0; i < out.length; i++) {
+    for (let j = i + 1; j < out.length; j++) {
+      const a = out[i], b = out[j];
+      if (!a.box || !b.box || a.photo !== b.photo || a.category !== b.category || !['top', 'bottom'].includes(a.category)) continue;
+      if (overlap(a.box, b.box) < 0.5) continue;
+      const [outer, inner] = area(a.box) >= area(b.box) ? [a, b] : [b, a];
+      out[i] = { ...outer, description: `${outer.description}, worn layered over ${inner.description}`.slice(0, 200), layered: [outer.description, inner.description],
+        box: [Math.min(a.box[0], b.box[0]), Math.min(a.box[1], b.box[1]), Math.max(a.box[2], b.box[2]), Math.max(a.box[3], b.box[3])],
+        visibility: a.visibility === 'full' || b.visibility === 'full' ? 'full' : a.visibility };
+      out.splice(j, 1); j = i;
+    }
+  }
+  return out;
+}
