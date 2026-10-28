@@ -43,19 +43,15 @@ const MODELS = [
 const PRICES = {
   'gemini-nano-banana-2': { inputPerM: 0.5, outputBySize: { '512': 0.045, '1K': 0.067, '2K': 0.101, '4K': 0.151 } },
   'gemini-nano-banana-pro': { inputPerM: 2, outputBySize: { '1K': 0.134, '2K': 0.134, '4K': 0.24 } },
-  'openai-2.5-flare-medium': { imageInputPerM: 8, textInputPerM: 5, outputPerImage: 0.01317 * 1.5 },
-  'openai-2.5-flare-high': { imageInputPerM: 8, textInputPerM: 5, outputPerImage: 0.05268 * 1.5 },
+  // GPT images: cost from the reported tokens, see OPENAI_TOKEN_PRICES.
 };
-
-// OpenAI output cost scales with pixels (estimate): 1536x2304 ≈ 2.25× the 1024x1536 price.
-const sizeFactor = (size) => { const [w, h] = String(size).split('x').map(Number); return w && h ? (w * h) / (1024 * 1536) : 1; };
 
 const GEMINI_BASE = process.env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com';
 const OPENAI_BASE = process.env.OPENAI_BASE_URL || 'https://api.openai.com';
 const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
 
 function args() {
-  const out = { runs: 3, looks: 1, cleanRefs: true, realFace: null, openaiSize: null, prep: true, reprep: false, prepModel: null, proFace: false, body: null, background: '#F9F9FB', poseRef: true, facePasses: 2, faceLock: true, clean: true, anchor: null, anchorTries: 3, only: null, dryRun: false, check: true, minIdentity: MIN_IDENTITY, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
+  const out = { runs: 3, looks: 1, cleanRefs: true, realFace: null, openaiSize: null, flex: false, prep: true, reprep: false, prepModel: null, proFace: false, body: null, background: '#F9F9FB', poseRef: true, facePasses: 2, faceLock: true, clean: true, anchor: null, anchorTries: 3, only: null, dryRun: false, check: true, minIdentity: MIN_IDENTITY, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
     expression: 'copy it exactly from the front face photo, including any slight smile; no smile or seriousness that photo does not have', occasion: 'an office day', weather: 'sunny 24°C', time: 'Monday morning',
     shoes: 'plain white leather low-top sneakers with white soles and white laces',
     pose: 'relaxed standing pose: body turned about 15 degrees so their left shoulder is slightly closer to the camera, head turned back to face the camera, chin level, eyes looking into the lens; weight on the back (right) leg, front (left) knee slightly relaxed, feet about hip-width apart; both arms hanging loosely at the sides, elbows very slightly bent, hands open and relaxed beside the thighs, never in pockets; shoulders relaxed and level' };
@@ -72,6 +68,7 @@ function args() {
     else if (k === 'prep-model') out.prepModel = v;
     else if (k === 'openai-size') { if (!/^\d{3,4}x\d{3,4}$/.test(v)) throw new Error('--openai-size=WIDTHxHEIGHT, e.g. 1536x2304'); out.openaiSize = v; }
     else if (k === 'hd') out.openaiSize = '1536x2304';
+    else if (k === 'flex') out.flex = true;
     else if (k === 'no-anchor') out.anchor = false;
     else if (k === 'anchor') out.anchor = true;
     else if (k === 'no-clean-refs') out.cleanRefs = false;
@@ -331,32 +328,55 @@ async function callGemini(m, images, prompt, label, opts) {
   };
 }
 
+// GPT Image 2.5 token prices (developers.openai.com/api/docs/models/gpt-image-2.5-flare, read 2026-10-28), USD per 1M:
+// text in $5, image in $8, image out $30 on Standard. Flex is billed at Batch rates (half). The cost of a GPT image is
+// computed from the tokens OpenAI reports, so it matches the bill (the earlier fixed per-image estimate did not).
+const OPENAI_TOKEN_PRICES = { standard: { textIn: 5, imageIn: 8, out: 30 }, flex: { textIn: 2.5, imageIn: 4, out: 15 } };
+export const openaiCost = (u, tier = 'standard') => {
+  const p = OPENAI_TOKEN_PRICES[tier] || OPENAI_TOKEN_PRICES.standard;
+  const img = u.input_tokens_details?.image_tokens ?? 0, txt = u.input_tokens_details?.text_tokens ?? Math.max(0, (u.input_tokens ?? 0) - img);
+  return (txt * p.textIn + img * p.imageIn + (u.output_tokens ?? 0) * p.out) / 1e6;
+};
+
 async function callOpenAI(m, images, prompt, label, opts) {
   const key = process.env.OPENAI_API_KEY;
   if (!key) throw new Error('OPENAI_API_KEY is not set in .env.local');
-  const form = new FormData();
-  form.append('model', m.model);
-  form.append('prompt', prompt + '\n\nThe images are given in order: ' + images.map((x, i) => `${i + 1} = ${label(i)}`).join('; ') + '.');
   const size = opts.openaiSize || m.size;
-  form.append('size', size);
-  form.append('quality', m.quality);
-  form.append('output_format', 'png');
-  form.append('n', '1');
-  if (m.inputFidelity) form.append('input_fidelity', m.inputFidelity);
-  for (const img of images) form.append('image[]', new Blob([img.bytes], { type: img.mime }), img.file);
-  const res = await fetch(`${OPENAI_BASE}/v1/images/edits`, { method: 'POST', headers: { authorization: `Bearer ${key}` }, body: form });
-  const json = await res.json().catch(() => ({}));
+  const send = async (tier) => {
+    const form = new FormData();
+    form.append('model', m.model);
+    form.append('prompt', prompt + '\n\nThe images are given in order: ' + images.map((x, i) => `${i + 1} = ${label(i)}`).join('; ') + '.');
+    form.append('size', size);
+    form.append('quality', m.quality);
+    form.append('output_format', 'png');
+    form.append('n', '1');
+    if (tier === 'flex') form.append('service_tier', 'flex');
+    if (m.inputFidelity) form.append('input_fidelity', m.inputFidelity);
+    for (const img of images) form.append('image[]', new Blob([img.bytes], { type: img.mime }), img.file);
+    // Flex can be slow: allow 15 minutes (OpenAI's own advice), standard 5.
+    const res = await fetch(`${OPENAI_BASE}/v1/images/edits`, { method: 'POST', headers: { authorization: `Bearer ${key}` }, body: form, signal: AbortSignal.timeout(tier === 'flex' ? 900_000 : 300_000) });
+    return { res, json: await res.json().catch(() => ({})) };
+  };
+  let tier = opts.flex ? 'flex' : 'standard';
+  let { res, json } = await send(tier);
+  // Flex: 429 "resource unavailable" is not charged; fall back to standard so the run finishes. Flex not offered for
+  // this model (400 mentioning service_tier/flex): say so once and use standard.
+  if (tier === 'flex' && !res.ok && (res.status === 429 || /service.?tier|flex/i.test(json.error?.message || ''))) {
+    console.log(`(flex unavailable: ${res.status} ${json.error?.message || ''}; using standard) `);
+    tier = 'standard';
+    ({ res, json } = await send(tier));
+  }
   if (!res.ok) throw new Error(`OpenAI ${res.status}: ${json.error?.message || JSON.stringify(json).slice(0, 300)}`);
   const b64 = json.data?.[0]?.b64_json;
   if (!b64) throw new Error('OpenAI returned no image');
   const u = json.usage || {};
-  const p = PRICES[m.key];
-  const imgIn = u.input_tokens_details?.image_tokens ?? null;
-  const txtIn = u.input_tokens_details?.text_tokens ?? null;
+  const billedTier = json.service_tier || tier;
   return {
     image: Buffer.from(b64, 'base64'),
-    tokens: { input: u.input_tokens ?? null, inputImage: imgIn, output: u.output_tokens ?? null },
-    cost: p ? p.outputPerImage * sizeFactor(size) + (imgIn || 0) / 1e6 * p.imageInputPerM + (txtIn || 0) / 1e6 * p.textInputPerM : null,
+    usage: { ...u, service_tier: billedTier, size, quality: m.quality },
+    tier: billedTier,
+    tokens: { input: u.input_tokens ?? null, inputImage: u.input_tokens_details?.image_tokens ?? null, output: u.output_tokens ?? null },
+    cost: json.usage ? openaiCost(u, billedTier === 'flex' ? 'flex' : 'standard') : null,
   };
 }
 
@@ -502,7 +522,7 @@ async function main() {
       await writeFile(join(out, file), r.image);
       if (r.usage) await writeFile(join(out, file.replace(/\.png$/, '.usage.json')), JSON.stringify(r.usage, null, 2));
       const faceNote = r.face ? (r.face.pass ? `, face ${fmt(r.face.before)}→${fmt(r.face.after)} (${r.face.kept})` : r.face.locked ? `, face locked${r.face.exact ? " (pixel copy)" : r.face.exact === false ? " (resampled: head moved or turned)" : ""} ${fmt(r.face.before)}→${fmt(r.face.after)}` : `, face not locked: ${r.face.reason}`) : '';
-      console.log(`${post ? '  ' : ''}${seconds.toFixed(1)}s, ~$${fmt(r.cost)}${faceNote}${r.clean ? `, background ${Math.round(r.clean.before)}→${opts.background} in ${r.clean.seconds.toFixed(1)}s` : ''}`);
+      console.log(`${post ? '  ' : ''}${seconds.toFixed(1)}s${r.tier === 'flex' ? ' (flex)' : ''}, ~$${fmt(r.cost)}${faceNote}${r.clean ? `, background ${Math.round(r.clean.before)}→${opts.background} in ${r.clean.seconds.toFixed(1)}s` : ''}`);
       return { m, look, run, seconds, file, ...r };
     } catch (e) {
       const seconds = (performance.now() - t0) / 1000;
@@ -780,6 +800,9 @@ async function main() {
       `Look check: hair, age, facial hair, glasses, expression and anything invented, by gemini-3.1-flash-lite (~$${check.lookCost.toFixed(4)} total).`, '', ...checkTable(check.results));
     for (const c of check.results) if (c.reasons.length || c.warnings.length) lines.push(`- ${c.file}: ${[...c.reasons, ...c.warnings.map((w) => 'warning: ' + w)].join('; ')}`);
   }
+  const spent = [...rows, ...rejected, ...prepRows].reduce((t, r) => t + (r.cost || 0), 0);
+  lines.push('', `Total spent this run (kept + rejected + base preparation): ~$${fmt(spent)}. GPT costs are from the tokens OpenAI reported; usage per image is in the *.usage.json files.`);
+  console.log(`Total spent this run: ~$${fmt(spent)}`);
   lines.push('', 'Score each image 1–5: face (would a friend recognise you?), body, garments exact, full frame. Below 4 on face fails.', '',
     'Costs are estimates from the PRICES table in scripts/image-test.mjs; check them on the providers\' pricing pages.');
   await writeFile(join(out, 'report.md'), lines.join('\n') + '\n');

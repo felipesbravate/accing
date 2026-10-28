@@ -176,3 +176,9 @@ Fill `face`, `clothes` and `pose` with 1 (right) or 0 (wrong), then `npm run sco
 In base mode the look check no longer judges what is copied or real: age, glasses and facial hair (the face is a pixel
 copy), earrings, and logos or prints on the garments (the outfit check covers garments). All 11 rejections in three runs
 on 2026-10-28 were false alarms of this kind.
+
+## Cost and Flex
+GPT image cost is computed from the tokens OpenAI reports (text in $5, image in $8, image out $30 per 1M; Flex at half),
+saved per image in `*.usage.json`, and the run prints its total (kept + rejected + base preparation).
+`--flex` asks for OpenAI's Flex tier (half price, slower, can be unavailable). When Flex is unavailable (429, not
+charged) or not offered for the model, that image falls back to standard and the log says so; flex images say "(flex)".
