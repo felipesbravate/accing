@@ -111,7 +111,7 @@ export async function outfitCheck(image, items, defaultShoes, { model = LOOK_MOD
   const prompt = `Image 1 is a photo of a person. ${refs.length ? `Images 2 to ${refs.length + 1} are close-ups of the real garments they should wear. ` : ''}The person should wear exactly these garments and nothing else:\n${list.map((x) => '- ' + x).join('\n')}
 missing: any garment from the list that is not visible or is clearly a different garment (other colour, cut or type).
 different: for each garment that has a reference image, any visible difference from it in the photo: neckline, straps or back construction, collar, sleeves, length, fit, closures (buttons, zips, drawstring), pockets, pattern, colour or fabric. Name the garment and the difference, e.g. "white tank top: racerback straps instead of plain straps". Ignore folds, lighting and the angle of view.
-The written names come from a quick reading and can be wrong about colour or details (gold read as silver, cream as white). When a garment has a reference image, the reference image is the truth: compare the photo with the image, never with the words, and do not report a difference that only the words have. Close-ups are often lit by coloured room light (one side pinker or yellower): that is the light, not a two-tone garment; judge the garment's own colour.
+The written names come from a quick reading and can be wrong about colour or details (gold read as silver, cream as white). When a garment has a reference image, the reference image is the truth: compare the photo with the image, never with the words, and do not report a difference that only the words have. Parts of a garment covered by another garment cannot be seen (a knee-high boot shaft under wide trousers, a tucked-in hem, a top under a jacket): never report a difference or a missing garment for what is covered, only for what is visible. Close-ups are often lit by coloured room light (one side pinker or yellower): that is the light, not a two-tone garment; judge the garment's own colour.
 extra: any outerwear, top, bottom, dress or shoes the person wears that is not on the list (e.g. a jacket or blazer that should not be there). Ignore belts, jewellery, underwear and small details. Empty lists if it matches.`;
   const part = (img) => ({ inlineData: { mimeType: img.mime, data: img.bytes.toString('base64') } });
   const res = await fetch(`${GEMINI_BASE}/v1beta/models/${model}:generateContent`, {
@@ -142,15 +142,16 @@ const PHOTO_PROMPT = `Describe this photo of a person, strictly and literally:
 - hands_in_pockets: either hand is in a pocket, even partly
 - mirror_selfie: the photo is taken in a mirror, or a mirror frame, phone or room reflection is visible
 - plain_background: the background is a plain wall or studio backdrop with no furniture or objects
+- ghosts: any grey or white smudge, halo, blur or faint shape in the background right next to the person (often beside the hair or shoulders) that is not part of them
 Give a short note on anything else that would make this a poor photo for a virtual fitting room.`;
 const PHOTO_SCHEMA = {
   type: 'OBJECT',
   properties: {
     one_person: { type: 'BOOLEAN' }, full_body: { type: 'BOOLEAN' }, face_visible: { type: 'BOOLEAN' }, sharp: { type: 'BOOLEAN' }, sitting: { type: 'BOOLEAN' },
     holding: { type: 'ARRAY', items: { type: 'STRING' } }, looking_at_camera: { type: 'BOOLEAN' }, arms_relaxed: { type: 'BOOLEAN' },
-    hands_in_pockets: { type: 'BOOLEAN' }, mirror_selfie: { type: 'BOOLEAN' }, plain_background: { type: 'BOOLEAN' }, note: { type: 'STRING' },
+    hands_in_pockets: { type: 'BOOLEAN' }, mirror_selfie: { type: 'BOOLEAN' }, plain_background: { type: 'BOOLEAN' }, ghosts: { type: 'BOOLEAN' }, note: { type: 'STRING' },
   },
-  required: ['one_person', 'full_body', 'face_visible', 'sharp', 'sitting', 'holding', 'looking_at_camera', 'arms_relaxed', 'hands_in_pockets', 'mirror_selfie', 'plain_background', 'note'],
+  required: ['one_person', 'full_body', 'face_visible', 'sharp', 'sitting', 'holding', 'looking_at_camera', 'arms_relaxed', 'hands_in_pockets', 'mirror_selfie', 'plain_background', 'ghosts', 'note'],
 };
 
 /** What a base photo needs. blocking: cannot be fixed by an edit (ask for another photo); fixes: what the edit must change. */
@@ -167,6 +168,8 @@ export function photoVerdict(r) {
   if (r.hands_in_pockets) fixes.push('a hand in a pocket');
   if (r.mirror_selfie) fixes.push('mirror selfie');
   if (!r.plain_background) fixes.push('room or objects in the background');
+  // The base photo is copied into every look: a smudge beside Juliana's hair in it came back in all 8 looks (2026-10-28).
+  if (r.ghosts) fixes.push('a smudge or ghost shape in the background next to the person');
   return { usable: blocking.length === 0, blocking, fixes };
 }
 
