@@ -625,7 +625,7 @@ async function main() {
   // and ears: on 2026-10-28 all 11 rejections in 3 runs were false alarms of this kind ("earrings", "Vans logo on the
   // shoes", "Adidas logo"). So face-only findings (age, glasses, facial hair) and those items are not judged there;
   // garments (incl. logos) are the outfit check's job. Identity, hair, body build, hands and other added items still are.
-  const realMark = /logo|print|text|wordmark|graphic|stripe|brand|earring|stud/i;
+  const realMark = /logo|print|text|wordmark|graphic|stripe|brand|earring|stud|tattoo|ink|piercing/i; // in base mode these come from the base photo
   // Garments and shoes are the outfit check's job in every mode (2026-10-28: "added: white sneakers" — the shoes the look asked for).
   const garmentWord = /sneaker|shoe|boot|trainer|sandal|loafer|heel|shirt|t-shirt|tee|top|hoodie|sweater|jacket|coat|blazer|trousers|pants|jeans|joggers|shorts|skirt|dress|sock/i;
   const dropGarments = (reasons) => reasons.flatMap((x) => { if (!x.startsWith('added: ')) return [x]; const left = x.slice(7).split(', ').filter((a) => !garmentWord.test(a)); return left.length ? [`added: ${left.join(', ')}`] : []; });
@@ -710,7 +710,8 @@ async function main() {
       // A clean background is the cleaner's job; everything else must be fixed.
       // The clothes are kept here and replaced in every look, so logos and prints on them are not judged: the check kept
       // reporting the real Adidas logo as "added" and rejected all 3 tries, the best at identity 0.752 (2026-10-28).
-      const clothesMark = /logo|print|text|wordmark|graphic|stripe|shirt|t-shirt|skirt|trousers|shoe|sneaker|earring|stud/i;
+      // Tattoos and piercings too: the base photo is the real person (2026-10-28: Ricardo's real arm tattoos rejected all 3 tries).
+      const clothesMark = /logo|print|text|wordmark|graphic|stripe|shirt|t-shirt|skirt|trousers|shoe|sneaker|earring|stud|tattoo|ink|piercing/i;
       const lookReasons = (look.reasons || []).filter((x) => !(x.startsWith('added:') && clothesMark.test(x)));
       const added = (look.look?.added || []).filter((x) => !clothesMark.test(x));
       const left = [...after.blocking, ...after.fixes.filter((f) => f !== 'room or objects in the background'), ...lookReasons.filter((x) => !x.startsWith('added:')), ...(added.length ? [`added: ${added.join(', ')}`] : [])];
