@@ -7,12 +7,12 @@ CHANGE
 - Hands: empty. Remove everything the person holds or carries (phone, bag, cup, keys) and anything only there because of it.
 - Pose: {{POSE}}{{POSE_IMAGE_RULE}}
 - Head facing the camera, eyes looking straight into the lens, with the natural relaxed expression of the face photos.
+- The face: rebuild it from the face photos (images {{FACE_IMAGES}}), which are close, sharp and evenly lit, with full fidelity: face shape and width, jaw and chin, eyes, eyelids and eyebrows, nose, lips, skin tone and texture, freckles, moles and lines, and their real age. The face in image 1 is small and soft (a phone photo): use it only for where the head is and how it is turned, never for the features. No beautifying, slimming, smoothing or makeup the face photos do not show.
 - Camera: not a mirror selfie. A photo taken by a camera on a tripod at hip height, about 4 m away, straight on, with a long lens (85 mm look): natural proportions, no wide-angle distortion, feet their natural size; no mirror, no mirror frame, no reflection.
 - Background: remove the room and every object. Plain light grey seamless studio backdrop, soft even front light, one soft shadow under the feet.
 - Framing: the whole body from head to feet, centred, top of the head about 8% below the top edge, soles about 6% above the bottom edge. Portrait.
 
 KEEP EXACTLY
-- The face: every feature as in image 1 and the face photos (images {{FACE_IMAGES}}): face shape and width, jaw and chin, eyes, eyelids and eyebrows, nose, lips, skin tone and texture, freckles, moles and lines, and their real age. Where the head or eyes turn, rebuild the face from the face photos; never invent a feature. No beautifying, slimming, smoothing or makeup.
 - The hair: colour, length, style, parting and where it falls, as in image 1.
 - The body: height, build, shoulder, waist and hip width, arm and leg length and proportions, as in image 1.
 - The clothes and shoes worn in image 1, unchanged (only fill in naturally what the phone or arm hid).
