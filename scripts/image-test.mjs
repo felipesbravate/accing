@@ -690,15 +690,22 @@ async function main() {
   if (!base && opts.autoBase && looks.length > 1 && models.some((m) => m.provider === 'openai')) {
     const genModel = MODELS.find((x) => x.key === (opts.prepModel || 'openai-2.5-flare-high'));
     const l1 = looks[0];
+    // Keyed on the face photos and size only: one base per person, whatever the outfit, occasion or seed.
     const hash = createHash('sha1');
-    for (const img of images) hash.update(img.bytes);
-    hash.update(l1.prompt).update(opts.openaiSize || '');
+    for (const img of faces) hash.update(img.bytes);
+    hash.update(opts.openaiSize || '');
     const cached = join(PREPARED_DIR, `generated-${hash.digest('hex').slice(0, 10)}.png`);
     const idOf = async (img) => (await checkFaces({ faces, lookRefs: [], images: [img], look: false, minIdentity: 0, log: () => {} })).results[0].identity;
-    if (opts.prepared) base = { file: 'generated-base.png', bytes: await readFile(resolve(opts.prepared)), mime: 'image/png', generated: true };
-    else if (existsSync(cached) && !opts.reprep) {
+    const outfitKey = (items) => items.map((x) => x.description).sort().join(' + ');
+    const wears = async () => (existsSync(cached + '.json') ? JSON.parse(await readFile(cached + '.json', 'utf8')).wears : null);
+    if (opts.prepared) {
+      base = { file: 'generated-base.png', bytes: await readFile(resolve(opts.prepared)), mime: 'image/png', generated: true, wears: null };
+      await mkdir(PREPARED_DIR, { recursive: true });
+      await writeFile(cached, base.bytes); await writeFile(cached + '.json', JSON.stringify({ wears: null }));
+      console.log(`Generated base photo: using ${opts.prepared} (--prepared); saved for later runs`);
+    } else if (existsSync(cached) && !opts.reprep) {
       console.log(`Generated base photo: using the one made earlier (${cached.replace(ROOT + '/', '')}; --reprep to make it again)`);
-      base = { file: 'generated-base.png', bytes: await readFile(cached), mime: 'image/png', generated: true };
+      base = { file: 'generated-base.png', bytes: await readFile(cached), mime: 'image/png', generated: true, wears: await wears() };
     } else {
       console.log(`No base photo: generating look 1 ${opts.anchorTries} times with ${genModel.key} and keeping the one closest to the face photos as the base photo…`);
       if (cleaner && l1.pose) l1.pose.geometry ??= await measurePose(cleaner, l1.pose.bytes).catch(() => null);
@@ -723,9 +730,9 @@ async function main() {
       if (!best) throw new Error('Could not generate a base photo (every try failed). Run again, or add a base photo (base.jpg).');
       if (!best.ok) console.log(`  (no try passed every check; keeping the closest face, ${best.file})`);
       await mkdir(PREPARED_DIR, { recursive: true });
-      await writeFile(cached, best.bytes);
+      await writeFile(cached, best.bytes); await writeFile(cached + '.json', JSON.stringify({ wears: outfitKey(l1.items) }));
       console.log(`Kept ${best.file} (identity ${best.id?.toFixed(3)}) as the base photo; saved as ${cached.replace(ROOT + '/', '')}. Not her? Pick another with --prepared=<file>.`);
-      base = { file: 'generated-base.png', bytes: best.bytes, mime: 'image/png', generated: true };
+      base = { file: 'generated-base.png', bytes: best.bytes, mime: 'image/png', generated: true, wears: outfitKey(l1.items) };
     }
   }
   const anchorMode = !base && (opts.anchor ?? opts.realFace === false) && looks.length > 1;
@@ -756,7 +763,7 @@ async function main() {
       look.editPrompt = edit.prompt;
       for (let run = 1; run <= opts.runs; run++) {
         // A generated base photo already is look 1 (same garments): reuse it instead of paying for an edit of itself.
-        if (base.generated && look === looks[0] && run === 1) {
+        if (base.generated && run === 1 && base.wears && base.wears === look.items.map((x) => x.description).sort().join(' + ')) {
           const file = name(m, look, run);
           await writeFile(join(out, file), base.bytes);
           console.log(`look ${look.n} · ${m.key}: the generated base photo (no extra call)`);
