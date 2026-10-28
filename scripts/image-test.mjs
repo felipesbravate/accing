@@ -54,7 +54,7 @@ const OPENAI_BASE = process.env.OPENAI_BASE_URL || 'https://api.openai.com';
 const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
 
 function args() {
-  const out = { runs: 3, looks: 1, cleanRefs: true, person: null, realFace: null, openaiSize: null, flex: false, garmentCrops: true, autoBase: true, prep: true, reprep: false, prepModel: null, proFace: false, body: null, background: '#F9F9FB', poseRef: true, facePasses: 2, faceLock: true, clean: true, anchor: null, anchorTries: 3, only: null, dryRun: false, check: true, minIdentity: MIN_IDENTITY, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
+  const out = { runs: 3, looks: 1, cleanRefs: true, person: null, bodyCard: true, realFace: null, openaiSize: null, flex: false, garmentCrops: true, autoBase: true, prep: true, reprep: false, prepModel: null, proFace: false, body: null, background: '#F9F9FB', poseRef: true, facePasses: 2, faceLock: true, clean: true, anchor: null, anchorTries: 3, only: null, dryRun: false, check: true, minIdentity: MIN_IDENTITY, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
     expression: 'copy it exactly from the front face photo, including any slight smile; no smile or seriousness that photo does not have', occasion: 'an office day', weather: 'sunny 24°C', time: 'Monday morning',
     shoes: 'plain white leather low-top sneakers with white soles and white laces',
     pose: HOUSE_POSE };
@@ -74,6 +74,7 @@ function args() {
     else if (k === 'flex') out.flex = true;
     else if (k === 'no-garment-crops') out.garmentCrops = false;
     else if (k === 'no-auto-base') out.autoBase = false;
+    else if (k === 'no-body-card') out.bodyCard = false;
     else if (k === 'no-anchor') out.anchor = false;
     else if (k === 'anchor') out.anchor = true;
     else if (k === 'no-clean-refs') out.cleanRefs = false;
@@ -157,6 +158,33 @@ async function loadInputs() {
   const outfits = [];
   for (const f of outfitFiles) outfits.push(await load(f));
   return { faces, outfits, base, images: [...faces, ...outfits] };
+}
+
+// Body card: the person's build in words, read once from the full-body outfit photos. The base photo only had those
+// photos as one hint among many and could miss someone's build (Felipe, 2026-10-28: "can we also match height and
+// body shape?"). A photo has no scale, so height and weight can only come from the person: image-test/inputs/body.txt
+// (or people/<name>/body.txt), e.g. "height 182 cm, weight 78 kg", is added to the card when present.
+const BODY_PROMPT = `These photos show one person, head to toe, in different clothes. Describe their body precisely and neutrally, so an artist could draw the same body: never flattering, never judging. Ignore the clothes' cut where you can (loose clothes hide shape; say so if you cannot tell).
+build: overall build in plain words (e.g. "slim", "lean and athletic", "average", "broad and muscular", "soft and rounded", "heavy-set").
+shoulders: width compared with the hips, and slope.
+torso: chest, waist and belly, and how long the torso is compared with the legs.
+hips: width and shape.
+arms: thickness and muscle.
+legs: length compared with the torso, thickness and shape.
+posture: how they carry themselves (e.g. "upright", "slightly rounded shoulders").`;
+const BODY_SCHEMA = { type: 'OBJECT', properties: Object.fromEntries(['build', 'shoulders', 'torso', 'hips', 'arms', 'legs', 'posture'].map((k) => [k, { type: 'STRING' }])), required: ['build', 'shoulders', 'torso', 'hips', 'arms', 'legs', 'posture'] };
+async function readBody(outfits, model) {
+  const key = process.env.GEMINI_API_KEY;
+  const res = await fetch(`${GEMINI_BASE}/v1beta/models/${model}:generateContent`, {
+    method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
+    body: JSON.stringify({ contents: [{ role: 'user', parts: [...outfits.map((o) => ({ inlineData: { mimeType: o.mime, data: o.bytes.toString('base64') } })), { text: BODY_PROMPT }] }],
+      generationConfig: { responseMimeType: 'application/json', responseSchema: BODY_SCHEMA, temperature: 0 } }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(`Reading the body failed (${res.status}): ${json.error?.message || 'no details'}`);
+  const c = JSON.parse(json.candidates?.[0]?.content?.parts?.map((p) => p.text).join('') || '{}');
+  const parts = ['build', 'shoulders', 'torso', 'hips', 'arms', 'legs', 'posture'].filter((k) => typeof c[k] === 'string' && c[k].trim()).map((k) => `${k} ${c[k].trim()}`);
+  return parts.length ? parts.join('; ') + '.' : null;
 }
 
 // Identity card: what the person looks like, in words, read once from the face photos. Image models drifted on what
@@ -432,8 +460,13 @@ async function main() {
   const totalMB = images.reduce((n, x) => n + x.bytes.length, 0) / 1e6;
   console.log(`Upload per request: ${totalMB.toFixed(1)} MB`);
   console.log(`Reading the garments in ${outfits.length} outfit photo(s) with ${opts.reader}…`);
-  const [{ readings, wardrobe, cost: readCost }, identityCard] = await Promise.all([readWardrobe(outfits, opts.reader),
-    readIdentity(faces, opts.reader).catch((e) => { console.log(`(identity card skipped: ${e.message})`); return null; })]);
+  const [{ readings, wardrobe, cost: readCost }, identityCard, bodyRead] = await Promise.all([readWardrobe(outfits, opts.reader),
+    readIdentity(faces, opts.reader).catch((e) => { console.log(`(identity card skipped: ${e.message})`); return null; }),
+    opts.bodyCard ? readBody(outfits, opts.reader).catch((e) => { console.log(`(body card skipped: ${e.message})`); return null; }) : null]);
+  const bodyOwn = existsSync(join(INPUTS, 'body.txt')) ? (await readFile(join(INPUTS, 'body.txt'), 'utf8')).trim() : null;
+  opts.bodyText = [bodyRead, bodyOwn ? `Stated by the person: ${bodyOwn}.` : null].filter(Boolean).join(' ') || null;
+  if (bodyRead) await writeFile(join(INPUTS, 'body-read.txt'), bodyRead + '\n').catch(() => {});
+  if (opts.bodyText) console.log(`Body card: ${opts.bodyText}${bodyOwn ? '' : '\n  (add body.txt next to the photos, e.g. "height 182 cm, weight 78 kg", to state height and weight)'}`);
   // image-test/inputs/identity.txt, if present, replaces the card: the person can correct how they are described.
   const own = join(INPUTS, 'identity.txt');
   opts.identityCard = existsSync(own) ? (await readFile(own, 'utf8')).trim() : identityCard;
@@ -717,12 +750,13 @@ KEEP IMAGE 1'S POSE EXACTLY, as if the person stepped into the mannequin's place
 ` : `Photo of the real person from the photos, standing: ${opts.pose}.\n`}
 THE PERSON (full fidelity, a friend must recognise them instantly)
 - Face, hair, skin and expression: from the face photos, images ${faceRange}. ${opts.identityCard ? 'What they look like: ' + opts.identityCard : ''}
-- Body build and proportions: from the full-body photos, images ${bodyRange} (only the body there: ignore those photos' pose, background and other clothes).
+- Body build and proportions: from the full-body photos, images ${bodyRange} (only the body there: ignore those photos' pose, background and other clothes).${opts.bodyText ? ' Their body, exactly: ' + opts.bodyText : ''}
 - Expression: ${opts.expression}
 
 GARMENTS
 ${garments.join('\n')}
 - Reproduce each garment exactly: colour, pattern, fabric, fit, length, neckline, straps and back construction, collar, sleeves, buttons, seams. Nothing else: no jewellery, watches, bags, tattoos, logos or text that the photos do not show.
+- Clean skin and hands: no paint, stains, marks, bruises or plasters that the face photos do not show.
 
 PHOTO
 - Camera at hip height, straight on, about 4 m away with a long lens (85 mm look): natural proportions, no wide-angle distortion, no looking down at the person; feet their natural size, legs their real length.
@@ -734,7 +768,7 @@ PHOTO
     // Keyed on the face photos and size only: one base per person, whatever the outfit, occasion or seed.
     const hash = createHash('sha1');
     for (const img of faces) hash.update(img.bytes);
-    hash.update(opts.openaiSize || '').update(l1.pose?.bytes || '').update(opts.pose).update('canvas-2'); // a new pose or method makes a new base
+    hash.update(opts.openaiSize || '').update(l1.pose?.bytes || '').update(opts.pose).update('canvas-3').update(opts.bodyText || ''); // a new pose, method or body card makes a new base
     const cached = join(PREPARED_DIR, `generated-${hash.digest('hex').slice(0, 10)}.png`);
     const idOf = async (img) => (await checkFaces({ faces, lookRefs: [], images: [img], look: false, minIdentity: 0, log: () => {} })).results[0].identity;
     const outfitKey = (items) => items.map((x) => x.description).sort().join(' + ');

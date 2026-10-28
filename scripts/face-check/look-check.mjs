@@ -16,7 +16,7 @@ Judge ONLY the person's identity cues, not the clothes, pose, background or ligh
 - glasses: same frame shape, thickness and colour, or none if they wear none?
 - build: same body build as in the real full-body photos (weight, shoulder, waist and hip width, leg length and proportions)? Ignore clothes; say how it differs.
 - hands_in_pockets: true if either hand is in a pocket, even partly (fingers or knuckles hidden in it). Both hands must be fully visible.
-- added: list anything on the person in the GENERATED image that appears in NO real photo. Only list what you can see in the GENERATED image; never list something you see only in a real photo: tattoos, piercings, jewellery, watches, brand logos or wordmarks on clothes or shoes, printed text. Empty list if none.
+- added: list anything on the person in the GENERATED image that appears in NO real photo. Only list what you can see in the GENERATED image; never list something you see only in a real photo: tattoos, piercings, jewellery, watches, paint, stains, marks or bruises on the skin or hands, brand logos or wordmarks on clothes or shoes, printed text. Empty list if none.
 For each check give ok (true when a friend would not notice a difference) and a short note.`;
 
 const CHECK = { type: 'OBJECT', properties: { ok: { type: 'BOOLEAN' }, note: { type: 'STRING' } }, required: ['ok', 'note'] };

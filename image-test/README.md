@@ -222,3 +222,11 @@ The previous ones are kept as `pose-reference-female-*-house.png`. A new pose ma
 Put each person's photos in `image-test/inputs/people/<name>/` (face-front, face-left, face-right + outfit photos,
 optional base.*) and run with `--person=<name>`. Results go to `results/<time>-<name>/`. Generated base photos are
 cached per face photos in `inputs/prepared/`, so each person gets their own.
+
+## Body card and body.txt (2026-10-28)
+The person's build is read once from their full-body outfit photos (build, shoulders, torso, hips, arms, legs,
+posture), saved as `body-read.txt` next to the photos and written into the base-photo prompt. A photo has no scale, so
+height and weight can only be stated: put `body.txt` next to the photos (e.g. `height 182 cm, weight 78 kg`) and it is
+added. A new body card makes a new generated base. `--no-body-card` turns the reading off.
+The base prompt and the look check now also forbid/catch paint, stains and marks on skin and hands (an orange mark
+appeared on Ricardo's hand in every look).
