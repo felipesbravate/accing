@@ -77,7 +77,11 @@ The base photo decides how good every look can be. Take it like this:
 - the house pose: body turned about 15°, arms loose at the sides, hands open, never in pockets
 Keep her `face-*` photos and the garment photos in the folder as before. Remove `base.*` to go back to generating.
 
-## Real face (default, when there is no base photo)
+## Real face (Gemini only by default, when there is no base photo)
+Since 2026-10-28 GPT looks keep GPT's own face (the transplant looked pasted on; GPT's face already looked like her);
+the face check still rejects a GPT look that does not match. `--real-face` forces the transplant on every model,
+`--no-real-face` turns it off everywhere. Everything the run prints is also saved as `run.log` in the results folder.
+
 Drawn faces plateaued at the identity of an average real photo (~0.6) and still read as "not her". Now look 1 gets the
 person's REAL face: from the face photo whose head angle matches best, aligned by the landmarks and relit to the
 generated light (her features, the image's light; toward the face edges only skin is taken, never hair). Identity on
