@@ -665,7 +665,7 @@ async function main() {
   let finalRefs = images;
   const prepareBase = async (orig, reading) => {
     const template = await readFile(BASE_PREP_PROMPT_FILE, 'utf8');
-    const hash = createHash('sha1').update(orig.bytes).update(template).update(opts.openaiSize || '').update(opts.pose).update((await poseFor({ items: reading.items }))?.bytes || '').digest('hex').slice(0, 10);
+    const hash = createHash('sha1').update(orig.bytes).update(Buffer.concat(faces.map((f) => f.bytes))).update(template).update(opts.openaiSize || '').update(opts.pose).update((await poseFor({ items: reading.items }))?.bytes || '').digest('hex').slice(0, 10);
     const cached = join(PREPARED_DIR, `${orig.file.replace(/\.[^.]+$/, '')}-${hash}.png`);
     if (opts.prepared) {
       console.log(`Base photo: using ${opts.prepared} as the prepared version (--prepared)`);
