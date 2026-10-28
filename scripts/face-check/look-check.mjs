@@ -114,3 +114,63 @@ extra: any outerwear, top, bottom, dress or shoes the person wears that is not o
   const missing = Array.isArray(r.missing) ? r.missing : [], extra = Array.isArray(r.extra) ? r.extra : [];
   return { ok: !missing.length && !extra.length, missing, extra, note: [...missing.map((x) => 'missing ' + x), ...extra.map((x) => 'extra ' + x)].join(', ') };
 }
+
+// Photo check for the base photo (before and after preparing it). Seen 2026-10-28: a mirror selfie as base photo made
+// every look hold a phone and look at it, because base mode keeps the pose. Users will upload selfies, so the base photo
+// is read first: unusable photos are refused with a reason, fixable ones are cleaned once.
+const PHOTO_PROMPT = `Describe this photo of a person, strictly and literally:
+- one_person: exactly one person in the photo (a reflection of the same person counts once)
+- full_body: the whole body from the top of the head to the soles of both feet is in the frame
+- face_visible: the face is clearly visible and not covered (by a phone, hand, hair or sunglasses)
+- sharp: the person is in focus and well enough lit to see the face and clothes
+- sitting: the person sits, kneels or lies instead of standing
+- holding: everything the person holds or carries in the hands or on the arm (phone, bag, cup, keys…); empty list if the hands are empty
+- looking_at_camera: the head faces the camera and the eyes look into the lens (not at a phone screen or away)
+- arms_relaxed: both arms hang loosely at the sides with the hands open and empty
+- hands_in_pockets: either hand is in a pocket, even partly
+- mirror_selfie: the photo is taken in a mirror, or a mirror frame, phone or room reflection is visible
+- plain_background: the background is a plain wall or studio backdrop with no furniture or objects
+Give a short note on anything else that would make this a poor photo for a virtual fitting room.`;
+const PHOTO_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    one_person: { type: 'BOOLEAN' }, full_body: { type: 'BOOLEAN' }, face_visible: { type: 'BOOLEAN' }, sharp: { type: 'BOOLEAN' }, sitting: { type: 'BOOLEAN' },
+    holding: { type: 'ARRAY', items: { type: 'STRING' } }, looking_at_camera: { type: 'BOOLEAN' }, arms_relaxed: { type: 'BOOLEAN' },
+    hands_in_pockets: { type: 'BOOLEAN' }, mirror_selfie: { type: 'BOOLEAN' }, plain_background: { type: 'BOOLEAN' }, note: { type: 'STRING' },
+  },
+  required: ['one_person', 'full_body', 'face_visible', 'sharp', 'sitting', 'holding', 'looking_at_camera', 'arms_relaxed', 'hands_in_pockets', 'mirror_selfie', 'plain_background', 'note'],
+};
+
+/** What a base photo needs. blocking: cannot be fixed by an edit (ask for another photo); fixes: what the edit must change. */
+export function photoVerdict(r) {
+  const blocking = [], fixes = [];
+  if (!r.one_person) blocking.push('more than one person in the photo');
+  if (!r.full_body) blocking.push('the whole body, head to feet, is not in the photo');
+  if (!r.face_visible) blocking.push('the face is covered or not visible');
+  if (!r.sharp) blocking.push('the photo is blurry or too dark');
+  if (r.sitting) blocking.push('the person is not standing');
+  if (r.holding?.length) fixes.push(`holding ${r.holding.join(', ')}`);
+  if (!r.looking_at_camera) fixes.push('not looking at the camera');
+  if (!r.arms_relaxed) fixes.push('arms not hanging relaxed at the sides');
+  if (r.hands_in_pockets) fixes.push('a hand in a pocket');
+  if (r.mirror_selfie) fixes.push('mirror selfie');
+  if (!r.plain_background) fixes.push('room or objects in the background');
+  return { usable: blocking.length === 0, blocking, fixes };
+}
+
+/** image: { bytes, mime }. Returns the reading plus { usable, blocking, fixes, cost }. */
+export async function photoCheck(image, { model = LOOK_MODEL, key = process.env.GEMINI_API_KEY } = {}) {
+  if (!key) throw new Error('GEMINI_API_KEY is not set in .env.local (needed for the photo check)');
+  const res = await fetch(`${GEMINI_BASE}/v1beta/models/${model}:generateContent`, {
+    method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
+    body: JSON.stringify({ contents: [{ role: 'user', parts: [{ inlineData: { mimeType: image.mime, data: image.bytes.toString('base64') } }, { text: PHOTO_PROMPT }] }],
+      generationConfig: { responseMimeType: 'application/json', responseSchema: PHOTO_SCHEMA, temperature: 0 } }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(`Photo check failed (${model}, ${res.status}): ${json.error?.message || 'no details'}`);
+  const text = json.candidates?.[0]?.content?.parts?.map((p) => p.text).filter(Boolean).join('') || '';
+  let r;
+  try { r = JSON.parse(text); } catch { throw new Error(`Could not understand the photo check: ${text.slice(0, 200)}`); }
+  const u = json.usageMetadata || {};
+  return { ...r, ...photoVerdict(r), cost: ((u.promptTokenCount || 0) * PRICE.inputPerM + ((u.candidatesTokenCount || 0) + (u.thoughtsTokenCount || 0)) * PRICE.outputPerM) / 1e6 };
+}

@@ -1,0 +1,19 @@
+Image 1 is a real photo of a real person. Images {{FACE_IMAGES}} are real close-up photos of the same person's face.{{POSE_IMAGE_LINE}}
+
+Turn image 1 into a clean full-body studio photo of EXACTLY this person, to be used as their photo in a virtual fitting room.
+What is wrong with image 1 now: {{FIXES}}.
+
+CHANGE
+- Hands: empty. Remove everything the person holds or carries (phone, bag, cup, keys) and anything only there because of it.
+- Pose: {{POSE}}{{POSE_IMAGE_RULE}}
+- Head facing the camera, eyes looking straight into the lens, with the natural relaxed expression of the face photos.
+- Camera: not a mirror selfie. A photo taken by a camera on a tripod at chest height, about 3 m away, straight on; no mirror, no mirror frame, no reflection.
+- Background: remove the room and every object. Plain light grey seamless studio backdrop, soft even front light, one soft shadow under the feet.
+- Framing: the whole body from head to feet, centred, top of the head about 8% below the top edge, soles about 6% above the bottom edge. Portrait.
+
+KEEP EXACTLY
+- The face: every feature as in image 1 and the face photos (images {{FACE_IMAGES}}): face shape and width, jaw and chin, eyes, eyelids and eyebrows, nose, lips, skin tone and texture, freckles, moles and lines, and their real age. Where the head or eyes turn, rebuild the face from the face photos; never invent a feature. No beautifying, slimming, smoothing or makeup.
+- The hair: colour, length, style, parting and where it falls, as in image 1.
+- The body: height, build, shoulder, waist and hip width, arm and leg length and proportions, as in image 1.
+- The clothes and shoes worn in image 1, unchanged (only fill in naturally what the phone or arm hid).
+- Nothing added: no tattoos, jewellery, watches, logos or text that image 1 does not show.

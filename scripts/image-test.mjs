@@ -9,7 +9,8 @@ import { appendFileSync, existsSync } from 'node:fs';
 import { extname, join, resolve } from 'node:path';
 import { CATEGORIES, composeLooks, normaliseReading } from './image-test-lib.mjs';
 import { checkFaces, checkTable, MIN_IDENTITY } from './face-check/index.mjs';
-import { outfitCheck, poseCheck } from './face-check/look-check.mjs';
+import { outfitCheck, photoCheck, poseCheck } from './face-check/look-check.mjs';
+import { createHash } from 'node:crypto';
 import { cleanBackground, createCleaner, measurePose } from './clean-background.mjs';
 import { facePass, faceLock, realFace, referenceFace, HARMONIZE_PROMPT_FILE } from './face-detail.mjs';
 import { createFaceModel } from './face-check/arcface.mjs';
@@ -21,6 +22,8 @@ const ROOT = resolve(import.meta.dirname, '..');
 const INPUTS = join(ROOT, 'image-test', 'inputs');
 const RESULTS = join(ROOT, 'image-test', 'results');
 const PROMPT_FILE = join(ROOT, 'scripts', 'image-test-prompt.txt');
+const BASE_PREP_PROMPT_FILE = join(ROOT, 'scripts', 'base-prep-prompt.txt');
+const PREPARED_DIR = join(INPUTS, 'prepared'); // prepared base photos, reused while the base photo and the prompt stay the same
 const EDIT_PROMPT_FILE = join(ROOT, 'scripts', 'image-edit-prompt.txt');
 
 // Models compared. Edit freely.
@@ -49,7 +52,7 @@ const OPENAI_BASE = process.env.OPENAI_BASE_URL || 'https://api.openai.com';
 const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
 
 function args() {
-  const out = { runs: 3, looks: 1, cleanRefs: true, realFace: null, proFace: false, body: null, background: '#F9F9FB', poseRef: true, facePasses: 2, faceLock: true, clean: true, anchor: null, anchorTries: 3, only: null, dryRun: false, check: true, minIdentity: MIN_IDENTITY, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
+  const out = { runs: 3, looks: 1, cleanRefs: true, realFace: null, prep: true, reprep: false, prepModel: null, proFace: false, body: null, background: '#F9F9FB', poseRef: true, facePasses: 2, faceLock: true, clean: true, anchor: null, anchorTries: 3, only: null, dryRun: false, check: true, minIdentity: MIN_IDENTITY, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
     expression: 'copy it exactly from the front face photo, including any slight smile; no smile or seriousness that photo does not have', occasion: 'an office day', weather: 'sunny 24°C', time: 'Monday morning',
     shoes: 'plain white leather low-top sneakers with white soles and white laces',
     pose: 'relaxed standing pose: body turned about 15 degrees so their left shoulder is slightly closer to the camera, head turned back to face the camera, chin level, eyes looking into the lens; weight on the back (right) leg, front (left) knee slightly relaxed, feet about hip-width apart; both arms hanging loosely at the sides, elbows very slightly bent, hands open and relaxed beside the thighs, never in pockets; shoulders relaxed and level' };
@@ -60,6 +63,9 @@ function args() {
     else if (k === 'looks') out.looks = Math.max(1, Math.min(8, parseInt(v, 10) || 1));
     else if (k === 'dry-run') out.dryRun = true;
     else if (k === 'no-check') out.check = false;
+    else if (k === 'no-prep') out.prep = false;
+    else if (k === 'reprep') out.reprep = true;
+    else if (k === 'prep-model') out.prepModel = v;
     else if (k === 'no-anchor') out.anchor = false;
     else if (k === 'anchor') out.anchor = true;
     else if (k === 'no-clean-refs') out.cleanRefs = false;
@@ -85,6 +91,7 @@ function args() {
 }
 
 const MAX_PHOTOS = 10;
+const BASE_POSE_TOLERANCE = 0.04; // edits of a base photo: GPT moved the feet 1–7% of the height on edits that looked right (2026-10-28)
 const POSE_TOLERANCE = 0.01; // feet position difference allowed between look 1 and an edit, as a share of the height
 
 // Phone photos are 4–11 MB and often stored sideways with a rotation flag (EXIF orientation). Every photo is turned
@@ -461,7 +468,7 @@ async function main() {
   const rows = [];
   const call = (m, imgs, prompt, label, o) => (m.provider === 'gemini' ? callGemini : callOpenAI)(m, imgs, prompt, label, o);
   const generate = async (m, look, run, file, imgs, prompt, label, o, post = null) => {
-    process.stdout.write(`${looks.length > 1 ? `look ${look.n} · ` : ''}${m.key} ${file.includes('rejected') ? 'retry' : 'run ' + run}… `);
+    process.stdout.write(`${look.n === 0 ? 'base photo · ' : looks.length > 1 ? `look ${look.n} · ` : ''}${m.key} ${file.includes('rejected') ? 'retry' : 'run ' + run}… `);
     const t0 = performance.now();
     try {
       const r = await call(m, imgs, prompt, label, o);
@@ -497,19 +504,19 @@ async function main() {
     }
   };
   // Everything a fresh look must pass: the pose reference's stance (measured), the face check, and exactly its outfit.
-  const lookProblems = async (look, r, refGeometry = null) => {
+  const lookProblems = async (look, r, refGeometry = null, lookRefs = images) => {
     const why = [];
     if (cleaner && (refGeometry || look.pose) && r.clean?.pose) {
       if (!refGeometry) look.pose.geometry ??= await measurePose(cleaner, look.pose.bytes).catch(() => null);
       const ref = refGeometry || look.pose.geometry, g = r.clean.pose;
       if (ref) {
         const off = Math.max(Math.abs(g.stagger - ref.stagger), Math.abs(g.gap - ref.gap) / 2);
-        if (off > POSE_TOLERANCE) why.push(`pose differs from the ${refGeometry ? 'base photo' : 'pose reference'} (feet off by ${off.toFixed(3)} of the height)`);
+        if (off > (refGeometry ? BASE_POSE_TOLERANCE : POSE_TOLERANCE)) why.push(`pose differs from the ${refGeometry ? 'base photo' : 'pose reference'} (feet off by ${off.toFixed(3)} of the height)`);
       }
     }
     const img = { file: r.file, bytes: r.image, mime: 'image/png' };
     const [face, fit] = await Promise.all([
-      checkFaces({ faces, lookRefs: images, images: [img], minIdentity: opts.minIdentity, background: opts.background, log: () => {} }).then((x) => x.results[0]),
+      checkFaces({ faces, lookRefs, images: [img], minIdentity: opts.minIdentity, background: opts.background, log: () => {} }).then((x) => x.results[0]),
       outfitCheck(img, look.items, look.items.some((x) => x.category === 'shoes') ? null : opts.shoes).catch((e) => ({ ok: true, note: `outfit check failed: ${e.message}` })),
     ]);
     why.push(...face.reasons);
@@ -517,6 +524,63 @@ async function main() {
     return why;
   };
   const name = (m, look, run) => (looks.length > 1 ? `${m.key}-look${look.n}-${run}.png` : `${m.key}-${run}.png`);
+  // BASE PHOTO PREPARATION (universal, once per base photo): users upload whatever they have, often mirror selfies.
+  // The photo is read first; an unusable one (cropped, covered face, several people, sitting, blurry) stops the run with
+  // the reason. A usable one with fixable problems (phone in hand, eyes on the phone, mirror and room, arms not relaxed)
+  // is edited once into a clean studio photo in the house pose, with the face rebuilt from the face photos where the
+  // head or eyes turn. It is kept only if it is still her (identity no more than 0.05 below the original photo's, and
+  // the look check) and the problems are gone. Saved in inputs/prepared/ and reused until the photo or prompt changes.
+  const prepRows = [];
+  let finalRefs = images;
+  const prepareBase = async (orig, reading) => {
+    const template = await readFile(BASE_PREP_PROMPT_FILE, 'utf8');
+    const hash = createHash('sha1').update(orig.bytes).update(template).digest('hex').slice(0, 10);
+    const cached = join(PREPARED_DIR, `${orig.file.replace(/\.[^.]+$/, '')}-${hash}.png`);
+    if (existsSync(cached) && !opts.reprep) {
+      console.log(`Base photo: using the prepared version made earlier (${cached.replace(ROOT + '/', '')}; --reprep to make it again)`);
+      return { ...orig, file: 'base-prepared.png', bytes: await readFile(cached), mime: 'image/png', prepared: true };
+    }
+    const before = await photoCheck(orig);
+    if (!before.usable) throw new Error(`The base photo can't be used: ${before.blocking.join('; ')}. Take another one: full body head to feet, standing, face visible, only you in the photo.`);
+    if (!before.fixes.length) { console.log('Base photo: already clean (no phone, looking at the camera, plain background); used as it is.'); return orig; }
+    console.log(`Base photo needs: ${before.fixes.join('; ')}. Preparing it once…`);
+    const idOf = async (img) => (await checkFaces({ faces, lookRefs: [], images: [img], look: false, minIdentity: 0, log: () => {} })).results[0].identity;
+    const origId = await idOf(orig).catch(() => null);
+    const minId = Math.max(opts.minIdentity, origId != null ? origId - 0.05 : 0);
+    const prepModel = MODELS.find((x) => x.key === (opts.prepModel || (process.env.OPENAI_API_KEY ? 'openai-2.5-flare-high' : 'gemini-nano-banana-2')));
+    if (!prepModel) throw new Error(`--prep-model=${opts.prepModel} is not a model key: ${MODELS.map((x) => x.key).join(', ')}`);
+    const poseRef = await poseFor({ items: reading.items });
+    const imgs = [orig, ...faces, ...(poseRef ? [poseRef] : [])];
+    const faceRange = faces.length > 1 ? `2 to ${faces.length + 1}` : '2';
+    const prompt = template.replaceAll('{{FACE_IMAGES}}', faceRange).replace('{{FIXES}}', before.fixes.join('; '))
+      .replace('{{POSE}}', opts.pose)
+      .replace('{{POSE_IMAGE_LINE}}', poseRef ? ` Image ${imgs.length} is a faceless mannequin showing the pose.` : '')
+      .replace('{{POSE_IMAGE_RULE}}', poseRef ? ` Copy the stance of the mannequin in image ${imgs.length} (only its pose: not its body, size or shape).` : '');
+    const label = (k) => (k === 0 ? 'the photo to prepare' : k <= faces.length ? faces[k - 1].label : 'pose reference: a faceless mannequin; copy only its pose');
+    let best = null;
+    for (let attempt = 1; attempt <= opts.anchorTries; attempt++) {
+      const file = `base-prepared-${attempt}.png`;
+      const r = await generate(prepModel, { n: 0 }, 1, file, imgs, prompt, label, { ...opts, faceCount: faces.length });
+      if (r.error) continue;
+      const img = { file, bytes: r.image, mime: 'image/png' };
+      const [id, after, look] = await Promise.all([
+        idOf(img).catch(() => null),
+        photoCheck(img).catch((e) => ({ usable: true, blocking: [], fixes: [], note: `photo check failed: ${e.message}` })),
+        checkFaces({ faces, lookRefs: [...faces, orig], images: [img], identity: false, log: () => {} }).then((x) => x.results[0]).catch(() => ({ reasons: [] })),
+      ]);
+      // A clean background is the cleaner's job; everything else must be fixed.
+      const left = [...after.blocking, ...after.fixes.filter((f) => f !== 'room or objects in the background'), ...look.reasons];
+      if (id == null || id < minId) left.unshift(`identity ${id == null ? 'no face' : id.toFixed(3)} < ${minId.toFixed(3)}`);
+      console.log(`  prepared base ${attempt}: identity ${id == null ? '–' : id.toFixed(3)} (original photo ${origId == null ? '–' : origId.toFixed(3)})${left.length ? ' — rejected: ' + left.join('; ') : ' — ok'}`);
+      prepRows.push({ ...r, file, reasons: left, identity: id });
+      if (!left.length) { best = img; break; }
+    }
+    if (!best) throw new Error(`Could not prepare the base photo in ${opts.anchorTries} tries (attempts are in ${out}). Try a photo without a mirror, or --no-prep to use it as it is.`);
+    await mkdir(PREPARED_DIR, { recursive: true });
+    await writeFile(cached, best.bytes);
+    console.log(`Base photo prepared and saved as ${cached.replace(ROOT + '/', '')}`);
+    return { ...orig, file: 'base-prepared.png', bytes: best.bytes, mime: 'image/png', prepared: true };
+  };
   // Looks are generated fresh from the same pose reference, and the real face gives every one the same face. Editing
   // look 1 into the others (--anchor) kept old garments, invented ghosts and reshaped the body (2026-10-27), so it is
   // only the default when the real face is off.
@@ -530,20 +594,25 @@ async function main() {
     const baseReading = await readPhoto(base, 0, opts.reader).catch(() => ({ items: [] }));
     const takeOff = baseReading.items.filter((x) => ['outerwear', 'top', 'dress', 'bottom', 'shoes'].includes(x.category)).map((x) => x.description);
     console.log(`Base photo ${base.file}: wears ${takeOff.join('; ') || 'nothing recognised'}`);
-    const baseGeometry = cleaner ? await measurePose(cleaner, base.bytes).catch(() => null) : null;
+    const src = opts.prep ? await prepareBase(base, baseReading) : base;
+    // Look check against her face photos and the (prepared) base photo only: her outfit photos are mirror selfies with
+    // other hair and jewellery, and the check then "saw" a bun and a choker that were not there (2026-10-28).
+    const baseRefs = [...faces, src];
+    finalRefs = baseRefs;
+    const baseGeometry = cleaner ? await measurePose(cleaner, src.bytes).catch(() => null) : null;
     const lockToBase = faceModel && opts.faceLock ? async (bytes) => {
-      const fl = await faceLock({ model: faceModel, source: base.bytes, target: bytes, reference });
+      const fl = await faceLock({ model: faceModel, source: src.bytes, target: bytes, reference });
       return { bytes: fl.bytes, face: { locked: fl.locked, before: fl.before, after: fl.after, reason: fl.reason } };
     } : null;
     for (const look of looks) for (const m of models) {
-      const edit = buildEdit(editTemplate, outfits, look, base, takeOff);
+      const edit = buildEdit(editTemplate, outfits, look, src, takeOff);
       look.editPrompt = edit.prompt;
       for (let run = 1; run <= opts.runs; run++) {
         for (let attempt = 1; attempt <= opts.anchorTries; attempt++) {
           const r = await generate(m, look, run, name(m, look, run), edit.images, edit.prompt, edit.label, { ...opts, faceCount: 1 }, lockToBase);
           const last = attempt === opts.anchorTries;
           if (r.error || !opts.check || last) { rows.push(r); break; }
-          const why = await lookProblems(look, r, baseGeometry);
+          const why = await lookProblems(look, r, baseGeometry, baseRefs);
           if (!why.length) { rows.push(r); break; }
           const rej = r.file.replace(/\.png$/, `-rejected-${attempt}.png`);
           await writeFile(join(out, rej), r.image);
@@ -645,7 +714,7 @@ async function main() {
   let check = null;
   if (opts.check && done.length) {
     console.log(`\nChecking faces (identity gate ≥ ${opts.minIdentity}, then hair/age/added items)…`);
-    check = await checkFaces({ faces, lookRefs: images, images: done.map((r) => ({ file: r.file, bytes: r.image, mime: 'image/png' })), minIdentity: opts.minIdentity, background: opts.background });
+    check = await checkFaces({ faces, lookRefs: finalRefs, images: done.map((r) => ({ file: r.file, bytes: r.image, mime: 'image/png' })), minIdentity: opts.minIdentity, background: opts.background });
     check.results.forEach((c, i) => { done[i].check = c; console.log(`  ${c.pass ? 'PASS' : 'FAIL'}  ${c.file}  identity ${fmt(c.identity)}${c.reasons.length ? '  ' + c.reasons.join('; ') : ''}`); });
     console.log(`Look check cost: ~$${check.lookCost.toFixed(4)}`);
   }
@@ -657,6 +726,8 @@ async function main() {
     `Reading cost: ~$${readCost.toFixed(4)}`, '',
     ...(anchorMode ? [`Same face, pose and shadow: look 1 was generated from the face photos${opts.check ? ' and had to pass the face check' : ''}; looks 2–${looks.length} are edits of it where only the clothes change, each checked for the same pose as look 1 and remade if it differs.`,
       ...(rejected.length ? ['', `Attempts rejected before one passed (${rejected.length}, ~$${fmt(rejected.reduce((s, r) => s + (r.cost || 0), 0))}):`, ...rejected.map((r) => `- ${r.file}: ${r.reasons.join('; ')}`)] : []), ''] : []),
+    ...(!anchorMode && rejected.length ? [`Attempts rejected before one passed (${rejected.length}, ~$${fmt(rejected.reduce((s, r) => s + (r.cost || 0), 0))}):`, ...rejected.map((r) => `- ${r.file}: ${r.reasons.join('; ')}`), ''] : []),
+    ...(prepRows.length ? ['## Base photo preparation', '', ...prepRows.map((r) => `- ${r.file}: ${r.m.key}, ${r.seconds.toFixed(1)}s, ~$${fmt(r.cost)}, identity ${fmt(r.identity)} — ${r.reasons.length ? 'rejected: ' + r.reasons.join('; ') : 'kept'}`), ''] : []),
     '## Results', '',
     '| Look | Model | Run | Seconds | Input tokens | Output tokens | Est. cost (USD) | Face step | Result |', '|---|---|---|---|---|---|---|---|---|'];
   const faceCell = (f) => (!f ? '–' : f.pass ? `face ${fmt(f.before)}→${fmt(f.after)} (${f.kept})` : f.locked ? `face locked ${fmt(f.before)}→${fmt(f.after)}` : `not locked: ${f.reason}`);

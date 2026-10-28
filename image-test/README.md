@@ -77,6 +77,19 @@ The base photo decides how good every look can be. Take it like this:
 - the house pose: body turned about 15°, arms loose at the sides, hands open, never in pockets
 Keep her `face-*` photos and the garment photos in the folder as before. Remove `base.*` to go back to generating.
 
+### Base photo preparation (automatic, once per photo)
+Any photo works as the base, including a mirror selfie: it is read first.
+- Unusable (only part of the body, face covered, more than one person, sitting, blurry): the run stops and says why.
+- Fixable (phone in hand, eyes on the phone, mirror and room, arms not relaxed, hand in a pocket): it is edited once into
+  a studio photo in the house pose: hands empty, looking into the lens, plain background, same clothes. The face is
+  rebuilt from the `face-*` photos where the head or eyes turn. Up to 3 tries; one is kept only if the identity stays
+  within 0.05 of the original photo's, the look check passes and the problems are gone. Made with
+  `openai-2.5-flare-high` (Gemini when there is no OpenAI key; `--prep-model=<key>` to choose), about $0.08–0.25 once.
+- Already clean: used as it is (nothing redrawn).
+The prepared photo is saved in `inputs/prepared/` and reused on later runs; `--reprep` makes it again, `--no-prep` skips
+it. Looks of a base photo may move the feet up to 4% of the height (1% elsewhere) and are checked against her face
+photos and the base photo only (her mirror-selfie outfit photos made the check see a bun and a choker that were not there).
+
 ## Real face (Gemini only by default, when there is no base photo)
 Since 2026-10-28 GPT looks keep GPT's own face (the transplant looked pasted on; GPT's face already looked like her);
 the face check still rejects a GPT look that does not match. `--real-face` forces the transplant on every model,

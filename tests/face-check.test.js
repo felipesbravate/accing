@@ -60,3 +60,23 @@ test('a different body build fails the look check', () => {
   assert.equal(r.pass, false);
   assert.deepEqual(r.fails, ['build: wider hips, shorter legs']);
 });
+
+import { photoVerdict } from '../scripts/face-check/look-check.mjs';
+
+const cleanPhoto = { one_person: true, full_body: true, face_visible: true, sharp: true, sitting: false, holding: [], looking_at_camera: true, arms_relaxed: true, hands_in_pockets: false, mirror_selfie: false, plain_background: true };
+
+test('a clean base photo needs nothing', () => {
+  assert.deepEqual(photoVerdict(cleanPhoto), { usable: true, blocking: [], fixes: [] });
+});
+
+test('a mirror selfie with a phone is usable but needs fixing', () => {
+  const r = photoVerdict({ ...cleanPhoto, holding: ['phone'], looking_at_camera: false, mirror_selfie: true, plain_background: false });
+  assert.equal(r.usable, true);
+  assert.deepEqual(r.fixes, ['holding phone', 'not looking at the camera', 'mirror selfie', 'room or objects in the background']);
+});
+
+test('a cropped or seated photo cannot be used', () => {
+  const r = photoVerdict({ ...cleanPhoto, full_body: false, sitting: true });
+  assert.equal(r.usable, false);
+  assert.deepEqual(r.blocking, ['the whole body, head to feet, is not in the photo', 'the person is not standing']);
+});
