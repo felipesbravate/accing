@@ -176,7 +176,9 @@ export function unfit(x, occ, wx) {
   if (!GARMENTS.includes(x.category)) return null; // accessories are not part of looks
   // 2026-10-28: the reader left exposure out for a shirt dress open to the thigh, and it passed "an office day".
   // A garment with no exposure counts as medium: it passes casual and evening rules, not work.
-  const exposure = x.exposure || (x.category === 'shoes' ? 'low' : 'medium');
+  // Shoes are judged by formality and weather only: the reader called every pair of sandals "exposure high", so all six
+  // office looks of 2026-10-28 got the same combat boots.
+  const exposure = x.category === 'shoes' ? 'low' : x.exposure || 'medium';
   if (EXPOSURE[exposure] > EXPOSURE[occ.maxExposure]) return `${x.exposure ? 'too revealing' : 'exposure not read; left out'} for ${occ.name}`;
   if (x.formality && (x.formality < occ.min - 1 || x.formality > occ.max + 1)) return `${x.formality < occ.min ? 'too casual' : 'too dressy'} for ${occ.name}`;
   if (x.season === 'warm' && (wx.cold || (wx.wet && x.category === 'shoes'))) return `warm-weather only (${wx.cold ? `${Math.round(wx.celsius)}°C` : 'rain'})`;

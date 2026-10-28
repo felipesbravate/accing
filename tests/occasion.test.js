@@ -47,6 +47,7 @@ test('sandals stay home in the cold or rain; untagged garments are medium; acces
   assert.equal(unfit({ category: 'dress' }, occasionProfile('office'), weatherProfile('20°C')), null);
   assert.match(unfit({ category: 'dress', exposure: 'high' }, occasionProfile('office'), weatherProfile('20°C')), /revealing/);
   assert.equal(unfit({ category: 'dress' }, occasionProfile('dinner'), weatherProfile('20°C')), null);
+  assert.equal(unfit({ category: 'shoes', exposure: 'high', formality: 3 }, occasionProfile('office'), weatherProfile('20°C')), null);
   assert.equal(unfit({ category: 'accessory', exposure: 'high' }, occasionProfile('office'), weatherProfile('20°C')), null);
 });
 
