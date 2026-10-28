@@ -97,7 +97,12 @@ function args() {
 
 const MAX_PHOTOS = 10;
 const HOUSE_POSE = 'relaxed standing pose: body turned about 15 degrees so their left shoulder is slightly closer to the camera, head turned back to face the camera, chin level, eyes looking into the lens; weight on the back (right) leg, front (left) knee slightly relaxed, feet about hip-width apart; both arms hanging loosely at the sides, elbows very slightly bent, hands open and relaxed beside the thighs, never in pockets; shoulders relaxed and level';
-const FEMALE_MODEL_POSE = 'relaxed fashion-model pose: standing almost facing the camera, head straight and facing the camera, chin level; weight on the right leg, the left leg relaxed with the knee slightly bent and turned in, the left foot placed a little in front of and across the right foot; right arm hanging relaxed beside the thigh, left arm slightly bent with the hand relaxed in front of the hip, never in pockets; shoulders relaxed and down';
+// Women: Felipe's own mannequins (2026-10-28), described to match them. Flat feet: relaxed, facing the camera.
+// Heels: a model stance with the left leg crossed in front. The words go with the mannequin image, so keep both in step.
+const FEMALE_POSES = {
+  flat: 'relaxed standing pose facing the camera straight on, head straight, chin level; weight slightly on the right leg, the left knee softly relaxed, feet about hip-width apart with the toes turned slightly out; both arms hanging loosely at the sides, hands open and relaxed beside the thighs, never in pockets; shoulders relaxed, down and level',
+  heels: 'fashion-model pose facing the camera, head straight, chin level; weight on the right leg, the left leg crossed in front of it with the knee turned in and the left foot set just in front of the right foot, heels raised; both arms hanging loosely at the sides, hands open and relaxed beside the thighs, never in pockets; shoulders relaxed and down',
+};
 const BASE_POSE_TOLERANCE = 0.04; // edits of a base photo: GPT moved the feet 1–7% of the height on edits that looked right (2026-10-28)
 const POSE_TOLERANCE = 0.025; // was 0.01: GPT looks Felipe judged right were 0.015–0.023 off and were all redone (2026-10-28)
 // Feet position difference allowed (share of the height) between a fresh look and the pose reference or look 1.
@@ -441,7 +446,9 @@ async function main() {
   const votes = readings.map((r) => r.figure).filter(Boolean);
   const body = opts.body || (votes.filter((v) => v === 'male').length > votes.length / 2 ? 'male' : 'female');
   // Women stand in a fashion-model pose (Felipe, 2026-10-28), men in the house pose; --pose=... overrides both.
-  if (body === 'female' && opts.pose === HOUSE_POSE) opts.pose = FEMALE_MODEL_POSE;
+  const femalePoses = body === 'female' && opts.pose === HOUSE_POSE;
+  const poseText = (feet) => (femalePoses ? FEMALE_POSES[feet] || FEMALE_POSES.flat : opts.pose);
+  if (femalePoses) opts.pose = FEMALE_POSES.flat;
   const warned = new Set();
   const poseFor = async (look) => {
     if (!opts.poseRef) return null;
@@ -455,7 +462,7 @@ async function main() {
     look.n = i + 1;
     look.pose = await poseFor(look);
     look.images = look.pose ? [...images, look.pose] : images;
-    look.prompt = buildPrompt(template, faces, outfits, look, { ...opts, poseImage: look.pose ? look.images.length : null });
+    look.prompt = buildPrompt(template, faces, outfits, look, { ...opts, pose: poseText(feetFor(look.items)), poseImage: look.pose ? look.images.length : null });
     look.label = (k) => (look.pose && k === images.length ? 'pose reference: a faceless mannequin; copy only its pose and framing' : imageLabel(faces, look, k));
     console.log(`Look ${look.n} (seed ${seed}${look.newCombination ? '' : ', NOT a new combination: add photos with other outfits'}):`);
     look.items.forEach((x) => console.log(`  - ${x.description} (${x.category}) from photo ${x.photo + 1} (${outfits[x.photo].file})`));
@@ -648,7 +655,7 @@ async function main() {
     const imgs = [orig, ...faces, ...(poseRef ? [poseRef] : [])];
     const faceRange = faces.length > 1 ? `2 to ${faces.length + 1}` : '2';
     const prompt = template.replaceAll('{{FACE_IMAGES}}', faceRange).replace('{{FIXES}}', before.fixes.join('; '))
-      .replace('{{POSE}}', opts.pose)
+      .replace('{{POSE}}', poseText(feetFor(reading.items)))
       .replace('{{POSE_IMAGE_LINE}}', poseRef ? ` Image ${imgs.length} is a faceless mannequin showing the pose.` : '')
       .replace('{{POSE_IMAGE_RULE}}', poseRef ? ` Copy the stance of the mannequin in image ${imgs.length} (only its pose: not its body, size or shape).` : '');
     const label = (k) => (k === 0 ? 'the photo to prepare' : k <= faces.length ? faces[k - 1].label : 'pose reference: a faceless mannequin; copy only its pose');
