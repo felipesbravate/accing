@@ -103,7 +103,11 @@ const OUTFIT_SCHEMA = { type: 'OBJECT', properties: { missing: { type: 'ARRAY', 
 export async function outfitCheck(image, items, defaultShoes, { model = LOOK_MODEL, key = process.env.GEMINI_API_KEY } = {}) {
   if (!key) throw new Error('GEMINI_API_KEY is not set');
   const refs = items.filter((x) => x.crop);
-  const list = [...items.map((x) => `${x.description} (${x.category})${x.crop ? ` — reference image ${refs.indexOf(x) + 2}` : ''}`), ...(defaultShoes ? [`${defaultShoes} (shoes)`] : [])];
+  // Garments with a close-up are named without colours: with "metallic silver" in the name the check kept rejecting
+  // gold sandals that matched their close-up exactly (2026-10-28, twice, despite being told to trust the image).
+  const COLOUR = /\b(metallic|silver|gold(en)?|black|white|off-white|cream|ivory|beige|tan|camel|brown|grey|gray|charcoal|navy|blue|light|dark|pale|red|pink|blush|green|olive|khaki|yellow|orange|purple|lilac|burgundy|nude)\b[- ]?/gi;
+  const named = (x) => (x.crop ? x.description.replace(COLOUR, '').replace(/\s{2,}/g, ' ').trim() : x.description);
+  const list = [...items.map((x) => `${named(x)} (${x.category})${x.crop ? ` — reference image ${refs.indexOf(x) + 2}` : ''}`), ...(defaultShoes ? [`${defaultShoes} (shoes)`] : [])];
   const prompt = `Image 1 is a photo of a person. ${refs.length ? `Images 2 to ${refs.length + 1} are close-ups of the real garments they should wear. ` : ''}The person should wear exactly these garments and nothing else:\n${list.map((x) => '- ' + x).join('\n')}
 missing: any garment from the list that is not visible or is clearly a different garment (other colour, cut or type).
 different: for each garment that has a reference image, any visible difference from it in the photo: neckline, straps or back construction, collar, sleeves, length, fit, closures (buttons, zips, drawstring), pockets, pattern, colour or fabric. Name the garment and the difference, e.g. "white tank top: racerback straps instead of plain straps". Ignore folds, lighting and the angle of view.
@@ -112,7 +116,7 @@ extra: any outerwear, top, bottom, dress or shoes the person wears that is not o
   const part = (img) => ({ inlineData: { mimeType: img.mime, data: img.bytes.toString('base64') } });
   const res = await fetch(`${GEMINI_BASE}/v1beta/models/${model}:generateContent`, {
     method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
-    body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'Image 1 (the photo):' }, part(image), ...refs.flatMap((x, i) => [{ text: `Image ${i + 2} (${x.description}):` }, part(x.crop)]), { text: prompt }] }],
+    body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'Image 1 (the photo):' }, part(image), ...refs.flatMap((x, i) => [{ text: `Image ${i + 2} (${named(x)}):` }, part(x.crop)]), { text: prompt }] }],
       generationConfig: { responseMimeType: 'application/json', responseSchema: OUTFIT_SCHEMA, temperature: 0 } }),
   });
   const json = await res.json().catch(() => ({}));

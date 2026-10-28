@@ -126,12 +126,14 @@ export function composeLooks(wardrobe, { count = 1, seed = 1, occasion = '', wea
     const chosen = [...o, ...base, ...s];
     // Items that clash in formality (a strapless evening dress with combat boots) rank last; cold days prefer a layer.
     const f = chosen.map((x) => x.formality).filter(Boolean), clash = f.length > 1 ? Math.max(0, Math.max(...f) - Math.min(...f) - 1) : 0;
-    const fitScore = clash + chosen.reduce((n, x) => n + offTarget(x, occ), 0) + (wx.cold && !o.length ? 1 : 0) + (wx.hot && o.length ? 1 : 0);
+    const fitScore = clash + Math.max(0, ...chosen.map((x) => offTarget(x, occ))) /* the look's furthest item: three casual items are not 3x worse than one */ + (wx.cold && !o.length ? 1 : 0) + (wx.hot && o.length ? 1 : 0);
     candidates.push({ chosen, fresh: isNew(chosen), fit: fitScore, full: chosen.filter((x) => x.visibility === 'full').length, tie: rand() });
   }
   const looks = [], used = new Map();
   while (looks.length < count && candidates.length) {
-    const reuse = (c) => c.chosen.reduce((n, x) => n + (used.get(x.key) || 0), 0);
+    // Repeating a main garment (top, bottom, dress, outerwear) counts 3 times as much as repeating shoes: on 2026-10-28
+    // four of six office looks were the same shirt dress with different shoes.
+    const reuse = (c) => c.chosen.reduce((n, x) => n + (used.get(x.key) || 0) * (x.category === 'shoes' ? 1 : 3), 0);
     // Fit to the occasion and variety weigh the same: a better-fitting look does not repeat the same garments 4 times.
     candidates.sort((a, b) => (a.fit + reuse(a) - b.fit - reuse(b)) || (b.fresh - a.fresh) || (b.full - a.full) || (a.tie - b.tie));
     const pick = candidates.shift();

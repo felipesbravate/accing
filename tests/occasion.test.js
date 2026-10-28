@@ -61,3 +61,19 @@ test('a skirt worn under an open shirt dress stays with the dress, and covers it
   assert.equal(out[0].category, 'dress');
   assert.equal(out[0].description, 'white sleeveless shirt dress, worn over black mini skirt');
 });
+
+test('looks differ by more than their shoes while other garments are left', () => {
+  const w = [
+    { photo: 0, category: 'dress', description: 'white shirt dress', visibility: 'full', formality: 3, exposure: 'medium' },
+    { photo: 0, category: 'shoes', description: 'beige sandals', visibility: 'full', formality: 2 },
+    { photo: 1, category: 'top', description: 'olive shirt', visibility: 'full', formality: 2, exposure: 'low' },
+    { photo: 1, category: 'bottom', description: 'grey jeans', visibility: 'full', formality: 2, exposure: 'low' },
+    { photo: 1, category: 'shoes', description: 'combat boots', visibility: 'full', formality: 2 },
+    { photo: 2, category: 'shoes', description: 'gold heels', visibility: 'full', formality: 5 },
+    { photo: 3, category: 'top', description: 'crochet blouse', visibility: 'full', formality: 3, exposure: 'medium' },
+    { photo: 3, category: 'bottom', description: 'blue jeans', visibility: 'full', formality: 2, exposure: 'low' },
+  ];
+  const looks = composeLooks(w, { count: 6, seed: 1, occasion: 'an office day', weather: 'mild 20°C' });
+  const dresses = looks.filter((l) => l.items.some((x) => x.description === 'white shirt dress')).length;
+  assert.ok(dresses <= 2, `shirt dress in ${dresses} of 6 looks`);
+});
