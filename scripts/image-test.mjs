@@ -13,7 +13,7 @@ import { outfitCheck, photoCheck, poseCheck } from './face-check/look-check.mjs'
 import { createHash } from 'node:crypto';
 import { cleanBackground, createCleaner, measurePose } from './clean-background.mjs';
 import { facePass, faceLock, realFace, referenceFace, HARMONIZE_PROMPT_FILE } from './face-detail.mjs';
-import { createFaceModel } from './face-check/arcface.mjs';
+import { createFaceModel, findFace } from './face-check/arcface.mjs';
 import { feetFor, poseReferencePath } from './make-pose-reference.mjs';
 import { MODELS_DIR as FACE_MODELS_DIR } from './face-check/index.mjs';
 import './net.mjs'; // retry requests whose connection fails
@@ -54,7 +54,7 @@ const OPENAI_BASE = process.env.OPENAI_BASE_URL || 'https://api.openai.com';
 const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
 
 function args() {
-  const out = { runs: 3, looks: 1, cleanRefs: true, person: null, bodyCard: true, realFace: null, openaiSize: null, flex: false, garmentCrops: true, autoBase: true, prep: true, reprep: false, prepModel: null, proFace: false, body: null, background: '#F9F9FB', poseRef: true, facePasses: 2, faceLock: true, clean: true, anchor: null, anchorTries: 3, only: null, dryRun: false, check: true, minIdentity: MIN_IDENTITY, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
+  const out = { runs: 3, looks: 1, cleanRefs: true, person: null, bodyCard: true, blankFace: true, realFace: null, openaiSize: null, flex: false, garmentCrops: true, autoBase: true, prep: true, reprep: false, prepModel: null, proFace: false, body: null, background: '#F9F9FB', poseRef: true, facePasses: 2, faceLock: true, clean: true, anchor: null, anchorTries: 3, only: null, dryRun: false, check: true, minIdentity: MIN_IDENTITY, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
     expression: 'copy it exactly from the front face photo, including any slight smile; no smile or seriousness that photo does not have', occasion: 'an office day', weather: 'sunny 24°C', time: 'Monday morning',
     shoes: 'plain white leather low-top sneakers with white soles and white laces',
     pose: HOUSE_POSE };
@@ -75,6 +75,7 @@ function args() {
     else if (k === 'no-garment-crops') out.garmentCrops = false;
     else if (k === 'no-auto-base') out.autoBase = false;
     else if (k === 'no-body-card') out.bodyCard = false;
+    else if (k === 'no-blank-face') out.blankFace = false;
     else if (k === 'no-anchor') out.anchor = false;
     else if (k === 'anchor') out.anchor = true;
     else if (k === 'no-clean-refs') out.cleanRefs = false;
@@ -665,7 +666,7 @@ async function main() {
   let finalRefs = images;
   const prepareBase = async (orig, reading) => {
     const template = await readFile(BASE_PREP_PROMPT_FILE, 'utf8');
-    const hash = createHash('sha1').update(orig.bytes).update(Buffer.concat(faces.map((f) => f.bytes))).update(template).update(opts.openaiSize || '').update(opts.pose).update((await poseFor({ items: reading.items }))?.bytes || '').digest('hex').slice(0, 10);
+    const hash = createHash('sha1').update(orig.bytes).update(Buffer.concat(faces.map((f) => f.bytes))).update(template).update(opts.openaiSize || '').update(opts.pose).update(opts.blankFace ? 'blank-face-1' : '').update((await poseFor({ items: reading.items }))?.bytes || '').digest('hex').slice(0, 10);
     const cached = join(PREPARED_DIR, `${orig.file.replace(/\.[^.]+$/, '')}-${hash}.png`);
     if (opts.prepared) {
       console.log(`Base photo: using ${opts.prepared} as the prepared version (--prepared)`);
@@ -680,7 +681,7 @@ async function main() {
     }
     const before = await photoCheck(orig);
     if (!before.usable) throw new Error(`The base photo can't be used: ${before.blocking.join('; ')}. Take another one: full body head to feet, standing, face visible, only you in the photo.`);
-    if (!before.fixes.length) { console.log('Base photo: already clean (no phone, looking at the camera, plain background); used as it is.'); return orig; }
+    if (!before.fixes.length && !opts.blankFace) { console.log('Base photo: already clean (no phone, looking at the camera, plain background); used as it is.'); return orig; }
     console.log(`Base photo needs: ${before.fixes.join('; ')}. Preparing it once…`);
     const idOf = async (img) => (await checkFaces({ faces, lookRefs: [], images: [img], look: false, minIdentity: 0, log: () => {} })).results[0].identity;
     const origId = await idOf(orig).catch(() => null);
@@ -688,13 +689,34 @@ async function main() {
     const prepModel = MODELS.find((x) => x.key === (opts.prepModel || (process.env.OPENAI_API_KEY ? 'openai-2.5-flare-high' : 'gemini-nano-banana-2')));
     if (!prepModel) throw new Error(`--prep-model=${opts.prepModel} is not a model key: ${MODELS.map((x) => x.key).join(', ')}`);
     const poseRef = await poseFor({ items: reading.items });
-    const imgs = [orig, ...faces, ...(poseRef ? [poseRef] : [])];
+    // Blank the face out first. GPT keeps the face of the image it edits whatever the prompt says: the small, soft
+    // face of a phone photo came back in every try (identity 0.45–0.49) even when told to rebuild it from the face
+    // photos, while on a faceless mannequin it drew the face from the face photos (0.80+). So the face is covered with
+    // a plain grey oval (hair and head shape stay) and GPT has only the face photos to paint it from.
+    let canvasImg = orig, blanked = false;
+    if (faceModel && opts.blankFace) {
+      try {
+        const { img, face } = await findFace(faceModel, orig.bytes);
+        if (face) {
+          const sharp = (await import('sharp')).default;
+          const [x0, y0, x1, y1] = face.box, w = x1 - x0, h = y1 - y0;
+          const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2 + h * 0.02, rx = w * 0.56, ry = h * 0.66;
+          const svg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${img.width}" height="${img.height}"><ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="#c9c9c9"/></svg>`);
+          const bytes = await sharp(orig.bytes).rotate().composite([{ input: svg }]).jpeg({ quality: 92 }).toBuffer();
+          canvasImg = { ...orig, bytes, mime: 'image/jpeg' };
+          blanked = true;
+          await writeFile(join(out, 'base-face-blanked.jpg'), bytes);
+        }
+      } catch (e) { console.log(`(face not blanked: ${e.message})`); }
+    }
+    const imgs = [canvasImg, ...faces, ...(poseRef ? [poseRef] : [])];
     const faceRange = faces.length > 1 ? `2 to ${faces.length + 1}` : '2';
-    const prompt = template.replaceAll('{{FACE_IMAGES}}', faceRange).replace('{{FIXES}}', before.fixes.join('; '))
+    let prompt = template.replaceAll('{{FACE_IMAGES}}', faceRange).replace('{{FIXES}}', before.fixes.join('; ') || 'only the face, which must come from the face photos')
       .replace('{{POSE}}', poseText(feetFor(reading.items)))
       .replace('{{POSE_IMAGE_LINE}}', poseRef ? ` Image ${imgs.length} is a faceless mannequin showing the pose.` : '')
       .replace('{{POSE_IMAGE_RULE}}', poseRef ? ` Copy the stance of the mannequin in image ${imgs.length} (only its pose: not its body, size or shape).` : '');
-    const label = (k) => (k === 0 ? 'the photo to prepare' : k <= faces.length ? faces[k - 1].label : 'pose reference: a faceless mannequin; copy only its pose');
+    if (blanked) prompt = prompt.replace('- The face: rebuild it from the face photos', '- The face: in image 1 it is covered by a plain grey oval on purpose. Paint the real face there, from the face photos');
+    const label = (k) => (k === 0 ? (blanked ? 'the photo to prepare (face covered on purpose)' : 'the photo to prepare') : k <= faces.length ? faces[k - 1].label : 'pose reference: a faceless mannequin; copy only its pose');
     // Every try is made and the passing one closest to her face photos is kept: this photo is the face of every look.
     let best = null;
     for (let attempt = 1; attempt <= opts.anchorTries; attempt++) {
