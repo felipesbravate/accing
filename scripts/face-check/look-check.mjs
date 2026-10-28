@@ -189,3 +189,26 @@ export async function photoCheck(image, { model = LOOK_MODEL, key = process.env.
   const u = json.usageMetadata || {};
   return { ...r, ...photoVerdict(r), cost: ((u.promptTokenCount || 0) * PRICE.inputPerM + ((u.candidatesTokenCount || 0) + (u.thoughtsTokenCount || 0)) * PRICE.outputPerM) / 1e6 };
 }
+
+/** Second opinion on the outfit check's findings, one yes/no per claim. On 2026-10-28 both looks dropped after 3 tries
+ *  were right: the check kept claiming a plain t-shirt in a close-up that clearly shows the print (a bag strap crossed
+ *  it) and a "two-tone" jacket that was room light. A claim stands only if a separate look, asked about that claim
+ *  alone, confirms it. Returns the confirmed claims (all of them if this call fails). */
+export async function confirmClaims(image, items, claims, { model = LOOK_MODEL, key = process.env.GEMINI_API_KEY } = {}) {
+  if (!claims.length || !key) return claims;
+  const refs = items.filter((x) => x.crop);
+  const part = (img) => ({ inlineData: { mimeType: img.mime, data: img.bytes.toString('base64') } });
+  const prompt = `Image 1 is a photo of a person. ${refs.length ? `Images 2 to ${refs.length + 1} are close-ups of the real garments they should wear, as photographed: they may also show other garments, a bag strap, a hand or coloured room light, which do not count. ` : ''}Another reviewer made these claims about image 1:
+${claims.map((c, i) => `${i + 1}. ${c}`).join('\n')}
+For each claim, look again at image 1 and the matching close-up and answer true only if the claim is clearly correct: the difference is plainly visible in image 1 and is a real difference of the garment itself (not light, not a covered part, not something else in the close-up). When unsure, answer false.`;
+  const res = await fetch(`${GEMINI_BASE}/v1beta/models/${model}:generateContent`, {
+    method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
+    body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'Image 1 (the photo):' }, part(image), ...refs.flatMap((x, i) => [{ text: `Image ${i + 2} (close-up of the ${x.category}):` }, part(x.crop)]), { text: prompt }] }],
+      generationConfig: { responseMimeType: 'application/json', responseSchema: { type: 'OBJECT', properties: { verdicts: { type: 'ARRAY', items: { type: 'BOOLEAN' } } }, required: ['verdicts'] }, temperature: 0 } }),
+  }).catch(() => null);
+  if (!res?.ok) return claims;
+  try {
+    const v = JSON.parse((await res.json()).candidates?.[0]?.content?.parts?.map((p) => p.text).join('') || '{}').verdicts;
+    return Array.isArray(v) && v.length === claims.length ? claims.filter((_, i) => v[i]) : claims;
+  } catch { return claims; }
+}

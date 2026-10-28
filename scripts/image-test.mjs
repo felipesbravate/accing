@@ -9,7 +9,7 @@ import { appendFileSync, existsSync } from 'node:fs';
 import { extname, join, resolve } from 'node:path';
 import { CATEGORIES, composeLooks, mergeLayers, normaliseReading } from './image-test-lib.mjs';
 import { checkFaces, checkTable, MIN_IDENTITY } from './face-check/index.mjs';
-import { outfitCheck, photoCheck, poseCheck } from './face-check/look-check.mjs';
+import { confirmClaims, outfitCheck, photoCheck, poseCheck } from './face-check/look-check.mjs';
 import { createHash } from 'node:crypto';
 import { cleanBackground, createCleaner, measurePose } from './clean-background.mjs';
 import { facePass, faceLock, realFace, referenceFace, HARMONIZE_PROMPT_FILE } from './face-detail.mjs';
@@ -680,7 +680,12 @@ async function main() {
       outfitCheck(img, look.items, look.items.some((x) => x.category === 'shoes') ? null : opts.shoes).catch((e) => ({ ok: true, note: `outfit check failed: ${e.message}` })),
     ]);
     why.push(...dropGarments(refGeometry ? baseReasons(face.reasons) : face.reasons));
-    if (!fit.ok) why.push(`outfit: ${fit.note}`);
+    if (!fit.ok) {
+      const claims = [...(fit.missing || []).map((x) => 'missing ' + x), ...(fit.extra || []).map((x) => 'extra ' + x), ...(fit.different || []).map((x) => 'different ' + x)];
+      const kept = await confirmClaims(img, look.items, claims.length ? claims : [fit.note]);
+      if (kept.length) why.push(`outfit: ${kept.join(', ')}`);
+      else console.log(`  (outfit check said "${fit.note.slice(0, 120)}", not confirmed on a second look; accepted)`);
+    }
     return why;
   };
   const name = (m, look, run) => (looks.length > 1 ? `${m.key}-look${look.n}-${run}.png` : `${m.key}-${run}.png`);
