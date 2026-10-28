@@ -5,7 +5,7 @@
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
-import { existsSync } from 'node:fs';
+import { appendFileSync, existsSync } from 'node:fs';
 import { extname, join, resolve } from 'node:path';
 import { CATEGORIES, composeLooks, normaliseReading } from './image-test-lib.mjs';
 import { checkFaces, checkTable, MIN_IDENTITY } from './face-check/index.mjs';
@@ -49,7 +49,7 @@ const OPENAI_BASE = process.env.OPENAI_BASE_URL || 'https://api.openai.com';
 const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
 
 function args() {
-  const out = { runs: 3, looks: 1, cleanRefs: true, realFace: true, proFace: false, body: null, background: '#F9F9FB', poseRef: true, facePasses: 2, faceLock: true, clean: true, anchor: null, anchorTries: 3, only: null, dryRun: false, check: true, minIdentity: MIN_IDENTITY, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
+  const out = { runs: 3, looks: 1, cleanRefs: true, realFace: null, proFace: false, body: null, background: '#F9F9FB', poseRef: true, facePasses: 2, faceLock: true, clean: true, anchor: null, anchorTries: 3, only: null, dryRun: false, check: true, minIdentity: MIN_IDENTITY, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
     expression: 'copy it exactly from the front face photo, including any slight smile; no smile or seriousness that photo does not have', occasion: 'an office day', weather: 'sunny 24°C', time: 'Monday morning',
     shoes: 'plain white leather low-top sneakers with white soles and white laces',
     pose: 'relaxed standing pose: body turned about 15 degrees so their left shoulder is slightly closer to the camera, head turned back to face the camera, chin level, eyes looking into the lens; weight on the back (right) leg, front (left) knee slightly relaxed, feet about hip-width apart; both arms hanging loosely at the sides, elbows very slightly bent, hands open and relaxed beside the thighs, never in pockets; shoulders relaxed and level' };
@@ -68,6 +68,7 @@ function args() {
     else if (k === 'no-face-lock') out.faceLock = false;
     else if (k === 'pro-face') out.proFace = true;
     else if (k === 'no-real-face') out.realFace = false;
+    else if (k === 'real-face') out.realFace = true;
     else if (k === 'no-pose-ref') out.poseRef = false;
     else if (k === 'body') { if (!['female', 'male'].includes(v)) throw new Error('--body must be female or male'); out.body = v; }
     else if (k === 'face-passes') out.facePasses = Math.max(0, Math.min(4, parseInt(v, 10) || 0));
@@ -402,6 +403,12 @@ async function main() {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const out = join(RESULTS, stamp);
   await mkdir(out, { recursive: true });
+  // Everything printed also goes to run.log (rejection reasons and timings were lost when only the terminal had them).
+  const logPath = join(out, 'run.log');
+  for (const stream of [process.stdout, process.stderr]) {
+    const write = stream.write.bind(stream);
+    stream.write = (chunk, ...rest) => { try { appendFileSync(logPath, chunk); } catch {} return write(chunk, ...rest); };
+  }
   for (const img of images) { img.refName = 'ref-' + (img.resized ? img.file.replace(/\.[^.]+$/, '.jpg') : img.file); await writeFile(join(out, img.refName), img.bytes); }
   await writeFile(join(out, 'prompt.txt'), looks.map((l) => (looks.length > 1 ? `=== Look ${l.n} ===\n` : '') + l.prompt).join('\n\n'));
   await writeFile(join(out, 'wardrobe.json'), JSON.stringify({ seed, readerModel: opts.reader, faces: faces.map((x) => x.file), readings: readings.map((r, i) => ({ file: outfits[i].file, ...r })), looks: looks.map(({ prompt, label, images: _i, ...l }) => l) }, (k, v) => (k === 'bytes' || v?.type === 'Buffer' ? undefined : v), 2));
@@ -441,7 +448,11 @@ async function main() {
       log: (t) => console.log(t.replace('face redraw', 'harmonize')) });
     return { bytes: hp.bytes, cost: hp.cost, face: { pass: true, before: rf.before, after: hp.after, kept: hp.kept === 'original' ? `real face (${rf.source}), not harmonized` : `real face (${rf.source}) + harmonize ${hp.kept.replace('redraw ', '')}` } };
   };
-  const withFacePass = (m) => (faceModel && opts.realFace ? withRealFace() : faceModel && opts.facePasses ? async (bytes) => {
+  // Face step per model: real face + harmonize for Gemini by default. GPT's own face is kept: on 2026-10-28 the real-face
+  // transplant on GPT looks read as pasted on (weird edges and light) while GPT's raw face already looked like her, and
+  // each transplant added a Gemini call to every attempt. --real-face / --no-real-face force it either way.
+  const faceStepFor = (m) => (opts.realFace ?? (m.provider !== 'openai'));
+  const withFacePass = (m) => (!faceStepFor(m) && opts.realFace === null ? null : faceModel && faceStepFor(m) ? withRealFace() : faceModel && opts.facePasses ? async (bytes) => {
     const fp = await facePass({ model: faceModel, image: bytes, faces, reference, passes: opts.facePasses,
       redraw: (imgs, prompt, label) => callGemini({ ...(opts.proFace ? MODELS.find((x) => x.key === 'gemini-nano-banana-pro') : redrawModel), aspectRatio: '1:1' }, imgs, prompt.replace('{{IDENTITY_CARD}}', opts.identityCard || 'see the face photos'), label, { ...opts, size: '1K', faceCount: imgs.length }),
       log: (t) => console.log(t) });
@@ -509,7 +520,7 @@ async function main() {
   // Looks are generated fresh from the same pose reference, and the real face gives every one the same face. Editing
   // look 1 into the others (--anchor) kept old garments, invented ghosts and reshaped the body (2026-10-27), so it is
   // only the default when the real face is off.
-  const anchorMode = !base && (opts.anchor ?? !opts.realFace) && looks.length > 1;
+  const anchorMode = !base && (opts.anchor ?? opts.realFace === false) && looks.length > 1;
   const rejected = [];
   if (base) {
     // BASE PHOTO MODE: every look is the person's own photo with only the clothes changed, so face, body, hair and pose
