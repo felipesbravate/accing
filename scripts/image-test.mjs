@@ -68,6 +68,8 @@ function args() {
     else if (k === 'no-prep') out.prep = false;
     else if (k === 'reprep') out.reprep = true;
     else if (k === 'prepared') out.prepared = v;
+    else if (k === 'prep-only') out.prepOnly = true;
+    else if (k === 'json-out') out.jsonOut = v;
     else if (k === 'prep-model') out.prepModel = v;
     else if (k === 'openai-size') { if (!/^\d{3,4}x\d{3,4}$/.test(v)) throw new Error('--openai-size=WIDTHxHEIGHT, e.g. 1536x2304'); out.openaiSize = v; }
     else if (k === 'hd') out.openaiSize = '1536x2304';
@@ -503,7 +505,8 @@ async function main() {
   if (identityCard && !existsSync(join(INPUTS, 'identity.txt'))) console.log(`Identity card: ${identityCard}\n  (saved as image-test/inputs/identity-read.txt; correct it and save it as identity.txt to use your own words)`);
   readings.forEach((r, i) => console.log(`  photo ${i + 1} = image ${faces.length + i + 1}, ${outfits[i].file}: ${r.items.map((x) => `${x.description} [${x.category}${x.visibility === 'full' ? '' : ', ' + x.visibility}]`).join('; ') || 'nothing recognised'}`));
   const seed = opts.seed ?? (Date.now() % 100000);
-  const looks = composeLooks(wardrobe, { count: opts.looks, seed, occasion: opts.occasion, weather: opts.weather });
+  // With --prep-only no look is made, so a wardrobe that can't make one yet (onboarding) must not stop the base photo.
+  const looks = (() => { try { return composeLooks(wardrobe, { count: opts.looks, seed, occasion: opts.occasion, weather: opts.weather }); } catch (e) { if (!opts.prepOnly) throw e; return Object.assign([], { skipped: [], occasion: { name: 'any', min: 1, max: 5, maxExposure: 'high' } }); } })();
   if (looks.skipped.length) console.log(`Left out for "${opts.occasion}" / "${opts.weather}" (${looks.occasion.name}): ${looks.skipped.map((x) => `${x.description} (${x.why})`).join('; ')}`);
   if (looks.length < opts.looks) console.warn(`Only ${looks.length} different look(s) are possible from these photos (asked for ${opts.looks}).`);
   // Pose reference (npm run make-pose-reference): a mannequin in the house pose, matching the body and the shoes of the
@@ -879,6 +882,29 @@ PHOTO
     dropped.push({ look, tries: r.attempt || opts.anchorTries, reasons, retake });
     console.log(`  look ${look.n} dropped: it failed the checks on all ${opts.anchorTries} tries (last: ${reasons.join('; ')})${retake ? `\n  → ${retake}` : ''}`);
   };
+  // Machine-readable summary for the worker (--json-out=path): what was made, where, what it cost, and what failed.
+  const writeSummary = async (stage, extra = {}) => {
+    if (!opts.jsonOut) return;
+    const spentNow = [...rows, ...rejected, ...prepRows].reduce((t, r) => t + (r.cost || 0), 0);
+    const okPrep = prepRows.filter((r) => !r.reasons.length && r.identity != null).sort((a, b) => b.identity - a.identity);
+    const item = (x) => ({ description: x.description, category: x.category, photo: x.photo, ...(x.formality ? { formality: x.formality } : {}), ...(x.exposure ? { exposure: x.exposure } : {}), ...(x.season ? { season: x.season } : {}) });
+    const summary = {
+      stage, dir: out, spent: spentNow,
+      prep: prepRows.map((r) => ({ file: r.file, identity: r.identity, ok: !r.reasons.length, reasons: r.reasons, cost: r.cost || 0, best: okPrep[0]?.file === r.file })),
+      wardrobe: readings.map((r, i) => ({ photo: i, file: outfits[i].file, items: r.items.map(item) })),
+      skipped: looks.skipped || [],
+      looks: stage === 'prep' ? [] : looks.map((l) => {
+        const row = rows.find((r) => r.look === l && !r.error), bad = rows.find((r) => r.look === l && r.error), drop = dropped.find((d) => d.look === l);
+        const cost = [...rows, ...rejected].filter((r) => r.look === l || r.m && r.look === l).reduce((t, r) => t + (r.cost || 0), 0);
+        return { n: l.n, items: l.items.map(item), cost,
+          ...(row ? { status: 'ready', file: row.file, identity: row.check?.identity ?? null, attempt: row.attempt ?? 1 }
+            : drop ? { status: 'dropped', reasons: drop.reasons, retake: drop.retake || null }
+            : bad ? { status: bad.refused ? 'refused' : 'failed', reasons: [bad.error] } : { status: 'failed', reasons: ['not made'] }) };
+      }),
+      ...extra,
+    };
+    await writeFile(resolve(opts.jsonOut), JSON.stringify(summary, null, 2));
+  };
   if (base) {
     // BASE PHOTO MODE: every look is the person's own photo with only the clothes changed, so face, body, hair and pose
     // are real. The face is then put back from the base photo itself (same light, same angle), and the background
@@ -888,6 +914,8 @@ PHOTO
     const takeOff = baseReading.items.filter((x) => ['outerwear', 'top', 'dress', 'bottom', 'shoes'].includes(x.category)).map((x) => x.description);
     console.log(`Base photo ${base.file}: wears ${takeOff.join('; ') || 'nothing recognised'}`);
     const src = opts.prep && !base.generated ? await prepareBase(base, baseReading) : base;
+    // --prep-only (worker onboarding): stop after preparing the base photo; the user picks 1 of the tries.
+    if (opts.prepOnly) { await writeSummary('prep'); console.log('Prepared the base photo only (--prep-only).'); return; }
     // Look check against her face photos and the (prepared) base photo only: her outfit photos are mirror selfies with
     // other hair and jewellery, and the check then "saw" a bun and a choker that were not there (2026-10-28).
     const baseRefs = [...faces, src];
@@ -1108,6 +1136,7 @@ ${models.map((m) => `<h3>${esc(m.key)}</h3><div class="row">${rows.filter((r) =>
     ? `<figure><div class="err">${esc(r.error)}</div><figcaption>run ${r.run}</figcaption></figure>`
     : `<figure><img src="${esc(r.file)}"><figcaption>run ${r.run} · ${r.seconds.toFixed(1)}s · ~$${fmt(r.cost)}${r.check ? `<br><b style="color:${r.check.pass ? '#1b7f3b' : '#b3261e'}">${r.check.pass ? 'PASS' : 'FAIL'}</b> · identity ${fmt(r.check.identity)}${r.check.reasons.length ? '<br>' + esc(r.check.reasons.join('; ')) : ''}` : ''}</figcaption></figure>`).join('')}</div>`).join('')}`).join('')}`;
   await writeFile(join(out, 'index.html'), html);
+  await writeSummary('looks');
   console.log(`\nDone. Open ${join(out, 'index.html')} to compare, and ${join(out, 'report.md')} for the numbers.`);
 }
 
