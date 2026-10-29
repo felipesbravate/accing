@@ -29,6 +29,6 @@ primary_region = "cdg"            # Paris, next to Vercel (cdg1)
   retries = 3
 
 [[vm]]
-  memory = "2gb"
+  memory = "4gb"                   # 2 GB was killed for memory on the first job (2026-10-29: the pipeline alone used 1.9 GB)
   cpu_kind = "shared"
-  cpus = 1
+  cpus = 2                         # Fly allows up to 2 GB per shared CPU

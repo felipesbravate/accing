@@ -42,7 +42,7 @@ function runPipeline(args) {
     const keep = (d) => { const s = d.toString(); tail = (tail + s).slice(-4000); process.stdout.write(s); };
     child.stdout.on('data', keep); child.stderr.on('data', keep);
     child.on('error', fail);
-    child.on('close', (code) => (code === 0 ? ok() : fail(new Error((tail.match(/Error: (.+)/g) || []).pop()?.slice(7) || `pipeline exited with ${code}`))));
+    child.on('close', (code, signal) => (code === 0 ? ok() : fail(new Error(signal === 'SIGKILL' ? 'the pipeline was killed, most likely out of memory (see fly logs)' : (tail.match(/Error: (.+)/g) || []).pop()?.slice(7) || `pipeline exited with ${code ?? signal}`))));
   });
 }
 
