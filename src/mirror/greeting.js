@@ -18,3 +18,8 @@ export function vibeQuestion(date, name, locale = 'en-US') {
   const weekday = new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(date);
   return name ? `What's your vibe this ${weekday}, ${name}?` : `What's your vibe this ${weekday}?`;
 }
+
+/** The splash screen line (Figma "Splash screen - Mobile"): no weekday, just today. */
+export function splashQuestion(name) {
+  return name ? `What's your vibe today, ${name}?` : "What's your vibe today?";
+}

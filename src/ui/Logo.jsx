@@ -6,3 +6,13 @@ export function Logo({ className = '' }) {
     </svg>
   );
 }
+
+// The Accing symbol (Figma "logo", Variant=Symbol, 103×80). Scales with width/height; filled with currentColor.
+export function LogoSymbol({ className = '', width = 103, height = 80, label }) {
+  return (
+    <svg className={('logo-symbol ' + className).trim()} width={width} height={height} viewBox="0 0 103 80" fill="none" xmlns="http://www.w3.org/2000/svg"
+      role={label ? 'img' : undefined} aria-label={label} aria-hidden={label ? undefined : true}>
+      <path fill="currentColor" d="M52.0383 55.8676L75.1049 78.9534L103 51.0042L52.0383 0L0 52.0816L27.926 80L52.0383 55.8676Z" />
+    </svg>
+  );
+}

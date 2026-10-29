@@ -1,8 +1,13 @@
-/* Desktop layout from the 1512×982 frame. */
+/* Daily Mirror layout. Desktop: Figma "Daily Mirror — Desktop" (1512×982, node 116:2311).
+   Mobile (below 1024px): "Daily Mirror - Mobile" (390×844, node 145:1617). Components come from src/ui/components.css. */
 .mirror { max-width: 1512px; min-height: 100vh; margin: 0 auto; background: var(--bg-primary); color: var(--text-primary); }
 
-.mirror-header { display: flex; align-items: center; justify-content: space-between; height: 88px; padding: var(--space-xl); }
-.mirror-logo { color: var(--text-primary); }
+/* Header: logo left; "Shoot your outfit" and the avatar right. */
+.mirror-header { display: flex; align-items: center; justify-content: space-between; padding: var(--space-lg) var(--space-3xl); }
+.mirror-logo { display: block; color: var(--brand-primary); }
+.mirror-actions { display: flex; align-items: center; gap: var(--space-md); }
+.mirror-shoot { cursor: pointer; }
+.mirror-shoot:has(input:focus-visible) { outline: 2px solid var(--border-accent); outline-offset: 2px; }
 .mirror-account { position: relative; }
 .mirror-account > summary { list-style: none; cursor: pointer; }
 .mirror-account > summary::-webkit-details-marker { display: none; }
@@ -11,68 +16,56 @@
 .mirror-account-menu button { padding: var(--space-sm) var(--space-md); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text-primary); white-space: nowrap; }
 .mirror-account-menu button:hover { background: var(--bg-secondary); }
 
-.mirror-content { margin-top: var(--space-lg); padding: 0 var(--space-2xl); }
+/* Top: question and date on the left; season filters and the occasion column pinned to the right. */
+.mirror-top { position: relative; padding: 0 var(--space-4xl); }
+.mirror-intro { display: flex; flex-direction: column; gap: var(--space-xs); }
+.mirror-question { font-size: var(--fs-h3); font-weight: var(--fw-medium); line-height: normal; color: var(--text-primary); }
+.mirror-meta { display: flex; align-items: center; gap: var(--space-sm); color: var(--text-secondary); font-size: var(--fs-body); line-height: normal; white-space: nowrap; }
+.mirror-sep { display: block; flex: none; }
+.mirror-weather { display: inline-flex; align-items: center; gap: var(--space-xs); }
+.mirror-weather .icon { color: var(--icon-secondary); }
+.mirror-nav { position: absolute; top: 0; right: var(--space-4xl); z-index: 1; display: flex; align-items: flex-start; gap: var(--space-3xl); }
+.mirror-filters { display: flex; align-items: center; gap: var(--space-xl); padding-top: var(--space-xs); }
+.mirror-menu { display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-lg); }
+.mirror-mobile-filters { display: none; }
 
-/* Greeting on the left; season filters and the occasion column on the right, as in the frame. */
-.mirror-top { display: flex; align-items: flex-start; gap: var(--space-sm); }
-.mirror-greeting { flex: 1; display: flex; flex-direction: column; gap: var(--space-xs); padding-top: var(--space-lg); }
-.mirror-meta { display: flex; align-items: center; gap: var(--space-md); color: var(--text-secondary); font-size: var(--fs-body); line-height: normal; }
-.mirror-weather { display: inline-flex; align-items: center; gap: var(--space-xs); color: var(--icon-secondary); }
-.mirror-question { font-size: var(--fs-h3); font-weight: 500; line-height: normal; color: var(--text-primary); }
-.mirror-filters { display: flex; align-items: center; gap: var(--space-sm); margin-top: 50px; }
-.mirror-nav { width: 109px; display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-lg); }
-.mirror-menu { display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-md); }
+/* Carousel: arrows, side looks 520 high, the main look 600 high (2:3 photos), pager 10px below. */
+.mirror-body { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 78px; padding: 0 var(--space-3xl) var(--space-3xl); }
+.mirror-carousel { display: flex; align-items: center; justify-content: center; gap: var(--space-lg); height: 600px; touch-action: pan-y; user-select: none; }
+.outfit { flex: none; margin: 0; overflow: hidden; }
+.outfit.is-main { height: 600px; aspect-ratio: 2 / 3; }
+.outfit.is-side { height: 520px; aspect-ratio: 2 / 3; }
+.outfit-image { display: block; width: 100%; height: 100%; object-fit: cover; }
+.mirror-arrow { flex: none; }
 
-/* Carousel: arrows, side outfits (360×540), main outfit (400×600). */
-.mirror-carousel { display: flex; align-items: center; justify-content: center; gap: var(--space-lg); height: 640px; }
-.outfit { display: flex; flex-direction: column; margin: 0; }
-.outfit-badges { display: flex; align-items: center; gap: var(--space-sm); height: 40px; padding: var(--space-sm); }
-.outfit-image { display: block; object-fit: cover; background: var(--bg-primary); }
-.outfit.is-main .outfit-image { width: 400px; height: 600px; }
-.outfit.is-side .outfit-image { width: 360px; height: 540px; }
-
-/* Desktop details added for the shared markup. */
-.mirror-when { display: inline; }
-.mirror-dots { display: none; }
-.mirror-carousel { touch-action: pan-y; user-select: none; }
-
-/* Mobile (Figma "Daily Mirror 2 — Mobile", 390×844), below 1024px. */
+/* Mobile */
 @media (max-width: 1023px) {
-  .mirror { padding-bottom: 88px; } /* room for the fixed avatar bar */
+  .mirror { display: flex; flex-direction: column; min-height: 100svh; padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
 
-  /* No logo header on mobile: the avatar sits in a bar fixed to the bottom right. */
-  .mirror-header { position: fixed; z-index: 20; left: 0; right: 0; bottom: 0; height: auto; justify-content: flex-end;
-    padding: var(--space-lg); padding-bottom: calc(var(--space-lg) + env(safe-area-inset-bottom)); background: var(--bg-primary); }
-  .mirror-logo { display: none; }
+  /* Logo, then the date line; the question moves to the splash screen and stays for screen readers. */
+  .mirror-header { padding: calc(var(--space-lg) + env(safe-area-inset-top)) var(--space-lg) 0; }
+  .mirror-top { padding: 0; }
+  .mirror-intro { padding: var(--space-xs) var(--space-lg) 0; }
+  .mirror-question { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .mirror-meta { color: var(--icon-secondary); }
+  .mirror-nav { display: none; }
+  .mirror-mobile-filters { display: flex; flex-direction: column; align-items: center; gap: var(--space-md); margin-top: var(--space-2xl); }
+  .mirror-mobile-filters .ds-tabs { align-self: stretch; }
+
+  /* Bottom bar: the button fills the row, the avatar sits on the right. */
+  .mirror-actions { position: fixed; z-index: 20; left: 0; right: 0; bottom: 0; gap: var(--space-md);
+    padding: var(--space-lg) var(--space-xl); padding-bottom: calc(var(--space-lg) + env(safe-area-inset-bottom)); background: var(--bg-primary); }
+  .mirror-shoot { flex: 1 1 auto; }
   .mirror-account-menu { top: auto; bottom: calc(100% + var(--space-sm)); }
 
-  .mirror-content { margin-top: 0; padding: calc(40px + env(safe-area-inset-top)) 0 0; }
-  .mirror-top { flex-direction: column; align-items: stretch; gap: var(--space-xl); padding: 0 var(--space-lg); margin-bottom: 28px; }
-
-  /* Question first, then day, time and weather stacked. */
-  .mirror-greeting { padding-top: 0; }
-  .mirror-question { order: -1; }
-  .mirror-meta { flex-direction: column; align-items: flex-start; gap: 0; }
-  .mirror-when { display: flex; flex-direction: column; }
-  .mirror-sep { display: none; }
-
-  /* Occasions (Label/Large) above the season filters, which scroll sideways. */
-  .mirror-nav { order: 1; width: auto; align-items: flex-start; padding: 0 var(--space-sm); }
-  .mirror-nav .ds-toggle { display: none; } /* not in the mobile design */
-  .mirror-menu { flex-direction: row; align-items: center; gap: var(--space-lg); }
-  .mirror-menu .ds-menu-item { font-size: var(--fs-label-large); line-height: var(--lh-label-large); }
-  .mirror-filters { order: 2; margin: calc(var(--space-md) - var(--space-xl)) 0 0; padding: 0 var(--space-sm); overflow-x: auto; scrollbar-width: none; }
-  .mirror-filters::-webkit-scrollbar { display: none; }
-  .mirror-filters .ds-filter-item { flex: none; }
-
-  /* Carousel: main 280×420 centred, neighbours 220×330 peeking; swipe instead of arrows. */
-  .mirror-carousel { height: 460px; gap: var(--space-md); overflow: hidden; justify-content: center; }
+  /* Carousel: the main look 200×464 centred, neighbours 160×392 cropped by the screen edges, edges faded. Heights shrink
+     on short screens so the pager stays above the bottom bar. */
+  .mirror-body { flex: 1; justify-content: center; margin-top: 22px; padding: 0 0 var(--space-md); overflow: hidden; }
+  .mirror-carousel { position: relative; width: 100%; height: auto; overflow: hidden; }
+  .mirror-carousel::before, .mirror-carousel::after { content: ''; position: absolute; top: 0; bottom: 0; z-index: 1; width: 78px; pointer-events: none; }
+  .mirror-carousel::before { left: 0; background: linear-gradient(to left, transparent, color-mix(in srgb, var(--bg-primary) 80%, transparent)); }
+  .mirror-carousel::after { right: 0; background: linear-gradient(to right, transparent, color-mix(in srgb, var(--bg-primary) 80%, transparent)); }
+  .outfit.is-main { height: clamp(300px, 100svh - 380px, 464px); aspect-ratio: 200 / 464; }
+  .outfit.is-side { height: clamp(254px, calc((100svh - 380px) * 0.845), 392px); aspect-ratio: 160 / 392; }
   .mirror-arrow { display: none; }
-  .outfit { flex: none; }
-  .outfit.is-main .outfit-image { width: 280px; height: 420px; }
-  .outfit.is-side .outfit-image { width: 220px; height: 330px; }
-
-  .mirror-dots { display: flex; justify-content: center; gap: 6px; margin-top: 2px; }
-  .mirror-dot { width: 6px; height: 6px; padding: 0; border: 0; border-radius: var(--radius-full); background: var(--border-default); }
-  .mirror-dot[aria-current="true"] { width: 16px; background: var(--bg-tertiary); }
 }

@@ -1,0 +1,13 @@
+/* Splash (Figma "Splash screen - Mobile", 390×844). Hidden unless <html> has .show-splash (see Splash.jsx).
+   Background is primitive blue-100, as in Figma; there is no semantic token for it yet. */
+.splash { display: none; }
+.show-splash .splash { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: env(safe-area-inset-top) var(--space-lg) env(safe-area-inset-bottom); background: var(--blue-100); color: var(--brand-primary);
+  transition: opacity .3s ease-out; }
+.show-splash body:has(.splash) { overflow: hidden; }
+.splash.is-leaving { opacity: 0; }
+.splash-center { display: flex; flex-direction: column; align-items: center; gap: var(--space-2xl); width: min(342px, 100%); }
+.splash-symbol { display: block; }
+.splash-question { font-size: var(--fs-h2); font-weight: var(--fw-medium); line-height: normal; color: var(--text-primary); text-align: center; }
+.splash-wordmark { position: absolute; left: 50%; bottom: calc(var(--space-2xl) + env(safe-area-inset-bottom)); transform: translateX(-50%); color: var(--brand-primary); }
+@media (prefers-reduced-motion: reduce) { .show-splash .splash { transition: none; } }
