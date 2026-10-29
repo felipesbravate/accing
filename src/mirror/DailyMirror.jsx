@@ -25,7 +25,7 @@ function Outfit({ outfit, size }) {
 function Account({ avatar }) {
   return (
     <details className="mirror-account">
-      <summary className="ds-avatar is-large" aria-label="Account"><img src={avatar} alt="" /></summary>
+      <summary className="ds-avatar mirror-avatar" aria-label="Account"><img src={avatar} alt="" /></summary>
       <form className="mirror-account-menu" method="post" action="/auth/signout">
         <button type="submit">Sign out</button>
       </form>
@@ -36,7 +36,7 @@ function Account({ avatar }) {
 function ShootButton({ onShoot }) {
   // A file input with `capture` opens the camera on phones and a file picker on desktop.
   return (
-    <label className="ds-button is-large mirror-shoot">
+    <label className="ds-button mirror-shoot">
       <Icon name="camera" size={20} />
       <span>Shoot your outfit</span>
       <input className="visually-hidden" type="file" accept="image/*" capture="environment"

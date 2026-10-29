@@ -55,7 +55,8 @@
   /* Bottom bar: the button fills the row, the avatar sits on the right. */
   .mirror-actions { position: fixed; z-index: 20; left: 0; right: 0; bottom: 0; gap: var(--space-md);
     padding: var(--space-lg) var(--space-xl); padding-bottom: calc(var(--space-lg) + env(safe-area-inset-bottom)); background: var(--bg-primary); }
-  .mirror-shoot { flex: 1 1 auto; }
+  .mirror-shoot { flex: 1 1 auto; height: 48px; font-size: var(--fs-label-large); } /* button Size=Large */
+  .mirror-avatar { width: 55px; height: 48px; } /* avatar Size=48px */
   .mirror-account-menu { top: auto; bottom: calc(100% + var(--space-sm)); }
 
   /* Carousel: the main look 200×464 centred, neighbours 160×392 cropped by the screen edges, edges faded. Heights shrink
