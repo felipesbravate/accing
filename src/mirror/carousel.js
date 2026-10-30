@@ -53,3 +53,12 @@ export function ringPose(offset, length, { radius, backScale, lift, minSlots = 5
 export function easeInOutCubic(t) {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 }
+
+/** How strongly a look shows at `offset` slots from the front: 1 at the front, `side` one slot away, `back` two or
+ *  more slots away (the back of a 5-look ring), straight lines in between so it changes smoothly while turning. */
+export function ringVisibility(offset, { side, back }) {
+  const d = Math.abs(offset);
+  if (d <= 1) return 1 + (side - 1) * d;
+  if (d <= 2) return side + (back - side) * (d - 1);
+  return back;
+}

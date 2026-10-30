@@ -5,8 +5,11 @@
 // Geometry lives in mirror.css as ratios of the look height (--ring-radius, --ring-lift) and --ring-back-scale;
 // the maths is in carousel.js. Transforms are written straight to the DOM each frame, not through React state.
 // Needs transparent looks (cut-outs with their floor shadow); opaque backgrounds would show as cards overlapping.
+// Looks away from the front fade toward the page colour (--ring-side-strength, --ring-back-strength): a veil in the
+// page colour, masked to the look's own shape, sits on each look. Unlike opacity, nobody becomes see-through, so a
+// look behind another never shows through it.
 import { useCallback, useEffect, useRef } from 'react';
-import { easeInOutCubic, ringOffset, ringPose, wrap } from './carousel.js';
+import { easeInOutCubic, ringOffset, ringPose, ringVisibility, wrap } from './carousel.js';
 
 const TURN_MS = 650;
 const INTRO_MS = 1300;
@@ -22,14 +25,15 @@ export default function OutfitRing({ outfits, index, onChange }) {
   const target = useRef(index);
   const frame = useRef(0);
   const drag = useRef(null);
-  const geo = useRef({ radius: 0, backScale: 1, lift: 0, slotPx: 200 });
+  const geo = useRef({ radius: 0, backScale: 1, lift: 0, slotPx: 200, side: 1, back: 1 });
 
   const measure = useCallback(() => {
     const el = stage.current; if (!el) return;
     const cs = getComputedStyle(el), h = el.clientHeight;
     const num = (name, fallback) => { const v = parseFloat(cs.getPropertyValue(name)); return Number.isFinite(v) ? v : fallback; };
     const radius = num('--ring-radius', 0.6) * h;
-    geo.current = { radius, backScale: num('--ring-back-scale', 0.6), lift: num('--ring-lift', 0.2) * h, slotPx: radius * 0.75 };
+    geo.current = { radius, backScale: num('--ring-back-scale', 0.6), lift: num('--ring-lift', 0.2) * h, slotPx: radius * 0.75,
+      side: num('--ring-side-strength', 1), back: num('--ring-back-strength', 1) };
     el.dataset.ready = 'true'; // from now on every look has its own pose (before this, CSS shows only the front one)
   }, []);
 
@@ -41,6 +45,7 @@ export default function OutfitRing({ outfits, index, onChange }) {
       el.style.transform = `translate3d(calc(-50% + ${p.x.toFixed(1)}px), ${p.y.toFixed(1)}px, 0) scale(${p.scale.toFixed(4)})`;
       el.style.zIndex = String(p.z);
       el.style.opacity = p.opacity.toFixed(3);
+      el.style.setProperty('--fade', (1 - ringVisibility(offset, geo.current)).toFixed(3));
       el.dataset.front = Math.abs(offset) < 0.5 ? 'true' : 'false';
     });
   }, [count]);
@@ -120,6 +125,7 @@ export default function OutfitRing({ outfits, index, onChange }) {
       {outfits.map((o, i) => (
         <figure key={o.id} className={`ring-item${i === index ? ' is-front' : ''}`} data-i={i} ref={(el) => { items.current[i] = el; }} aria-hidden={i !== index || undefined}>
           <img src={o.image} alt={i === index ? o.alt : ''} draggable={false} />
+          <span className="ring-veil" aria-hidden="true" style={{ WebkitMaskImage: `url(${o.image})`, maskImage: `url(${o.image})` }} />
         </figure>
       ))}
     </div>

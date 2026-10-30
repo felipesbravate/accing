@@ -45,3 +45,13 @@ test('with 3 looks the one switching sides is invisible while it switches', () =
   assert.equal(ringPose(1.5, 3, ring).opacity, 0);
   assert.equal(ringPose(2, 5, ring).opacity, 1);
 });
+
+import { ringVisibility } from '../src/mirror/carousel.js';
+test('ringVisibility: front full, sides 68%, back 44%, smooth in between', () => {
+  const v = { side: 0.68, back: 0.44 };
+  assert.equal(ringVisibility(0, v), 1);
+  assert.equal(ringVisibility(-1, v), 0.68);
+  assert.equal(ringVisibility(2, v), 0.44);
+  assert.equal(ringVisibility(2.5, v), 0.44);
+  assert.ok(Math.abs(ringVisibility(0.5, v) - 0.84) < 1e-9);
+});

@@ -37,6 +37,7 @@
 .mirror-arrow { flex: none; position: relative; z-index: 2; }
 
 .ring { --look-h: 600px; --ring-radius: 0.697; --ring-back-scale: 0.615; --ring-lift: 0.193;
+  --ring-side-strength: 0.68; --ring-back-strength: 0.44; /* sides 32% faded, back 56% faded */
   position: relative; z-index: 0; flex: 0 1 1190px; height: var(--look-h); touch-action: pan-y; user-select: none; -webkit-user-select: none; outline: none; }
 .ring:focus-visible { outline: 2px solid var(--border-accent); outline-offset: 4px; border-radius: var(--radius-lg); }
 .ring-item { position: absolute; left: 50%; bottom: 0; height: 100%; aspect-ratio: 2 / 3; margin: 0;
@@ -44,6 +45,10 @@
 .ring:not([data-ready]) .ring-item.is-front { opacity: 1; } /* before the first paint, only the front look shows */
 .ring-item[data-front="false"] { cursor: pointer; }
 .ring-item img { display: block; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+/* The fade: page colour over the look, cut to the look's shape, so the person fades without becoming see-through. */
+.ring-veil { position: absolute; inset: 0; background: var(--bg-primary); opacity: var(--fade, 0); pointer-events: none;
+  -webkit-mask-size: contain; mask-size: contain; -webkit-mask-position: center; mask-position: center;
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; }
 
 /* Mobile */
 @media (max-width: 1023px) {
