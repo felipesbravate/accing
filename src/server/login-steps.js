@@ -21,6 +21,11 @@ export async function rememberUser(email, name) {
   jar.delete(EMAIL_COOKIE);
 }
 
+/** First name remembered on this device at sign-in, for the splash greeting ('' if none). */
+export function knownName(jar) {
+  try { return JSON.parse(Buffer.from(jar.get(KNOWN_COOKIE)?.value || '', 'base64url').toString('utf8')).name || ''; } catch { return ''; }
+}
+
 /** { email, step: 'email' | 'password' | 'create', name } for the login page. */
 export async function loginStep() {
   const jar = await cookies();
