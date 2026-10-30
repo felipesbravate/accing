@@ -643,9 +643,10 @@ async function main() {
       if (cleaner) {
         try {
           const t1 = performance.now();
-          const cleaned = await cleanBackground(cleaner, r.image, { background: opts.background });
+          const cleaned = await cleanBackground(cleaner, r.image, { background: opts.background, cutout: look.n > 0 });
           await writeFile(join(out, file.replace(/\.png$/, '-raw.png')), raw);
           r.image = cleaned.bytes;
+          if (cleaned.cutout) { r.cutout = file.replace(/\.png$/, '-cutout.webp'); await writeFile(join(out, r.cutout), cleaned.cutout); }
           r.clean = { before: cleaned.before, seconds: (performance.now() - t1) / 1000, pose: cleaned.pose };
         } catch (e) { console.log(`(background not cleaned: ${e.message})`); }
       }
@@ -905,7 +906,7 @@ PHOTO
         const row = rows.find((r) => r.look === l && !r.error), bad = rows.find((r) => r.look === l && r.error), drop = dropped.find((d) => d.look === l);
         const cost = [...rows, ...rejected].filter((r) => r.look === l || r.m && r.look === l).reduce((t, r) => t + (r.cost || 0), 0);
         return { n: l.n, items: l.items.map(item), cost,
-          ...(row ? { status: 'ready', file: row.file, identity: row.check?.identity ?? null, attempt: row.attempt ?? 1 }
+          ...(row ? { status: 'ready', file: row.file, ...(row.cutout ? { cutout: row.cutout } : {}), identity: row.check?.identity ?? null, attempt: row.attempt ?? 1 }
             : drop ? { status: 'dropped', reasons: drop.reasons, retake: drop.retake || null }
             : bad ? { status: bad.refused ? 'refused' : 'failed', reasons: [bad.error] } : { status: 'failed', reasons: ['not made'] }) };
       }),
@@ -960,7 +961,7 @@ PHOTO
         const ready = (r) => { r.readySeconds = (performance.now() - t0) / 1000; r.shownSeconds = shownAt ?? r.readySeconds; rows.push(r); };
         // For the worker: a look that passed its checks is announced at once, so it can be uploaded and shown while the
         // next one is made (one line per look: @@LOOK {n, file, items}).
-        const announce = (r) => { if (opts.jsonOut) console.log('@@LOOK ' + JSON.stringify({ n: look.n, file: join(out, r.file), items: look.items.map((x) => ({ description: x.description, category: x.category, photo: x.photo })) })); };
+        const announce = (r) => { if (opts.jsonOut) console.log('@@LOOK ' + JSON.stringify({ n: look.n, file: join(out, r.file), ...(r.cutout ? { cutout: join(out, r.cutout) } : {}), items: look.items.map((x) => ({ description: x.description, category: x.category, photo: x.photo })) })); };
         for (let attempt = 1; attempt <= opts.anchorTries; attempt++) {
           const r = await generate(m, look, run, name(m, look, run), edit.images, edit.prompt, edit.label, { ...opts, faceCount: 1 }, lockToBase);
           r.attempt = attempt;

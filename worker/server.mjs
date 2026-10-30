@@ -29,7 +29,8 @@ async function download(bucket, path) {
   return Buffer.from(await data.arrayBuffer());
 }
 async function upload(bucket, path, bytes) {
-  const { error } = await db.storage.from(bucket).upload(path, bytes, { contentType: 'image/png', upsert: true });
+  const contentType = path.endsWith('.webp') ? 'image/webp' : 'image/png';
+  const { error } = await db.storage.from(bucket).upload(path, bytes, { contentType, upsert: true });
   if (error) throw new Error(`Could not save ${bucket}/${path}: ${error.message}`);
   return path;
 }
@@ -46,6 +47,15 @@ function runPipeline(args, onLook = null) {
     child.on('error', fail);
     child.on('close', (code, signal) => (code === 0 ? ok() : fail(new Error(signal === 'SIGKILL' ? 'the pipeline was killed, most likely out of memory (see fly logs)' : (tail.match(/Error: (.+)/g) || []).pop()?.slice(7) || `pipeline exited with ${code ?? signal}`))));
   });
+}
+
+/** Uploads a look: the transparent cut-out (lookN.webp, what the app shows) and the flat version (lookN.png).
+ *  Returns the path the app should use. */
+async function saveLook(job, n, file, cutout) {
+  const dir = `${job.user_id}/looks/${job.id}`;
+  const flat = await upload('outfits', `${dir}/look${n}.png`, await readFile(file));
+  if (!cutout) return flat;
+  return upload('outfits', `${dir}/look${n}.webp`, await readFile(cutout)).catch((e) => { log(`look ${n}: cut-out not saved (${e.message}), using the flat image`); return flat; });
 }
 
 async function forecast(user) {
@@ -89,7 +99,7 @@ async function runJob(job) {
     // Each look is uploaded and listed as soon as it passes its checks, so the app shows it while the next is made.
     const early = new Map(), pending = [];
     const onLook = (l) => pending.push((async () => {
-      const path = await upload('outfits', `${job.user_id}/looks/${job.id}/look${l.n}.png`, await readFile(l.file));
+      const path = await saveLook(job, l.n, l.file, l.cutout);
       const [row] = outfitRows(job, { looks: [{ n: l.n, status: 'ready', items: l.items, cost: 0 }] }, { [l.n]: path });
       const { error } = await db.from('outfits').insert(row);
       if (error) throw new Error(error.message);
@@ -108,7 +118,7 @@ async function runJob(job) {
       if (error) throw new Error(error.message);
       return { result: { base_options: options }, cost: summary.spent };
     }
-    for (const l of summary.looks.filter((x) => x.status === 'ready')) uploaded[l.n] = early.get(l.n) || await upload('outfits', `${job.user_id}/looks/${job.id}/look${l.n}.png`, await readFile(join(summary.dir, l.file)));
+    for (const l of summary.looks.filter((x) => x.status === 'ready')) uploaded[l.n] = early.get(l.n) || await saveLook(job, l.n, join(summary.dir, l.file), l.cutout && join(summary.dir, l.cutout));
     const rows = outfitRows(job, summary, uploaded);
     // Looks already listed get their final cost and identity; dropped, refused and late ones are added now.
     for (const r of rows.filter((x) => early.has(x.look_n))) await db.from('outfits').update({ cost: r.cost, validation_confidence: r.validation_confidence }).eq('job_id', job.id).eq('look_n', r.look_n);
