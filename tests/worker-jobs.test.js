@@ -49,3 +49,16 @@ test('base options: passing tries only, best identity first', () => {
   assert.deepEqual(o.map((x) => x.path), ['u/b3', 'u/b1']);
   assert.equal(o[0].best, true);
 });
+
+test('morning weather and occasion', async () => {
+  const { weatherText, defaultOccasion } = await import('../worker/jobs.mjs');
+  assert.equal(weatherText({ temperature_2m_max: [19.4], temperature_2m_min: [11.6], precipitation_probability_max: [60] }), '19°C high, 12°C low, rain likely');
+  assert.equal(weatherText({ temperature_2m_max: [24], precipitation_probability_max: [10] }), '24°C high');
+  assert.equal(weatherText({}), null);
+  assert.equal(defaultOccasion(new Date('2026-10-30T06:00:00Z')), 'an office day');      // Friday
+  assert.equal(defaultOccasion(new Date('2026-10-31T06:00:00Z')), 'a relaxed weekend day'); // Saturday
+  const { occasionProfile, weatherProfile } = await import('../scripts/image-test-lib.mjs');
+  assert.equal(occasionProfile('a relaxed weekend day').name, 'casual');
+  assert.equal(weatherProfile('19°C high, 12°C low, rain likely').celsius, 19);
+  assert.equal(weatherProfile('19°C high, 12°C low, rain likely').wet, true);
+});

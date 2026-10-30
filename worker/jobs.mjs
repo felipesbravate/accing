@@ -58,3 +58,17 @@ export function baseOptions(summary, uploaded) {
     .sort((a, b) => (b.identity ?? 0) - (a.identity ?? 0))
     .map((r) => ({ path: uploaded[r.file], identity: r.identity, best: !!r.best }));
 }
+
+/** The day's weather as the pipeline reads it ("19°C high, 12°C low, rain likely"), from Open-Meteo's daily forecast.
+ *  The first temperature is the one the occasion rules use. */
+export function weatherText(daily) {
+  const max = daily?.temperature_2m_max?.[0], min = daily?.temperature_2m_min?.[0], rain = daily?.precipitation_probability_max?.[0];
+  if (!Number.isFinite(max)) return null;
+  return `${Math.round(max)}°C high${Number.isFinite(min) ? `, ${Math.round(min)}°C low` : ''}${rain >= 50 ? ', rain likely' : rain >= 25 ? ', a chance of rain' : ''}`;
+}
+
+/** The occasion when the person hasn't set one: work on weekdays, a relaxed day at weekends (in their time zone). */
+export function defaultOccasion(date, timeZone = 'Europe/Madrid') {
+  const day = new Intl.DateTimeFormat('en-GB', { weekday: 'short', timeZone }).format(date);
+  return ['Sat', 'Sun'].includes(day) ? 'a relaxed weekend day' : 'an office day';
+}

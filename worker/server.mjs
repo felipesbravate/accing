@@ -11,7 +11,7 @@ import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { timingSafeEqual } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
-import { baseOptions, inputsFor, outfitRows, pipelineArgs } from './jobs.mjs';
+import { baseOptions, defaultOccasion, inputsFor, outfitRows, pipelineArgs, weatherText } from './jobs.mjs';
 
 const ROOT = resolve(import.meta.dirname, '..');
 const env = (k) => { const v = process.env[k]; if (!v) throw new Error(`Missing secret ${k} (fly secrets set ${k}=…)`); return v; };
@@ -35,15 +35,24 @@ async function upload(bucket, path, bytes) {
 }
 
 /** Runs the pipeline as a child process (the same code as `npm run image-test`), streaming its log. */
-function runPipeline(args) {
+function runPipeline(args, onLook = null) {
   return new Promise((ok, fail) => {
     const child = spawn(process.execPath, [join(ROOT, 'scripts', 'image-test.mjs'), ...args], { cwd: ROOT, env: process.env, stdio: ['ignore', 'pipe', 'pipe'] });
     let tail = '';
     const keep = (d) => { const s = d.toString(); tail = (tail + s).slice(-4000); process.stdout.write(s); };
-    child.stdout.on('data', keep); child.stderr.on('data', keep);
+    let buf = '';
+    child.stdout.on('data', (d) => { keep(d); buf += d.toString(); let i; while ((i = buf.indexOf('\n')) >= 0) { const line = buf.slice(0, i); buf = buf.slice(i + 1); if (onLook && line.startsWith('@@LOOK ')) { try { onLook(JSON.parse(line.slice(7))); } catch (e) { log('bad look line:', e.message); } } } });
+    child.stderr.on('data', keep);
     child.on('error', fail);
     child.on('close', (code, signal) => (code === 0 ? ok() : fail(new Error(signal === 'SIGKILL' ? 'the pipeline was killed, most likely out of memory (see fly logs)' : (tail.match(/Error: (.+)/g) || []).pop()?.slice(7) || `pipeline exited with ${code ?? signal}`))));
   });
+}
+
+async function forecast(user) {
+  const q = new URLSearchParams({ latitude: user.home_lat, longitude: user.home_lon, daily: 'temperature_2m_max,temperature_2m_min,precipitation_probability_max', timezone: user.home_timezone || 'auto', forecast_days: '1' });
+  const res = await fetch(`https://api.open-meteo.com/v1/forecast?${q}`, { signal: AbortSignal.timeout(10_000) });
+  if (!res.ok) throw new Error(`Open-Meteo ${res.status}`);
+  return weatherText((await res.json()).daily);
 }
 
 async function runJob(job) {
@@ -70,7 +79,24 @@ async function runJob(job) {
     const { data: had } = await db.storage.from('outfits').list(cutoutPrefix, { limit: 1000 });
     const known = new Set((had || []).map((f) => f.name));
     for (const name of known) await writeFile(join(cutouts, name), await download('outfits', `${cutoutPrefix}/${name}`)).catch(() => {});
-    await runPipeline(pipelineArgs(job, person, jsonOut, preparedFile, cutouts));
+    // Morning jobs (and any job without weather): today's forecast for the person's home, and the default occasion.
+    if (job.job_type === 'make_looks') {
+      const p = job.payload = { ...(job.payload || {}) };
+      if (!p.weather && Number.isFinite(user.home_lat) && Number.isFinite(user.home_lon)) p.weather = await forecast(user).catch((e) => { log('forecast failed:', e.message); return null; });
+      if (!p.occasion) p.occasion = user.default_occasion || defaultOccasion(new Date(), user.home_timezone || 'Europe/Madrid');
+      await db.from('generation_jobs').update({ payload: p }).eq('id', job.id);
+    }
+    // Each look is uploaded and listed as soon as it passes its checks, so the app shows it while the next is made.
+    const early = new Map(), pending = [];
+    const onLook = (l) => pending.push((async () => {
+      const path = await upload('outfits', `${job.user_id}/looks/${job.id}/look${l.n}.png`, await readFile(l.file));
+      const [row] = outfitRows(job, { looks: [{ n: l.n, status: 'ready', items: l.items, cost: 0 }] }, { [l.n]: path });
+      const { error } = await db.from('outfits').insert(row);
+      if (error) throw new Error(error.message);
+      early.set(l.n, path); log(`look ${l.n} shown`);
+    })().catch((e) => log(`look ${l.n} not shown early: ${e.message}`)));
+    await runPipeline(pipelineArgs(job, person, jsonOut, preparedFile, cutouts), job.job_type === 'make_looks' ? onLook : null);
+    await Promise.all(pending);
     for (const name of await readdir(cutouts)) if (!known.has(name)) await upload('outfits', `${cutoutPrefix}/${name}`, await readFile(join(cutouts, name))).catch((e) => log('cut-out not kept:', e.message));
     const summary = JSON.parse(await readFile(jsonOut, 'utf8'));
     const uploaded = {};
@@ -82,9 +108,12 @@ async function runJob(job) {
       if (error) throw new Error(error.message);
       return { result: { base_options: options }, cost: summary.spent };
     }
-    for (const l of summary.looks.filter((x) => x.status === 'ready')) uploaded[l.n] = await upload('outfits', `${job.user_id}/looks/${job.id}/look${l.n}.png`, await readFile(join(summary.dir, l.file)));
+    for (const l of summary.looks.filter((x) => x.status === 'ready')) uploaded[l.n] = early.get(l.n) || await upload('outfits', `${job.user_id}/looks/${job.id}/look${l.n}.png`, await readFile(join(summary.dir, l.file)));
     const rows = outfitRows(job, summary, uploaded);
-    if (rows.length) { const { error } = await db.from('outfits').insert(rows); if (error) throw new Error(error.message); }
+    // Looks already listed get their final cost and identity; dropped, refused and late ones are added now.
+    for (const r of rows.filter((x) => early.has(x.look_n))) await db.from('outfits').update({ cost: r.cost, validation_confidence: r.validation_confidence }).eq('job_id', job.id).eq('look_n', r.look_n);
+    const rest = rows.filter((x) => !early.has(x.look_n));
+    if (rest.length) { const { error } = await db.from('outfits').insert(rest); if (error) throw new Error(error.message); }
     // A garment that made every try fail: ask for a new photo of it (shown in the app next to that photo).
     for (const l of summary.looks.filter((x) => x.retake)) {
       const photo = files.filter((f) => f.photoId)[l.items.find((i) => l.retake.includes(i.description.split(',')[0]))?.photo ?? -1];

@@ -958,15 +958,18 @@ PHOTO
         const t0 = performance.now();
         let shownAt = null;
         const ready = (r) => { r.readySeconds = (performance.now() - t0) / 1000; r.shownSeconds = shownAt ?? r.readySeconds; rows.push(r); };
+        // For the worker: a look that passed its checks is announced at once, so it can be uploaded and shown while the
+        // next one is made (one line per look: @@LOOK {n, file, items}).
+        const announce = (r) => { if (opts.jsonOut) console.log('@@LOOK ' + JSON.stringify({ n: look.n, file: join(out, r.file), items: look.items.map((x) => ({ description: x.description, category: x.category, photo: x.photo })) })); };
         for (let attempt = 1; attempt <= opts.anchorTries; attempt++) {
           const r = await generate(m, look, run, name(m, look, run), edit.images, edit.prompt, edit.label, { ...opts, faceCount: 1 }, lockToBase);
           r.attempt = attempt;
           if (!r.error && shownAt == null) shownAt = (performance.now() - t0) / 1000;
           const last = attempt === opts.anchorTries;
           if (r.error) { ready(r); break; }
-          if (!opts.check) { remember(r); ready(r); break; }
+          if (!opts.check) { remember(r); ready(r); announce(r); break; }
           const why = await lookProblems(look, r, baseGeometry, baseRefs);
-          if (!why.length) { remember(r); ready(r); break; }
+          if (!why.length) { remember(r); ready(r); announce(r); break; }
           const rej = r.file.replace(/\.png$/, `-rejected-${attempt}.png`);
           await writeFile(join(out, rej), r.image);
           rejected.push({ file: rej, reasons: why, cost: r.cost, look });

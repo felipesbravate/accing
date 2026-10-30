@@ -75,7 +75,7 @@ if (opt.pick) {
 
 let job = null;
 if (opt.prepare) job = { job_type: 'prepare_base', payload: {} };
-else if (opt.looks) job = { job_type: 'make_looks', payload: { looks: Number(opt.looks) || 3, occasion: opt.occasion, weather: opt.weather, seed: opt.seed, date: new Date().toISOString(), daypart: 'morning' } };
+else if (opt.looks) job = { job_type: 'make_looks', payload: { looks: Number(opt.looks) || 3, ...(opt.occasion ? { occasion: opt.occasion } : {}), ...(opt.weather ? { weather: opt.weather } : {}), seed: opt.seed, date: new Date().toISOString(), daypart: 'morning' } };
 if (!job) process.exit(0);
 
 const { data: created, error: je } = await db.from('generation_jobs').insert({ user_id: uid, status: 'pending', ...job }).select().single();
@@ -84,11 +84,16 @@ console.log(`Queued ${job.job_type} job ${created.id}. Waking the worker…`);
 const wake = await fetch(new URL('/wake', need('WORKER_URL')), { method: 'POST', headers: { 'x-worker-secret': need('WORKER_SECRET') } }).catch((e) => ({ ok: false, status: e.message }));
 console.log(wake.ok ? 'Worker awake.' : `Could not wake the worker (${wake.status}); it will pick the job up when it runs.`);
 
-const t0 = Date.now();
+const t0 = Date.now(), seen = new Set();
 for (;;) {
   await new Promise((r) => setTimeout(r, 5000));
   const { data: j } = await db.from('generation_jobs').select('*').eq('id', created.id).single();
   process.stdout.write(`\r${j.status} · ${Math.round((Date.now() - t0) / 1000)} s   `);
+  // Looks appear one by one while the job runs (what the app will show).
+  if (job.job_type === 'make_looks') {
+    const { data: shown } = await db.from('outfits').select('look_n').eq('job_id', created.id).eq('status', 'ready');
+    for (const o of shown || []) if (!seen.has(o.look_n)) { seen.add(o.look_n); console.log(`\n  look ${o.look_n} ready after ${Math.round((Date.now() - t0) / 1000)} s`); }
+  }
   if (j.status === 'failed') { console.log(`\nFailed: ${j.error_message}`); process.exit(1); }
   if (j.status !== 'completed') continue;
   console.log(`\nDone in ${Math.round((Date.now() - t0) / 1000)} s, ~$${Number(j.cost || 0).toFixed(3)}: ${JSON.stringify(j.result)}`);
