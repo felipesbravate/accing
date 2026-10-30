@@ -47,7 +47,8 @@ export async function askForLooks(userId, label) {
   const since = startOfToday();
   const { data: jobs } = await sb.from('generation_jobs').select('status, payload').eq('user_id', userId).eq('job_type', 'make_looks').gte('created_at', since);
   if ((jobs || []).some((j) => ['pending', 'processing'].includes(j.status) && tabFor(j.payload?.occasion) === label)) return { queued: false, making: true };
-  if ((jobs || []).length >= MAX_JOBS_PER_DAY) return { error: 'That is enough new looks for today' };
+  // Only the app's own requests count towards the daily limit (not the morning run or test jobs).
+  if ((jobs || []).filter((j) => j.payload?.kind === 'on-demand').length >= MAX_JOBS_PER_DAY) return { error: 'That is enough new looks for today' };
   const { error } = await sb.from('generation_jobs').insert({ user_id: userId, status: 'pending', job_type: 'make_looks',
     payload: { kind: 'on-demand', looks: 3, occasion: tab.occasion, date: new Date().toISOString(), daypart: 'day' } });
   if (error) return { error: error.message };
