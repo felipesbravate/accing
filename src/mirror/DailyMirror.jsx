@@ -3,13 +3,17 @@
 // mobile below 1024px "Daily Mirror - Mobile" (145:1617). One markup; mirror.css lays it out per breakpoint.
 // Desktop: season filter-items + occasion menu column, arrows. Mobile: occasion tabs + season dropdown, swipe,
 // and a bottom bar with "Shoot your outfit" and the avatar. The looks turn on a ring (OutfitRing.jsx).
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Icon } from '../ui/Icon.jsx';
 import { Logo } from '../ui/Logo.jsx';
 import { wrap } from './carousel.js';
 import { dayLine, timeLine, vibeQuestion } from './greeting.js';
 import OutfitRing from './OutfitRing.jsx';
-import { OCCASIONS, SAMPLE_OUTFITS, SEASONS } from './outfits.js';
+import { defaultTab, OCCASION_TABS } from './occasions.js';
+import { SAMPLE_OUTFITS, SEASONS } from './outfits.js';
+
+const OCCASIONS = OCCASION_TABS.map((t) => t.label);
+const POLL_MS = 5000;
 import '../ui/components.css';
 import './mirror.css';
 
@@ -38,14 +42,44 @@ function ShootButton({ onShoot }) {
   );
 }
 
+/** today: the signed-in person's looks from the server ({ tabs, temperature, hasBase }), or null for the sample looks
+ *  (local preview). Picking a tab with no looks yet asks the worker for some; while any are being made the mirror asks
+ *  the server again every few seconds, and each look joins the ring as soon as it's ready. */
 export default function DailyMirror({
-  name = '', avatar = '/samples/avatar.png', outfits = SAMPLE_OUTFITS, temperature = '24º', onShoot = () => {},
+  name = '', avatar = '/samples/avatar.png', today = null, temperature = '24º', onShoot = () => {},
 }) {
   const [now, setNow] = useState(null); // set on the client, so the time is the viewer's own
   const [index, setIndex] = useState(0);
   const [season, setSeason] = useState(SEASONS[0]);
-  const [occasion, setOccasion] = useState(OCCASIONS[0]);
+  const [occasion, setOccasionState] = useState(() => defaultTab());
+  const [data, setData] = useState(today);
+  const [problem, setProblem] = useState(null);
   useEffect(() => { setNow(new Date()); const t = setInterval(() => setNow(new Date()), 60_000); return () => clearInterval(t); }, []);
+
+  const live = Boolean(data);
+  const tab = live ? data.tabs[occasion] : null;
+  const outfits = live ? tab.looks : SAMPLE_OUTFITS;
+  const making = live && Object.values(data.tabs).some((t) => t.making);
+  const refresh = useCallback(async () => {
+    const res = await fetch('/api/looks', { cache: 'no-store' }).catch(() => null);
+    if (res?.ok) setData(await res.json());
+  }, []);
+  const ask = useCallback(async (label) => {
+    setProblem(null);
+    setData((d) => ({ ...d, tabs: { ...d.tabs, [label]: { ...d.tabs[label], making: true } } }));
+    const res = await fetch('/api/looks', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ tab: label }) }).catch(() => null);
+    const r = res ? await res.json().catch(() => ({})) : { error: 'No connection' };
+    if (r.error) setProblem(r.error);
+    refresh();
+  }, [refresh]);
+  const setOccasion = (label) => {
+    setOccasionState(label); setIndex(0);
+    if (live && data.hasBase && !data.tabs[label].looks.length && !data.tabs[label].making) ask(label);
+  };
+  // While looks are being made, fetch again every few seconds; new ones join the ring as they arrive.
+  useEffect(() => { if (!making) return undefined; const t = setInterval(refresh, POLL_MS); return () => clearInterval(t); }, [making, refresh]);
+  // Opening the mirror on a tab with no looks today (the morning run hasn't happened, or another occasion) asks for some.
+  useEffect(() => { if (live && data.hasBase && !tab.looks.length && !tab.making) ask(occasion); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The server renders with its own clock; the browser corrects it to the viewer's time right after it loads.
   const shown = now || new Date();
@@ -75,7 +109,7 @@ export default function DailyMirror({
               <img className="mirror-sep" src="/brand/sep.svg" width="5" height="11" alt="" />
               <span>{timeLine(shown)}</span>
               <img className="mirror-sep" src="/brand/sep.svg" width="5" height="11" alt="" />
-              <span className="mirror-weather"><Icon name="sun" size={16} label="Sunny" />{temperature}</span>
+              <span className="mirror-weather"><Icon name="sun" size={16} label="Weather" />{(live && data.temperature) || temperature}</span>
             </p>
           </div>
 
@@ -113,7 +147,14 @@ export default function DailyMirror({
         <section className="mirror-body" aria-roledescription="carousel" aria-label={`${occasion} outfits, ${season}`}>
           <div className="mirror-carousel">
             {count > 1 && <button type="button" className="ds-round-button mirror-arrow" onClick={() => go(-1)} aria-label="Previous outfit"><Icon name="arrow-left" size={20} /></button>}
-            <OutfitRing outfits={outfits} index={current} onChange={setIndex} />
+            {count ? <OutfitRing key={occasion} outfits={outfits} index={current} onChange={setIndex} /> : (
+              <div className="mirror-empty" role="status">
+                {!data.hasBase ? <p>Add your photos to see yourself in your own clothes.</p>
+                  : tab.making ? <p>Making your {occasion.toLowerCase()} looks… the first one takes about a minute.</p>
+                  : <><p>{problem || `No ${occasion.toLowerCase()} looks yet today.`}</p>
+                    {!problem && <button type="button" className="ds-button" onClick={() => ask(occasion)}>Make looks</button>}</>}
+              </div>
+            )}
             {count > 1 && <button type="button" className="ds-round-button mirror-arrow" onClick={() => go(1)} aria-label="Next outfit"><Icon name="arrow-right" size={20} /></button>}
           </div>
           {count > 1 && (

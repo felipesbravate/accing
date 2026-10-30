@@ -35,6 +35,8 @@
 .mirror-body { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 78px; padding: 0 var(--space-3xl) var(--space-3xl); }
 .mirror-carousel { position: relative; display: flex; align-items: center; justify-content: center; gap: var(--space-lg); width: 100%; }
 .mirror-arrow { flex: none; position: relative; z-index: 2; }
+.mirror-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-md); min-height: 320px; max-width: 360px; text-align: center; color: var(--text-secondary); }
+.mirror-empty p { margin: 0; }
 
 .ring { --look-h: 600px; --ring-radius: 0.697; --ring-back-scale: 0.615; --ring-lift: 0.193;
   --ring-side-strength: 0.68; --ring-back-strength: 0.44; /* sides 32% faded; looks heading to the back fade further */
