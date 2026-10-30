@@ -36,7 +36,7 @@ export function ringOffset(i, position, length) {
  *  With fewer than `minSlots` looks they are spread as if there were `minSlots`, so 2–3 looks keep a natural spacing;
  *  the empty back of the ring is where a look fades out on one side and back in on the other (`opacity`). */
 export function ringPose(offset, length, { radius, backScale, lift, minSlots = 5 }) {
-  const slots = Math.max(length, minSlots);
+  const slots = minSlots;
   const angle = (offset / slots) * 2 * Math.PI;
   const depth = (Math.cos(angle) + 1) / 2;
   return {
