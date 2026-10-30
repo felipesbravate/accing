@@ -4,8 +4,8 @@ import { authClient } from './auth.js';
 import { OCCASION_TABS, startOfToday, tabFor, temperatureOf } from '../mirror/occasions.js';
 
 const URL_SECONDS = 60 * 60;
-const MAX_JOBS_PER_DAY = 8;
-const MAX_PER_TAB = 5;      // the ring is designed for up to 5 looks; more crowd it (2026-10-30: 23 test looks in one tab)  // on-demand jobs per person per day (each ~$0.15–0.40)
+const MAX_JOBS_PER_DAY = 8;  // on-demand jobs per person per day (each ~$0.15–0.40)
+const MAX_PER_TAB = 5;       // the ring is designed for up to 5 looks; more crowd it (2026-10-30: 23 test looks in one tab)
 
 /** { tabs: { [label]: { looks: [{ id, image, alt }], making: bool } }, temperature, hasBase } */
 export async function todaysLooks(userId) {
