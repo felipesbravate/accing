@@ -44,7 +44,7 @@ export function pipelineArgs(job, person, jsonOut, preparedFile = null, cutoutCa
   const clean = (s, d) => (typeof s === 'string' && s.trim() ? s.trim().slice(0, 80) : d);
   return [...base, `--looks=${looks}`, `--occasion=${clean(p.occasion, 'an ordinary day')}`, `--weather=${clean(p.weather, 'mild')}`,
     ...(p.seed ? [`--seed=${parseInt(p.seed, 10) || 1}`] : []), ...(preparedFile ? [`--prepared=${preparedFile}`] : []),
-    ...(mustPhoto ? [`--must-photo=${mustPhoto}`] : [])];
+    ...(mustPhoto ? [`--must-photo=${mustPhoto}`, ...(p.strict ? ['--must-strict'] : [])] : [])];
 }
 
 /** Rows for public.outfits from the pipeline summary (one per look asked for, ready or not). */

@@ -97,7 +97,7 @@ export default function DailyMirror({
       const r = await res.json().catch(() => ({}));
       if (r.error) { setNote(null); setProblem(r.error); return; }
       const tip = r.advice ? ` ${r.advice.title}: ${r.advice.hint}` : '';
-      setNote(r.queued ? `Outfit added. Making ${occasion.toLowerCase()} looks with it… the first in about a minute.${tip}`
+      setNote(r.queued ? `Outfit added. Making looks with it for every occasion it suits, starting with ${occasion.toLowerCase()}… the first in about a minute.${tip}`
         : r.queueError ? `Outfit added. ${r.queueError}` : `Outfit added. It’ll be in your next looks.${tip}`);
       if (r.queued) { setSeason(SEASONS[0]); refresh(); }
       setData((d) => ({ ...d, outfitPhotos: (d.outfitPhotos || 0) + 1 }));

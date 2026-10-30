@@ -38,3 +38,23 @@ test('a look can be made to wear a given outfit photo (testers: see a new outfit
   for (const l of looks) assert.ok(l.items.some((x) => x.photo === 1), 'every look wears something from photo 2');
   assert.equal(looks.mustMissed, false);
 });
+
+test('a new garment is shown in weather it suits when today rules it out', async () => {
+  const { weatherForGarments } = await import('../scripts/image-test-lib.mjs');
+  const coat = { category: 'outerwear', description: 'wool coat', season: 'cold' };
+  const hoodie = { category: 'top', description: 'grey hoodie', season: 'any' };
+  const sandals = { category: 'shoes', description: 'sandals', season: 'warm' };
+  assert.deepEqual(weatherForGarments([coat], '27°C high'), { weather: '8°C high, 3°C low', changed: true });
+  assert.equal(weatherForGarments([coat, hoodie], '27°C high').changed, false, 'the hoodie still fits today');
+  assert.equal(weatherForGarments([sandals], '6°C high').weather, '27°C high, 19°C low');
+  assert.equal(weatherForGarments([coat], '9°C high').changed, false);
+});
+
+test('occasions where nothing from the new photo fits get no looks (strict)', () => {
+  const g = (photo, category, description, formality, exposure = 'low') => ({ photo, category, description, visibility: 'full', formality, exposure, season: 'any' });
+  const wardrobe = [g(0, 'top', 'silk blouse', 4), g(0, 'bottom', 'tailored trousers', 4), g(0, 'shoes', 'loafers', 3), g(1, 'top', 'grey hoodie', 1)];
+  const looks = composeLooks(wardrobe, { count: 2, occasion: 'a party', weather: 'mild 20°C', mustPhoto: 1 });
+  assert.equal(looks.mustMissed, true, 'a hoodie is not party wear');
+  const casual = composeLooks(wardrobe, { count: 2, occasion: 'a relaxed casual day', weather: 'mild 20°C', mustPhoto: 1 });
+  assert.equal(casual.mustMissed, false);
+});

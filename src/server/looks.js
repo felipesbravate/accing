@@ -52,7 +52,7 @@ export async function todaysLooks(userId) {
 
 /** Queues looks for a tab and wakes the worker. Refuses a second job for the same tab while one is running, and more
  *  than their daily limit (src/lib/plans.js). Returns { queued } or { error }. */
-export async function askForLooks(userId, label, { includePath = null } = {}) {
+export async function askForLooks(userId, label, { includePath = null, looks = 3 } = {}) {
   const tab = OCCASION_TABS.find((t) => t.label === label);
   if (!tab) return { error: 'Unknown occasion' };
   const sb = await authClient();
@@ -66,7 +66,7 @@ export async function askForLooks(userId, label, { includePath = null } = {}) {
   const limit = dailyLimit(profile);
   if ((jobs || []).filter((j) => j.payload?.kind === 'on-demand').length >= limit) return { error: `You've made today's ${limit * 3} new looks. More tomorrow.`, limit: true };
   const { error } = await sb.from('generation_jobs').insert({ user_id: userId, status: 'pending', job_type: 'make_looks',
-    payload: { kind: 'on-demand', looks: 3, occasion: tab.occasion, date: new Date().toISOString(), daypart: 'day', ...(includePath ? { include_path: includePath } : {}) } });
+    payload: { kind: 'on-demand', looks, occasion: tab.occasion, date: new Date().toISOString(), daypart: 'day', ...(includePath ? { include_path: includePath, strict: true } : {}) } });
   if (error) return { error: error.message };
   await wakeWorker();
   return { queued: true };

@@ -65,11 +65,16 @@ export async function savePhoto(userId, kind, bytes, { tab = null } = {}) {
   if (kind === 'outfit') {
     const { error } = await sb.from('wardrobe_photos').insert({ user_id: userId, path });
     if (error) return { error: error.message };
-    // Plans with instantNewOutfit (testers): looks wearing the new outfit are made right away for the open tab.
+    // Plans with instantNewOutfit (testers): looks wearing the new outfit are made right away, for every occasion. Each
+    // occasion's job keeps only the garments that suit it (a hoodie: casual, maybe office; not a party) and makes no
+    // looks where nothing fits. The season filters then place the looks by the garments' own season tags.
     const { data: profile } = await sb.from('users').select('*').eq('id', userId).single();
-    if (planFeatures(profile).instantNewOutfit && tab) {
-      const r = await askForLooks(userId, tab, { includePath: path });
-      return { ok: true, advice, queued: Boolean(r.queued), queueError: r.error || null };
+    if (planFeatures(profile).instantNewOutfit) {
+      const order = [tab, ...OCCASION_TABS.map((t) => t.label).filter((l) => l !== tab)].filter(Boolean); // the open tab first
+      const results = [];
+      for (const label of order) results.push(await askForLooks(userId, label, { includePath: path, looks: 2 }));
+      const queued = results.filter((r) => r.queued).length;
+      return { ok: true, advice, queued, queueError: queued ? null : results.find((r) => r.error)?.error || null };
     }
     return { ok: true, advice };
   }

@@ -174,6 +174,18 @@ export function occasionProfile(text = '') {
   return OCCASIONS.find((o) => o.words.test(text)) || { name: 'any', min: 1, max: 5, maxExposure: 'high' };
 }
 /** Temperature (°C or °F) and rain/snow from free text such as "mild 20°C" or "rainy, 55F". */
+/** A new garment is shown in weather it suits (the app's "see my new outfit"): if today's weather rules out every
+ *  garment given (a wool coat on a 27°C day, sandals at 6°C), the looks are made for the weather they are for instead.
+ *  Returns { weather, changed }. */
+export function weatherForGarments(items, weather) {
+  const wx = weatherProfile(weather);
+  const kept = (items || []).filter((x) => GARMENTS.includes(x.category));
+  if (!kept.length) return { weather, changed: false };
+  const ruledOut = (x) => (x.season === 'warm' && wx.cold) || (x.season === 'cold' && wx.hot);
+  if (!kept.every(ruledOut)) return { weather, changed: false };
+  return { weather: kept.some((x) => x.season === 'cold') ? '8°C high, 3°C low' : '27°C high, 19°C low', changed: true };
+}
+
 export function weatherProfile(text = '') {
   const m = String(text).match(/(-?\d+(?:[.,]\d+)?)\s*°?\s*([cf])\b/i);
   let c = m ? parseFloat(m[1].replace(',', '.')) : null;

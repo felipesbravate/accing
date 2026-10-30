@@ -149,7 +149,7 @@ async function runJob(job) {
       const photo = files.filter((f) => f.photoId)[l.items.find((i) => l.retake.includes(i.description.split(',')[0]))?.photo ?? -1];
       if (photo) await db.from('wardrobe_photos').update({ retake_hint: l.retake }).eq('id', photo.photoId);
     }
-    return { result: { ready: rows.filter((r) => r.status === 'ready').length, asked: rows.length, ...(debug ? { debug } : {}) }, cost: summary.spent };
+    return { result: { ready: rows.filter((r) => r.status === 'ready').length, asked: rows.length, ...(summary.mustMissed ? { notForThisOccasion: true } : {}), ...(debug ? { debug } : {}) }, cost: summary.spent };
   } finally {
     await rm(inputs, { recursive: true, force: true });
     await rm(tmp, { recursive: true, force: true });
