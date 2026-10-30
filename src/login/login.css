@@ -46,3 +46,5 @@
 .login-preview { display: flex; flex-direction: column; gap: var(--space-xs); padding-top: var(--space-md); border-top: 1px solid var(--border-default);
   text-align: center; color: var(--text-secondary); font-size: var(--fs-body); }
 .login-preview p { margin: 0; }
+
+@media (max-height: 700px) { .login-page { gap: var(--space-2xl); padding-top: calc(var(--space-2xl) + env(safe-area-inset-top)); } }

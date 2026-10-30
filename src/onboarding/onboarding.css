@@ -70,6 +70,9 @@
 .ob-viewfinder { position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; padding: var(--space-sm);
   width: 100%; aspect-ratio: 342 / 423; border-radius: var(--radius-lg); background: var(--border-secondary); }
 .ob-viewfinder.is-body { aspect-ratio: 342 / 440; }
+/* The viewfinder keeps its shape but shrinks on short screens, so the shutter stays on screen without scrolling. */
+.ob-viewfinder { align-self: center; width: min(100%, (100svh - 360px) * 342 / 423); }
+.ob-viewfinder.is-body { width: min(100%, (100svh - 330px) * 342 / 440); }
 .ob-viewfinder video, .ob-viewfinder > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .ob-viewfinder.is-body > img { object-fit: contain; background: var(--bg-secondary); }
 .ob-viewfinder video.is-mirrored { transform: scaleX(-1); }
@@ -139,3 +142,18 @@
   padding: var(--space-lg); text-align: center; }
 .ob-processing > div { display: flex; flex-direction: column; gap: var(--space-xs); }
 .ob-processing p { color: var(--text-secondary); font-size: var(--fs-body-large); }
+
+/* Short screens (iPhone SE, Safari with both toolbars): tighter spacing and smaller illustrations, no scrolling. */
+@media (max-height: 700px) {
+  .ob-body { gap: var(--space-md); padding-top: var(--space-md); }
+  .ob-footer-roomy { padding: var(--space-sm) var(--space-lg) var(--space-md); }
+  .ob-hero { gap: var(--space-sm); }
+  .ob-body-welcome { gap: var(--space-lg); padding-top: var(--space-lg); }
+  .ob-hero img { width: 64px; height: 64px; }
+  .ob-intro-large h1 { font-size: var(--fs-h2); }
+  .ob-steps { gap: var(--space-sm); }
+  .ob-checks li { font-size: var(--fs-body); }
+  .ob-footer { padding-bottom: var(--space-md); }
+  .ob-processing img { width: 110px; height: 110px; }
+  .ob-picked img { max-height: calc(100svh - 430px); }
+}
