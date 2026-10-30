@@ -62,3 +62,10 @@ export function ringVisibility(offset, { side, back }) {
   if (d <= 2) return side + (back - side) * (d - 1);
   return back;
 }
+
+/** Whether a look `offset` slots from the front is on screen: fully within `visibleSlots` of the front (1 = the front
+ *  look and one each side), fading out over the next slot, gone beyond. Keeps the screen to 3 looks however many
+ *  the ring holds; the next one fades in from the back as it turns to a side. */
+export function ringPresence(offset, visibleSlots = 1) {
+  return Math.min(1, Math.max(0, visibleSlots + 1 - Math.abs(offset)));
+}

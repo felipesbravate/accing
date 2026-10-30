@@ -55,3 +55,12 @@ test('ringVisibility: front full, sides 68%, back 44%, smooth in between', () =>
   assert.equal(ringVisibility(2.5, v), 0.44);
   assert.ok(Math.abs(ringVisibility(0.5, v) - 0.84) < 1e-9);
 });
+
+import { ringPresence } from '../src/mirror/carousel.js';
+test('ringPresence keeps 3 looks on screen and fades the next one in from the back', () => {
+  assert.equal(ringPresence(0), 1);
+  assert.equal(ringPresence(-1), 1);
+  assert.equal(ringPresence(1.5), 0.5);
+  assert.equal(ringPresence(2), 0);
+  assert.equal(ringPresence(2, 2), 1);
+});

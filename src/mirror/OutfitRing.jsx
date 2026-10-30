@@ -7,9 +7,10 @@
 // Needs transparent looks (cut-outs with their floor shadow); opaque backgrounds would show as cards overlapping.
 // Looks away from the front fade toward the page colour (--ring-side-strength, --ring-back-strength): a veil in the
 // page colour, masked to the look's own shape, sits on each look. Unlike opacity, nobody becomes see-through, so a
-// look behind another never shows through it.
+// look behind another never shows through it. Only the front look and one on each side are on screen
+// (--ring-visible-slots); the rest wait at the back and fade in as the ring turns them to a side.
 import { useCallback, useEffect, useRef } from 'react';
-import { easeInOutCubic, ringOffset, ringPose, ringVisibility, wrap } from './carousel.js';
+import { easeInOutCubic, ringOffset, ringPose, ringPresence, ringVisibility, wrap } from './carousel.js';
 
 const TURN_MS = 650;
 const INTRO_MS = 1300;
@@ -33,7 +34,7 @@ export default function OutfitRing({ outfits, index, onChange }) {
     const num = (name, fallback) => { const v = parseFloat(cs.getPropertyValue(name)); return Number.isFinite(v) ? v : fallback; };
     const radius = num('--ring-radius', 0.6) * h;
     geo.current = { radius, backScale: num('--ring-back-scale', 0.6), lift: num('--ring-lift', 0.2) * h, slotPx: radius * 0.75,
-      side: num('--ring-side-strength', 1), back: num('--ring-back-strength', 1) };
+      side: num('--ring-side-strength', 1), back: num('--ring-back-strength', 1), visible: num('--ring-visible-slots', 1) };
     el.dataset.ready = 'true'; // from now on every look has its own pose (before this, CSS shows only the front one)
   }, []);
 
@@ -44,7 +45,9 @@ export default function OutfitRing({ outfits, index, onChange }) {
       const p = ringPose(offset, count, geo.current);
       el.style.transform = `translate3d(calc(-50% + ${p.x.toFixed(1)}px), ${p.y.toFixed(1)}px, 0) scale(${p.scale.toFixed(4)})`;
       el.style.zIndex = String(p.z);
-      el.style.opacity = p.opacity.toFixed(3);
+      const shown = p.opacity * ringPresence(offset, geo.current.visible);
+      el.style.opacity = shown.toFixed(3);
+      el.style.visibility = shown > 0 ? 'visible' : 'hidden'; // hidden looks can't be tapped
       el.style.setProperty('--fade', (1 - ringVisibility(offset, geo.current)).toFixed(3));
       el.dataset.front = Math.abs(offset) < 0.5 ? 'true' : 'false';
     });
