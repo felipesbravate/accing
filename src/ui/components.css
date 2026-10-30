@@ -39,8 +39,8 @@
 
 /* round-button — Size=Small (32×24), State=Default | Hover; swaps a 20px icon */
 .ds-round-button { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 24px; padding: 0 var(--space-xs);
-  border: 1px solid var(--border-accent); border-radius: var(--radius-full); background: transparent; color: var(--icon-primary); }
-.ds-round-button:hover { background: var(--bg-secondary); border-color: var(--icon-primary); }
+  border: 1px solid var(--border-default); border-radius: var(--radius-full); background: transparent; color: var(--icon-primary); }
+.ds-round-button:hover { background: var(--bg-secondary); } /* Figma 24:5469: the border stays --border-default on hover */
 
 /* menu-item — Size=Small (14) | Medium (16); State=Default | Hover | Press | Active (1px underline 4px below) */
 .ds-menu-item { position: relative; padding: 0; border: 0; background: transparent; color: var(--text-secondary);
