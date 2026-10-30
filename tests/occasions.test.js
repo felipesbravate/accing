@@ -18,3 +18,12 @@ test('default tab, temperature and local midnight', () => {
   assert.equal(startOfToday(new Date('2026-10-30T10:15:00Z')), '2026-10-29T23:00:00.000Z'); // CET, UTC+1
   assert.equal(startOfToday(new Date('2026-07-01T23:30:00Z')), '2026-07-01T22:00:00.000Z'); // 01:30 CEST next day
 });
+
+test('daily limit: per person, else by plan, else free', async () => {
+  const { dailyLimit, PLAN_LIMITS } = await import('../src/lib/plans.js');
+  assert.equal(dailyLimit({ plan: 'free', daily_batches: null }), PLAN_LIMITS.free);
+  assert.equal(dailyLimit({ plan: 'free', daily_batches: 20 }), 20);
+  assert.equal(dailyLimit({ plan: 'free', daily_batches: 0 }), 0);
+  assert.equal(dailyLimit({ plan: 'unknown' }), PLAN_LIMITS.free);
+  assert.equal(dailyLimit(null), PLAN_LIMITS.free);
+});

@@ -1,10 +1,11 @@
 // Server-only: today's looks for the signed-in person, read with their own session (RLS: own rows and own storage
 // folder only). Images are private, so each gets a short-lived signed URL. Never import from client code.
 import { authClient } from './auth.js';
+import { dailyLimit } from '../lib/plans.js';
 import { OCCASION_TABS, startOfToday, tabFor, temperatureOf } from '../mirror/occasions.js';
 
 const URL_SECONDS = 60 * 60;
-const MAX_JOBS_PER_DAY = 8;  // on-demand jobs per person per day (each ~$0.15–0.40)
+
 const MAX_PER_TAB = 5;       // the ring is designed for up to 5 looks; more crowd it (2026-10-30: 23 test looks in one tab)
 
 /** { tabs: { [label]: { looks: [{ id, image, alt }], making: bool } }, temperature, hasBase } */
@@ -39,16 +40,20 @@ export async function todaysLooks(userId) {
 }
 
 /** Queues looks for a tab and wakes the worker. Refuses a second job for the same tab while one is running, and more
- *  than MAX_JOBS_PER_DAY a day. Returns { queued } or { error }. */
+ *  than their daily limit (src/lib/plans.js). Returns { queued } or { error }. */
 export async function askForLooks(userId, label) {
   const tab = OCCASION_TABS.find((t) => t.label === label);
   if (!tab) return { error: 'Unknown occasion' };
   const sb = await authClient();
   const since = startOfToday();
-  const { data: jobs } = await sb.from('generation_jobs').select('status, payload').eq('user_id', userId).eq('job_type', 'make_looks').gte('created_at', since);
+  const [{ data: jobs }, { data: profile }] = await Promise.all([
+    sb.from('generation_jobs').select('status, payload').eq('user_id', userId).eq('job_type', 'make_looks').gte('created_at', since),
+    sb.from('users').select('plan, daily_batches').eq('id', userId).single(),
+  ]);
   if ((jobs || []).some((j) => ['pending', 'processing'].includes(j.status) && tabFor(j.payload?.occasion) === label)) return { queued: false, making: true };
   // Only the app's own requests count towards the daily limit (not the morning run or test jobs).
-  if ((jobs || []).filter((j) => j.payload?.kind === 'on-demand').length >= MAX_JOBS_PER_DAY) return { error: 'That is enough new looks for today' };
+  const limit = dailyLimit(profile);
+  if ((jobs || []).filter((j) => j.payload?.kind === 'on-demand').length >= limit) return { error: `You've made today's ${limit * 3} new looks. More tomorrow.`, limit: true };
   const { error } = await sb.from('generation_jobs').insert({ user_id: userId, status: 'pending', job_type: 'make_looks',
     payload: { kind: 'on-demand', looks: 3, occasion: tab.occasion, date: new Date().toISOString(), daypart: 'day' } });
   if (error) return { error: error.message };
