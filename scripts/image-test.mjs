@@ -62,6 +62,7 @@ function args() {
     const [k, ...rest] = a.replace(/^--/, '').split('='); const v = rest.join('=');
     if (k === 'runs') out.runs = Math.max(1, Math.min(10, parseInt(v, 10) || 3));
     else if (k === 'only') out.only = v;
+    else if (k === 'must-photo') out.mustPhoto = v; // an outfit photo's file name: every look wears something from it
     else if (k === 'looks') out.looks = Math.max(1, Math.min(8, parseInt(v, 10) || 1));
     else if (k === 'dry-run') out.dryRun = true;
     else if (k === 'no-check') out.check = false;
@@ -507,7 +508,8 @@ async function main() {
   readings.forEach((r, i) => console.log(`  photo ${i + 1} = image ${faces.length + i + 1}, ${outfits[i].file}: ${r.items.map((x) => `${x.description} [${x.category}${x.visibility === 'full' ? '' : ', ' + x.visibility}]`).join('; ') || 'nothing recognised'}`));
   const seed = opts.seed ?? (Date.now() % 100000);
   // With --prep-only no look is made, so a wardrobe that can't make one yet (onboarding) must not stop the base photo.
-  const looks = (() => { try { return composeLooks(wardrobe, { count: opts.looks, seed, occasion: opts.occasion, weather: opts.weather }); } catch (e) { if (!opts.prepOnly) throw e; return Object.assign([], { skipped: [], occasion: { name: 'any', min: 1, max: 5, maxExposure: 'high' } }); } })();
+  const looks = (() => { try { return composeLooks(wardrobe, { count: opts.looks, seed, occasion: opts.occasion, weather: opts.weather, mustPhoto: opts.mustPhoto ? outfits.findIndex((o) => o.file === opts.mustPhoto) : null }); } catch (e) { if (!opts.prepOnly) throw e; return Object.assign([], { skipped: [], occasion: { name: 'any', min: 1, max: 5, maxExposure: 'high' } }); } })();
+  if (looks.mustMissed) console.log(`Nothing from ${opts.mustPhoto} fits "${opts.occasion}" / "${opts.weather}": the looks are made without it.`);
   if (looks.skipped.length) console.log(`Left out for "${opts.occasion}" / "${opts.weather}" (${looks.occasion.name}): ${looks.skipped.map((x) => `${x.description} (${x.why})`).join('; ')}`);
   if (looks.length < opts.looks) console.warn(`Only ${looks.length} different look(s) are possible from these photos (asked for ${opts.looks}).`);
   // Pose reference (npm run make-pose-reference): a mannequin in the house pose, matching the body and the shoes of the

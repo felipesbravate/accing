@@ -101,7 +101,7 @@ export function composeOutfit(wardrobe, { seed = 1 } = {}) {
  * with or without outerwear), new combinations first, each next look chosen to reuse as few already-used garments
  * as possible. Fewer looks come back when the wardrobe cannot make `count` different ones.
  */
-export function composeLooks(wardrobe, { count = 1, seed = 1, occasion = '', weather = '' } = {}) {
+export function composeLooks(wardrobe, { count = 1, seed = 1, occasion = '', weather = '', mustPhoto = null } = {}) {
   const all = dedupeWardrobe(wardrobe).filter((x) => x.visibility !== 'hidden');
   const occ = occasionProfile(occasion), wx = weatherProfile(weather);
   const skipped = [];
@@ -129,6 +129,13 @@ export function composeLooks(wardrobe, { count = 1, seed = 1, occasion = '', wea
     const fitScore = clash + Math.max(0, ...chosen.map((x) => offTarget(x, occ))) /* the look's furthest item: three casual items are not 3x worse than one */ + (wx.cold && !o.length ? 1 : 0) + (wx.hot && o.length ? 1 : 0);
     candidates.push({ chosen, fresh: isNew(chosen), fit: fitScore, full: chosen.filter((x) => x.visibility === 'full').length, tie: rand() });
   }
+  // mustPhoto (index of an outfit photo): every look wears something from it, if any look can (the app's "see my new
+  // outfit now"). If its garments don't fit the occasion or weather, the looks are made as usual and say so.
+  let mustMissed = false;
+  if (Number.isInteger(mustPhoto)) {
+    const withIt = candidates.filter((c) => c.chosen.some((x) => x.photo === mustPhoto));
+    if (withIt.length) candidates.splice(0, candidates.length, ...withIt); else mustMissed = true;
+  }
   const looks = [], used = new Map();
   while (looks.length < count && candidates.length) {
     // Repeating a main garment (top, bottom, dress, outerwear) counts 3 times as much as repeating shoes: on 2026-10-28
@@ -142,6 +149,7 @@ export function composeLooks(wardrobe, { count = 1, seed = 1, occasion = '', wea
     looks.push({ items: out, distinctPhotos: new Set(out.map((x) => x.photo)).size, newCombination: pick.fresh, fit: pick.fit });
   }
   looks.skipped = skipped;
+  looks.mustMissed = mustMissed;
   looks.occasion = occ;
   return looks;
 }

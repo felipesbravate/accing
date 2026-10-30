@@ -7,7 +7,4 @@ export const SAMPLE_OUTFITS = [
   { id: 'look-4', image: '/samples/look-4.webp', alt: 'Generated outfit, look 4' },
   { id: 'look-1', image: '/samples/look-1.webp', alt: 'Generated outfit, look 1' },
 ];
-
-// "Today's suggestions" is the default: looks for today's weekday and weather. The others override the season.
-export const SEASONS = ["Today's suggestions", 'Summer', 'Mid-season', 'Winter', 'All'];
-export const OCCASIONS = ['Casual', 'Office day', 'Dinner', 'Party'];
+// Season filters: src/mirror/seasons.js. Occasion tabs: src/mirror/occasions.js.

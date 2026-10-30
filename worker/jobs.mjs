@@ -8,7 +8,9 @@ export function ownPath(userId, path) {
 }
 
 /** The files the pipeline needs, as { bucket, path, as } (as = file name in the person's input folder). */
-export function inputsFor(user, photos, { prepared = false } = {}) {
+export const MAX_OUTFIT_PHOTOS = 10; // scripts/image-test.mjs MAX_PHOTOS
+
+export function inputsFor(user, photos, { prepared = false, mustPath = null } = {}) {
   const need = [
     ['face_front_path', 'face-front'], ['face_left_path', 'face-left'], ['face_right_path', 'face-right'], ['base_source_path', 'base'],
   ];
@@ -17,7 +19,11 @@ export function inputsFor(user, photos, { prepared = false } = {}) {
     if (!ownPath(user.id, user[col])) throw new Error(`Missing ${col.replace(/_path$/, '').replace(/_/g, ' ')} photo`);
     files.push({ bucket: 'wardrobe', path: user[col], as: name + ext(user[col]) });
   }
-  const outfits = photos.filter((p) => ownPath(user.id, p.path));
+  // The pipeline reads at most 10 outfit photos: the newest ones, always including the one a job must show.
+  const own = photos.filter((p) => ownPath(user.id, p.path));
+  const must = own.find((p) => p.path === mustPath);
+  const outfits = own.length <= MAX_OUTFIT_PHOTOS ? own
+    : [...(must ? [must] : []), ...own.filter((p) => p !== must).slice(-(MAX_OUTFIT_PHOTOS - (must ? 1 : 0)))];
   if (!outfits.length) throw new Error('Add at least one full-body photo of you in your clothes');
   outfits.forEach((p, i) => files.push({ bucket: 'wardrobe', path: p.path, as: `photo-${String(i + 1).padStart(2, '0')}${ext(p.path)}`, photoId: p.id }));
   if (prepared) {
@@ -29,7 +35,7 @@ export function inputsFor(user, photos, { prepared = false } = {}) {
 const ext = (p) => (/\.(jpe?g|png|webp)$/i.exec(p)?.[0] || '.jpg').toLowerCase();
 
 /** Arguments for scripts/image-test.mjs. Quality settings are fixed (Felipe: medium looks, high base, HD). */
-export function pipelineArgs(job, person, jsonOut, preparedFile = null, cutoutCache = null) {
+export function pipelineArgs(job, person, jsonOut, preparedFile = null, cutoutCache = null, mustPhoto = null) {
   const p = job.payload || {};
   const base = [`--person=${person}`, '--only=openai-2.5-flare-medium', '--hd', '--runs=1', `--json-out=${jsonOut}`, ...(cutoutCache ? [`--cutout-cache=${cutoutCache}`] : [])];
   if (job.job_type === 'prepare_base') return [...base, '--looks=1', '--prep-only', '--reprep'];
@@ -37,7 +43,8 @@ export function pipelineArgs(job, person, jsonOut, preparedFile = null, cutoutCa
   const looks = Math.max(1, Math.min(6, parseInt(p.looks, 10) || 3));
   const clean = (s, d) => (typeof s === 'string' && s.trim() ? s.trim().slice(0, 80) : d);
   return [...base, `--looks=${looks}`, `--occasion=${clean(p.occasion, 'an ordinary day')}`, `--weather=${clean(p.weather, 'mild')}`,
-    ...(p.seed ? [`--seed=${parseInt(p.seed, 10) || 1}`] : []), ...(preparedFile ? [`--prepared=${preparedFile}`] : [])];
+    ...(p.seed ? [`--seed=${parseInt(p.seed, 10) || 1}`] : []), ...(preparedFile ? [`--prepared=${preparedFile}`] : []),
+    ...(mustPhoto ? [`--must-photo=${mustPhoto}`] : [])];
 }
 
 /** Rows for public.outfits from the pipeline summary (one per look asked for, ready or not). */

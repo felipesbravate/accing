@@ -14,6 +14,6 @@ export async function POST(request) {
   const file = form?.get('photo');
   if (!file || typeof file.arrayBuffer !== 'function') return NextResponse.json({ error: 'No photo' }, { status: 400 });
   if (file.type && file.type !== 'image/jpeg') return NextResponse.json({ error: 'Send a JPEG' }, { status: 400 });
-  const r = await savePhoto(u.id, String(form.get('kind') || ''), Buffer.from(await file.arrayBuffer()));
+  const r = await savePhoto(u.id, String(form.get('kind') || ''), Buffer.from(await file.arrayBuffer()), { tab: form.get('tab') ? String(form.get('tab')) : null });
   return NextResponse.json(r, { status: r.error ? 400 : 200 });
 }

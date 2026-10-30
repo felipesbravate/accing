@@ -11,7 +11,10 @@ import { dayLine, timeLine, vibeQuestion } from './greeting.js';
 import LookViewer from './LookViewer.jsx';
 import OutfitRing from './OutfitRing.jsx';
 import { defaultTab, OCCASION_TABS } from './occasions.js';
-import { SAMPLE_OUTFITS, SEASONS } from './outfits.js';
+import { SAMPLE_OUTFITS } from './outfits.js';
+import { SEASON_FILTERS, seasonKey } from './seasons.js';
+
+const SEASONS = SEASON_FILTERS.map((f) => f.label);
 
 const OCCASIONS = OCCASION_TABS.map((t) => t.label);
 const POLL_MS = 5000;
@@ -60,8 +63,13 @@ export default function DailyMirror({
   const [viewing, setViewing] = useState(null); // the look shown full screen
   useEffect(() => { setNow(new Date()); const t = setInterval(() => setNow(new Date()), 60_000); return () => clearInterval(t); }, []);
 
+  const [past, setPast] = useState(null); // { key, tabs }: looks for a season filter other than today's
+  const filter = seasonKey(season);
+  const today_ = filter === 'today';
+
   const live = Boolean(data);
-  const tab = live ? data.tabs[occasion] : null;
+  const seasonTabs = !today_ && past?.key === filter ? past.tabs : null;
+  const tab = live ? (today_ ? data.tabs[occasion] : seasonTabs?.[occasion] || { looks: [], making: false, loading: true }) : null;
   const outfits = live ? tab.looks : SAMPLE_OUTFITS;
   const making = live && Object.values(data.tabs).some((t) => t.making);
   const refresh = useCallback(async () => {
@@ -84,18 +92,30 @@ export default function DailyMirror({
     try {
       const { fileToJpeg } = await import('../onboarding/resize.js');
       const form = new FormData();
-      form.append('kind', 'outfit'); form.append('photo', await fileToJpeg(file), 'outfit.jpg');
+      form.append('kind', 'outfit'); form.append('tab', occasion); form.append('photo', await fileToJpeg(file), 'outfit.jpg');
       const res = await fetch('/api/onboarding/photo', { method: 'POST', body: form });
       const r = await res.json().catch(() => ({}));
       if (r.error) { setNote(null); setProblem(r.error); return; }
-      setNote(r.advice ? `Outfit added. ${r.advice.title}: ${r.advice.hint}` : 'Outfit added. It’ll be in your next looks.');
+      const tip = r.advice ? ` ${r.advice.title}: ${r.advice.hint}` : '';
+      setNote(r.queued ? `Outfit added. Making ${occasion.toLowerCase()} looks with it… the first in about a minute.${tip}`
+        : r.queueError ? `Outfit added. ${r.queueError}` : `Outfit added. It’ll be in your next looks.${tip}`);
+      if (r.queued) { setSeason(SEASONS[0]); refresh(); }
       setData((d) => ({ ...d, outfitPhotos: (d.outfitPhotos || 0) + 1 }));
     } catch (e) { setNote(null); setProblem(e.message || 'Could not add the photo'); }
-  }, [live]);
+  }, [live, occasion, refresh]);
   const setOccasion = (label) => {
     setOccasionState(label); setIndex(0);
-    if (live && data.hasBase && !data.tabs[label].looks.length && !data.tabs[label].making) ask(label);
+    if (live && today_ && data.hasBase && !data.tabs[label].looks.length && !data.tabs[label].making) ask(label);
   };
+  // Season filters other than today's look back over earlier looks (src/mirror/seasons.js).
+  const pickSeason = (label) => { setSeason(label); setIndex(0); setProblem(null); };
+  useEffect(() => {
+    if (!live || today_) return;
+    let gone = false;
+    fetch(`/api/looks?season=${filter}`, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).catch(() => null)
+      .then((r) => { if (!gone) { if (r?.tabs) setPast({ key: filter, tabs: r.tabs }); else setProblem('Could not load those looks. Try again.'); } });
+    return () => { gone = true; };
+  }, [filter, live, today_]);
   // While looks are being made, fetch again every few seconds; new ones join the ring as they arrive.
   useEffect(() => { if (!making) return undefined; const t = setInterval(refresh, POLL_MS); return () => clearInterval(t); }, [making, refresh]);
   // Opening the mirror on a tab with no looks today (the morning run hasn't happened, or another occasion) asks for some.
@@ -164,7 +184,7 @@ export default function DailyMirror({
           <nav className="mirror-nav" aria-label="Filters">
             <div className="mirror-filters" role="group" aria-label="Season">
               {SEASONS.map((s) => (
-                <button key={s} type="button" className="ds-filter-item" aria-pressed={season === s} onClick={() => setSeason(s)}>{s}</button>
+                <button key={s} type="button" className="ds-filter-item" aria-pressed={season === s} onClick={() => pickSeason(s)}>{s}</button>
               ))}
             </div>
             <div className="mirror-menu" role="group" aria-label="Occasion">
@@ -184,7 +204,7 @@ export default function DailyMirror({
             <label className="ds-filter-selector">
               <span>{season}</span>
               <Icon name="chevron-down" size={16} />
-              <select aria-label="Season" value={season} onChange={(e) => setSeason(e.target.value)}>
+              <select aria-label="Season" value={season} onChange={(e) => pickSeason(e.target.value)}>
                 {SEASONS.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             </label>
@@ -194,9 +214,10 @@ export default function DailyMirror({
         <section className="mirror-body" aria-roledescription="carousel" aria-label={`${occasion} outfits, ${season}`}>
           <div className="mirror-carousel">
             {count > 1 && <button type="button" className="ds-round-button mirror-arrow" onClick={() => go(-1)} aria-label="Previous outfit"><Icon name="arrow-left" size={20} /></button>}
-            {count ? <OutfitRing key={occasion} outfits={outfits} index={current} onChange={setIndex} onOpen={(i) => setViewing(outfits[i])} /> : (
+            {count ? <OutfitRing key={`${occasion}|${filter}`} outfits={outfits} index={current} onChange={setIndex} onOpen={(i) => setViewing(outfits[i])} /> : (
               <div className="mirror-empty" role="status">
                 {!data.hasBase ? <p>Add your photos to see yourself in your own clothes.</p>
+                  : !today_ ? <p>{tab.loading ? 'Loading…' : problem || `No ${season.toLowerCase()} ${occasion.toLowerCase()} looks yet.`}</p>
                   : tab.making ? <p>Making your {occasion.toLowerCase()} looks… the first one takes about a minute.</p>
                   : <><p>{problem || `No ${occasion.toLowerCase()} looks yet today.`}</p>
                     {!problem && <button type="button" className="ds-button" onClick={() => ask(occasion)}>Make looks</button>}</>}

@@ -2,7 +2,8 @@
 // their own row and their own storage folder (wardrobe/<id>/…). The worker prepares the base photo; the person picks one.
 // Never import from client code.
 import { authClient } from './auth.js';
-import { wakeWorker } from './looks.js';
+import { askForLooks, wakeWorker } from './looks.js';
+import { planFeatures } from '../lib/plans.js';
 import { checkPhoto } from './photo-check.js';
 import { bodyNote } from '../lib/photo-advice.js';
 import { defaultTab, OCCASION_TABS } from '../mirror/occasions.js';
@@ -42,7 +43,7 @@ export async function onboardingState(userId) {
 
 /** Stores a photo the person just took and checks it. kind: front | left | right (face), body (the first outfit, which
  *  is also the base photo: starts its preparation), outfit (another outfit photo, from the mirror). */
-export async function savePhoto(userId, kind, bytes) {
+export async function savePhoto(userId, kind, bytes, { tab = null } = {}) {
   if (!PHOTO_KINDS.includes(kind)) return { error: 'Unknown photo' };
   if (!bytes?.length) return { error: 'The photo is empty' };
   if (bytes.length > MAX_BYTES) return { error: 'The photo is too large' };
@@ -64,6 +65,12 @@ export async function savePhoto(userId, kind, bytes) {
   if (kind === 'outfit') {
     const { error } = await sb.from('wardrobe_photos').insert({ user_id: userId, path });
     if (error) return { error: error.message };
+    // Plans with instantNewOutfit (testers): looks wearing the new outfit are made right away for the open tab.
+    const { data: profile } = await sb.from('users').select('*').eq('id', userId).single();
+    if (planFeatures(profile).instantNewOutfit && tab) {
+      const r = await askForLooks(userId, tab, { includePath: path });
+      return { ok: true, advice, queued: Boolean(r.queued), queueError: r.error || null };
+    }
     return { ok: true, advice };
   }
   // body: replaces the previous onboarding full-body photo (and its prepared versions) and prepares the new one.

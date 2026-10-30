@@ -74,7 +74,9 @@ async function runJob(job) {
     if (ue) throw new Error(`No profile for this user: ${ue.message}`);
     const { data: photos, error: pe } = await db.from('wardrobe_photos').select('id, path').eq('user_id', job.user_id).eq('is_active', true).order('created_at');
     if (pe) throw new Error(pe.message);
-    const files = inputsFor(user, photos, { prepared: job.job_type === 'make_looks' });
+    const mustPath = job.job_type === 'make_looks' ? job.payload?.include_path || null : null; // "see my new outfit now" (testers)
+    const files = inputsFor(user, photos, { prepared: job.job_type === 'make_looks', mustPath });
+    const mustPhoto = files.find((f) => mustPath && f.path === mustPath)?.as || null;
     let preparedFile = null;
     for (const f of files) {
       const bytes = await download(f.bucket, f.path);
@@ -105,7 +107,7 @@ async function runJob(job) {
       if (error) throw new Error(error.message);
       early.set(l.n, path); log(`look ${l.n} shown`);
     })().catch((e) => log(`look ${l.n} not shown early: ${e.message}`)));
-    await runPipeline(pipelineArgs(job, person, jsonOut, preparedFile, cutouts), job.job_type === 'make_looks' ? onLook : null);
+    await runPipeline(pipelineArgs(job, person, jsonOut, preparedFile, cutouts, mustPhoto), job.job_type === 'make_looks' ? onLook : null);
     await Promise.all(pending);
     for (const name of await readdir(cutouts)) if (!known.has(name)) await upload('outfits', `${cutoutPrefix}/${name}`, await readFile(join(cutouts, name))).catch((e) => log('cut-out not kept:', e.message));
     const summary = JSON.parse(await readFile(jsonOut, 'utf8'));
