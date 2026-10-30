@@ -32,12 +32,13 @@ function Account({ initial }) {
 }
 
 function ShootButton({ onShoot }) {
-  // A file input with `capture` opens the camera on phones and a file picker on desktop.
+  // No `capture` attribute on purpose: phones then offer their own menu (iPhone: Take Photo, Photo Library, Choose
+  // File; Android: camera or gallery). With `capture` they open only the camera (2026-10-30, Felipe).
   return (
     <label className="ds-button mirror-shoot">
       <Icon name="camera" size={20} />
       <span>Shoot your outfit</span>
-      <input className="visually-hidden" type="file" accept="image/*" capture="environment"
+      <input className="visually-hidden" type="file" accept="image/*"
         onChange={(e) => { const file = e.target.files?.[0]; if (file) onShoot(file); e.target.value = ''; }} />
     </label>
   );
