@@ -22,6 +22,21 @@ export function defaultTab(date = new Date(), timeZone = 'Europe/Madrid') {
   return ['Sat', 'Sun'].includes(day) ? 'Casual' : 'Office day';
 }
 
+/** The day's sky from the weather text ("…, rain likely" / "…, snow" / "…, cloudy"), for the weather icon:
+ *  'snow' | 'rain' | 'cloud' | null (clear, or no forecast). "A chance of rain" is not rain. */
+export function conditionOf(weather) {
+  const t = String(weather || '').toLowerCase();
+  if (/snow/.test(t)) return 'snow';
+  if (/rain likely|\brain\b(?!.*chance)|drizzle|shower|storm/.test(t) && !/chance of rain/.test(t)) return 'rain';
+  if (/cloud|overcast|fog/.test(t)) return 'cloud';
+  return null;
+}
+
+/** The icon next to the temperature: rain, snow or cloud when the forecast says so, else sun by day and moon at night. */
+export function weatherIcon(condition, night) {
+  return { snow: 'cloud-snow', rain: 'cloud-drizzle', cloud: 'cloud' }[condition] || (night ? 'moon' : 'sun');
+}
+
 /** "19°C high, 12°C low, rain likely" → "19º". */
 export function temperatureOf(weather) {
   const m = /(-?\d+)\s*°?\s*C/i.exec(String(weather || ''));

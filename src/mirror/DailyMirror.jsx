@@ -10,7 +10,7 @@ import { wrap } from './carousel.js';
 import { dayLine, isNight, timeLine, vibeQuestion } from './greeting.js';
 import LookViewer from './LookViewer.jsx';
 import OutfitRing from './OutfitRing.jsx';
-import { defaultTab, OCCASION_TABS } from './occasions.js';
+import { defaultTab, OCCASION_TABS, weatherIcon } from './occasions.js';
 import { SAMPLE_OUTFITS } from './outfits.js';
 import { SEASON_FILTERS, seasonKey } from './seasons.js';
 
@@ -176,7 +176,7 @@ export default function DailyMirror({
               <img className="mirror-sep" src="/brand/sep.svg" width="5" height="11" alt="" />
               <span>{timeLine(shown)}</span>
               <img className="mirror-sep" src="/brand/sep.svg" width="5" height="11" alt="" />
-              <span className="mirror-weather"><Icon name={isNight(shown) ? 'moon' : 'sun'} size={16} label="Weather" />{(live && data.temperature) || temperature}</span>
+              <span className="mirror-weather"><Icon name={weatherIcon(live ? data.condition : null, isNight(shown))} size={16} label="Weather" />{(live && data.temperature) || temperature}</span>
             </p>
           </div>
 

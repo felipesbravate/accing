@@ -76,3 +76,12 @@ test('a job can ask every look to wear one outfit photo; at most 10 photos, that
   assert.equal(planFeatures({ plan: 'free' }).instantNewOutfit, false);
   assert.equal(dailyLimit({ plan: 'tester' }), 50);
 });
+
+test('the forecast names snow, rain and cloud from the WMO weather code', async () => {
+  const { weatherText } = await import('../worker/jobs.mjs');
+  assert.equal(weatherText({ temperature_2m_max: [2], temperature_2m_min: [-3], weather_code: [73] }), '2°C high, -3°C low, snow');
+  assert.equal(weatherText({ temperature_2m_max: [15], weather_code: [61], precipitation_probability_max: [30] }), '15°C high, rain likely');
+  assert.equal(weatherText({ temperature_2m_max: [15], weather_code: [3] }), '15°C high, cloudy');
+  assert.equal(weatherText({ temperature_2m_max: [15], weather_code: [3], precipitation_probability_max: [30] }), '15°C high, a chance of rain, cloudy');
+  assert.equal(weatherText({ temperature_2m_max: [24], weather_code: [0] }), '24°C high');
+});

@@ -27,3 +27,17 @@ test('daily limit: per person, else by plan, else free', async () => {
   assert.equal(dailyLimit({ plan: 'unknown' }), PLAN_LIMITS.free);
   assert.equal(dailyLimit(null), PLAN_LIMITS.free);
 });
+
+test('weather icon: rain, snow and cloud from the forecast, else sun or moon', async () => {
+  const { conditionOf, weatherIcon } = await import('../src/mirror/occasions.js');
+  assert.equal(conditionOf('19°C high, 12°C low, rain likely'), 'rain');
+  assert.equal(conditionOf('16°C high, a chance of rain'), null);
+  assert.equal(conditionOf('2°C high, -3°C low, snow'), 'snow');
+  assert.equal(conditionOf('14°C high, 9°C low, cloudy'), 'cloud');
+  assert.equal(conditionOf(null), null);
+  assert.equal(weatherIcon('rain', true), 'cloud-drizzle');
+  assert.equal(weatherIcon('snow', false), 'cloud-snow');
+  assert.equal(weatherIcon('cloud', false), 'cloud');
+  assert.equal(weatherIcon(null, true), 'moon');
+  assert.equal(weatherIcon(null, false), 'sun');
+});

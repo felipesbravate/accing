@@ -59,7 +59,7 @@ async function saveLook(job, n, file, cutout) {
 }
 
 async function forecast(user) {
-  const q = new URLSearchParams({ latitude: user.home_lat, longitude: user.home_lon, daily: 'temperature_2m_max,temperature_2m_min,precipitation_probability_max', timezone: user.home_timezone || 'auto', forecast_days: '1' });
+  const q = new URLSearchParams({ latitude: user.home_lat, longitude: user.home_lon, daily: 'temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code', timezone: user.home_timezone || 'auto', forecast_days: '1' });
   const res = await fetch(`https://api.open-meteo.com/v1/forecast?${q}`, { signal: AbortSignal.timeout(10_000) });
   if (!res.ok) throw new Error(`Open-Meteo ${res.status}`);
   return weatherText((await res.json()).daily);

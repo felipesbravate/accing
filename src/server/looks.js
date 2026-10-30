@@ -2,7 +2,7 @@
 // folder only). Images are private, so each gets a short-lived signed URL. Never import from client code.
 import { authClient } from './auth.js';
 import { dailyLimit } from '../lib/plans.js';
-import { OCCASION_TABS, startOfToday, tabFor, temperatureOf } from '../mirror/occasions.js';
+import { conditionOf, OCCASION_TABS, startOfToday, tabFor, temperatureOf } from '../mirror/occasions.js';
 import { pickLooks } from '../mirror/seasons.js';
 
 const URL_SECONDS = 60 * 60;
@@ -47,7 +47,7 @@ export async function todaysLooks(userId) {
   const tabs = Object.fromEntries(await Promise.all(OCCASION_TABS.map(async (t) => [t.label, { looks: await signLooks(sb, picked[t.label]), making: false }])));
   for (const j of jobs || []) if (['pending', 'processing'].includes(j.status)) tabs[tabFor(j.payload?.occasion || '')].making = true;
   const weather = (rows || []).find((r) => r.weather)?.weather || (jobs || []).find((j) => j.payload?.weather)?.payload.weather;
-  return { tabs, temperature: temperatureOf(weather), hasBase: Boolean(profile?.base_path), later: Boolean(profile?.onboarding_later_at), jobsToday: (jobs || []).length, outfitPhotos: outfitPhotos || 0 };
+  return { tabs, temperature: temperatureOf(weather), condition: conditionOf(weather), hasBase: Boolean(profile?.base_path), later: Boolean(profile?.onboarding_later_at), jobsToday: (jobs || []).length, outfitPhotos: outfitPhotos || 0 };
 }
 
 /** Queues looks for a tab and wakes the worker. Refuses a second job for the same tab while one is running, and more

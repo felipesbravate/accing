@@ -71,7 +71,13 @@ export function baseOptions(summary, uploaded) {
 export function weatherText(daily) {
   const max = daily?.temperature_2m_max?.[0], min = daily?.temperature_2m_min?.[0], rain = daily?.precipitation_probability_max?.[0];
   if (!Number.isFinite(max)) return null;
-  return `${Math.round(max)}°C high${Number.isFinite(min) ? `, ${Math.round(min)}°C low` : ''}${rain >= 50 ? ', rain likely' : rain >= 25 ? ', a chance of rain' : ''}`;
+  // WMO weather code (Open-Meteo daily weather_code, the day's most significant weather): snow and cloud are named so
+  // the app can show the right icon (src/mirror/occasions.js conditionOf); "snow" also reads as wet and cold.
+  const code = daily?.weather_code?.[0];
+  const snow = [71, 73, 75, 77, 85, 86].includes(code);
+  const wet = !snow && ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99].includes(code) || rain >= 50);
+  const cloudy = !snow && !wet && [2, 3, 45, 48].includes(code);
+  return `${Math.round(max)}°C high${Number.isFinite(min) ? `, ${Math.round(min)}°C low` : ''}${snow ? ', snow' : wet ? ', rain likely' : rain >= 25 ? ', a chance of rain' : ''}${cloudy ? ', cloudy' : ''}`;
 }
 
 /** The occasion when the person hasn't set one: work on weekdays, a relaxed day at weekends (in their time zone). */
