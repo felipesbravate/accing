@@ -3,6 +3,7 @@
 //
 //   node --env-file=.env.local worker/enqueue.mjs --email=you@example.com --person=<name> --upload --prepare
 //   node --env-file=.env.local worker/enqueue.mjs --email=you@example.com --pick=1
+//   node --env-file=.env.local worker/enqueue.mjs --email=you@example.com --person=<name> --upload --photos-only   (new outfit photos only)
 //   node --env-file=.env.local worker/enqueue.mjs --email=you@example.com --looks=3 --occasion="an office day" --weather="mild 20°C"
 //
 // Needs in .env.local: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, WORKER_URL, WORKER_SECRET. Looks are downloaded to
@@ -46,6 +47,8 @@ if (opt.upload) {
   const front = pick(/^face-front\./i), left = pick(/^face-left\./i), right = pick(/^face-right\./i), base = pick(/^base\./i);
   if (!front || !left || !right || !base) throw new Error('The folder needs face-front, face-left, face-right and base photos');
   const photos = files.filter((f) => !/^face-|^base\./i.test(f));
+  // --photos-only: replace the outfit photos and keep the faces and the picked base photo (no new preparation, $0).
+  if (!opt['photos-only']) {
   const update = {
     face_front_path: await put(`${uid}/faces/front${extname(front).toLowerCase()}`, join(dir, front)),
     face_left_path: await put(`${uid}/faces/left${extname(left).toLowerCase()}`, join(dir, left)),
@@ -56,13 +59,14 @@ if (opt.upload) {
   };
   const { error: ue } = await db.from('users').update(update).eq('id', uid);
   if (ue) throw new Error(ue.message);
+  }
   await db.from('wardrobe_photos').update({ is_active: false }).eq('user_id', uid);
   for (const [i, f] of photos.entries()) {
     const path = await put(`${uid}/photos/${String(i + 1).padStart(2, '0')}-${f.replace(/[^\w.-]+/g, '_')}`, join(dir, f));
     const { error } = await db.from('wardrobe_photos').insert({ user_id: uid, path });
     if (error) throw new Error(error.message);
   }
-  console.log(`Uploaded 3 face photos, the base photo and ${photos.length} outfit photo(s).`);
+  console.log(opt['photos-only'] ? `Replaced your outfit photos with ${photos.length} photo(s); faces and base photo kept.` : `Uploaded 3 face photos, the base photo and ${photos.length} outfit photo(s).`);
 }
 
 if (opt.pick) {
