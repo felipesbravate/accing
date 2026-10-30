@@ -29,9 +29,9 @@ export function inputsFor(user, photos, { prepared = false } = {}) {
 const ext = (p) => (/\.(jpe?g|png|webp)$/i.exec(p)?.[0] || '.jpg').toLowerCase();
 
 /** Arguments for scripts/image-test.mjs. Quality settings are fixed (Felipe: medium looks, high base, HD). */
-export function pipelineArgs(job, person, jsonOut, preparedFile = null) {
+export function pipelineArgs(job, person, jsonOut, preparedFile = null, cutoutCache = null) {
   const p = job.payload || {};
-  const base = [`--person=${person}`, '--only=openai-2.5-flare-medium', '--hd', '--runs=1', `--json-out=${jsonOut}`];
+  const base = [`--person=${person}`, '--only=openai-2.5-flare-medium', '--hd', '--runs=1', `--json-out=${jsonOut}`, ...(cutoutCache ? [`--cutout-cache=${cutoutCache}`] : [])];
   if (job.job_type === 'prepare_base') return [...base, '--looks=1', '--prep-only', '--reprep'];
   if (job.job_type !== 'make_looks') throw new Error(`Unknown job type ${job.job_type}`);
   const looks = Math.max(1, Math.min(6, parseInt(p.looks, 10) || 3));

@@ -26,6 +26,7 @@ test('pipeline arguments keep quality fixed and bound what the app can ask', () 
   const looks = pipelineArgs({ job_type: 'make_looks', payload: { looks: 40, occasion: ' dinner date ', weather: '' } }, 'job-1', '/t/s.json', '/t/prepared.png');
   assert.ok(looks.includes('--looks=6') && looks.includes('--occasion=dinner date') && looks.includes('--weather=mild') && looks.includes('--prepared=/t/prepared.png'));
   assert.throws(() => pipelineArgs({ job_type: 'drop_table' }, 'p', 'x'), /Unknown job type/);
+  assert.ok(pipelineArgs({ job_type: 'prepare_base' }, 'p', 'x', null, '/t/cutouts').includes('--cutout-cache=/t/cutouts'));
 });
 
 test('one outfit row per look asked for, with the image only for ready ones', () => {

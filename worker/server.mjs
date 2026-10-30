@@ -7,7 +7,7 @@
 // SUPABASE_SERVICE_ROLE_KEY, OPENAI_API_KEY, GEMINI_API_KEY, WORKER_SECRET.
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { timingSafeEqual } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
@@ -63,7 +63,15 @@ async function runJob(job) {
     }
     if (user.body_note) await writeFile(join(inputs, 'body.txt'), String(user.body_note).slice(0, 200) + '\n');
     log(`job ${job.id} (${job.job_type}): ${files.length} file(s) ready, running the pipeline`);
-    await runPipeline(pipelineArgs(job, person, jsonOut, preparedFile));
+    // Cut-outs of the outfit photos are kept in Storage (outfits/<user>/cutouts/), so each photo is cut out only on the
+    // first run that uses it, on whichever machine runs it.
+    const cutouts = join(tmp, 'cutouts'), cutoutPrefix = `${job.user_id}/cutouts`;
+    await mkdir(cutouts, { recursive: true });
+    const { data: had } = await db.storage.from('outfits').list(cutoutPrefix, { limit: 1000 });
+    const known = new Set((had || []).map((f) => f.name));
+    for (const name of known) await writeFile(join(cutouts, name), await download('outfits', `${cutoutPrefix}/${name}`)).catch(() => {});
+    await runPipeline(pipelineArgs(job, person, jsonOut, preparedFile, cutouts));
+    for (const name of await readdir(cutouts)) if (!known.has(name)) await upload('outfits', `${cutoutPrefix}/${name}`, await readFile(join(cutouts, name))).catch((e) => log('cut-out not kept:', e.message));
     const summary = JSON.parse(await readFile(jsonOut, 'utf8'));
     const uploaded = {};
     if (job.job_type === 'prepare_base') {
@@ -88,7 +96,6 @@ async function runJob(job) {
     await rm(tmp, { recursive: true, force: true });
     // The pipeline's own results folder for this person (image-test/results/<stamp>-job-…).
     const results = join(ROOT, 'image-test', 'results');
-    const { readdir } = await import('node:fs/promises');
     for (const d of await readdir(results).catch(() => [])) if (d.endsWith(person)) await rm(join(results, d), { recursive: true, force: true });
   }
 }

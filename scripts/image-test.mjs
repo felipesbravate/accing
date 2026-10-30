@@ -69,6 +69,7 @@ function args() {
     else if (k === 'reprep') out.reprep = true;
     else if (k === 'prepared') out.prepared = v;
     else if (k === 'prep-only') out.prepOnly = true;
+    else if (k === 'cutout-cache') out.cutoutCache = v;
     else if (k === 'json-out') out.jsonOut = v;
     else if (k === 'prep-model') out.prepModel = v;
     else if (k === 'openai-size') { if (!/^\d{3,4}x\d{3,4}$/.test(v)) throw new Error('--openai-size=WIDTHxHEIGHT, e.g. 1536x2304'); out.openaiSize = v; }
@@ -565,11 +566,18 @@ async function main() {
   // Outfit photos are cut out onto a plain background before they are sent: clutter in mirror selfies (a red table, a
   // bed) came back as blurry ghosts in the looks (2026-10-27). The face photos are sent as they are.
   if (cleaner && opts.cleanRefs) {
+    // Each photo is cut out once and kept (keyed by its bytes): cutting out 8 photos on every run cost ~30 s of CPU and,
+    // on Fly's shared CPU, the burst budget that the looks then lacked (2026-10-30). --cutout-cache=dir sets the folder.
+    const cacheDir = opts.cutoutCache ? resolve(opts.cutoutCache) : join(PREPARED_DIR, 'cutouts');
+    await mkdir(cacheDir, { recursive: true });
+    let reused = 0;
     for (const o of outfits) {
-      try { o.bytes = (await cleanBackground(cleaner, o.bytes, { background: opts.background })).bytes; o.mime = 'image/png'; }
+      const file = join(cacheDir, createHash('sha1').update(o.bytes).update(opts.background).update('isnet-1').digest('hex').slice(0, 16) + '.png');
+      if (existsSync(file)) { o.bytes = await readFile(file); o.mime = 'image/png'; reused++; continue; }
+      try { o.bytes = (await cleanBackground(cleaner, o.bytes, { background: opts.background })).bytes; o.mime = 'image/png'; await writeFile(file, o.bytes); }
       catch (e) { console.log(`(could not cut out ${o.file}: ${e.message})`); }
     }
-    console.log(`Cut out ${outfits.length} outfit photo(s) onto a plain background.`);
+    console.log(`Cut out ${outfits.length - reused} outfit photo(s) onto a plain background${reused ? ` (${reused} reused from earlier runs)` : ''}.`);
   }
   // Garment close-ups for edits (base and anchor mode): one small image per garment instead of whole outfit photos.
   if (opts.garmentCrops) {
