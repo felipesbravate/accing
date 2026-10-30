@@ -53,6 +53,20 @@
   -webkit-mask-size: contain; mask-size: contain; -webkit-mask-position: center; mask-position: center;
   -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; }
 
+/* Under the looks: outfit-photo nudge (Figma 162:540) and short status notes. */
+.mirror-nudge, .mirror-note { margin: 0; padding: 0 var(--space-md); text-align: center; font-size: var(--fs-label-medium); font-weight: var(--fw-medium); line-height: normal; color: var(--text-primary); }
+.mirror-note { color: var(--text-secondary); }
+
+/* Not set up yet ("Skip" in onboarding, Figma 162:545) */
+.mirror-waiting { display: flex; flex-direction: column; align-items: center; gap: var(--space-lg); max-width: 342px; margin: 120px auto 0; padding: 0 var(--space-lg); text-align: center; }
+.mirror-waiting > div { display: flex; flex-direction: column; gap: var(--space-sm); }
+.mirror-waiting h1 { margin: 0; font-size: var(--fs-h2); font-weight: var(--fw-medium); line-height: normal; color: var(--text-primary); }
+.mirror-waiting p { margin: 0; color: var(--text-secondary); font-size: var(--fs-body-large); line-height: normal; }
+.mirror-waiting-cta { width: 100%; }
+.mirror-waiting .mirror-waiting-time { color: var(--text-primary); font-size: var(--fs-label-small); font-weight: var(--fw-medium); }
+.mirror-waiting .ds-button { width: 100%; }
+.mirror.is-waiting .mirror-top { padding: var(--space-xs) var(--space-4xl) 0; }
+
 /* Mobile */
 @media (max-width: 1023px) {
   .mirror { display: flex; flex-direction: column; min-height: 100svh; padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
@@ -83,4 +97,7 @@
   .mirror-carousel::before { left: 0; background: linear-gradient(to left, transparent, color-mix(in srgb, var(--bg-primary) 80%, transparent)); }
   .mirror-carousel::after { right: 0; background: linear-gradient(to right, transparent, color-mix(in srgb, var(--bg-primary) 80%, transparent)); }
   .mirror-arrow { display: none; }
+  .mirror.is-waiting { padding-bottom: 0; }
+  .mirror.is-waiting .mirror-top { padding: var(--space-xs) var(--space-lg) 0; }
+  .mirror-waiting { margin-top: 140px; }
 }

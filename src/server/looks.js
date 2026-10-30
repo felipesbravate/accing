@@ -8,16 +8,17 @@ const URL_SECONDS = 60 * 60;
 
 const MAX_PER_TAB = 5;       // the ring is designed for up to 5 looks; more crowd it (2026-10-30: 23 test looks in one tab)
 
-/** { tabs: { [label]: { looks: [{ id, image, alt }], making: bool } }, temperature, hasBase } */
+/** { tabs: { [label]: { looks: [{ id, image, alt }], making: bool } }, temperature, hasBase, outfitPhotos } */
 export async function todaysLooks(userId) {
   const sb = await authClient();
   const since = startOfToday();
-  const [{ data: rows }, { data: jobs }, { data: profile }] = await Promise.all([
+  const [{ data: rows }, { data: jobs }, { data: profile }, { count: outfitPhotos }] = await Promise.all([
     sb.from('outfits').select('id, job_id, look_n, generated_image_path, items, occasion, weather, created_at')
       .eq('user_id', userId).eq('status', 'ready').gte('created_at', since).order('created_at', { ascending: false }),
     sb.from('generation_jobs').select('id, status, payload, created_at').eq('user_id', userId).eq('job_type', 'make_looks')
       .gte('created_at', since).order('created_at', { ascending: false }),
-    sb.from('users').select('base_path').eq('id', userId).single(),
+    sb.from('users').select('*').eq('id', userId).single(), // '*': works before and after migration 005
+    sb.from('wardrobe_photos').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('is_active', true),
   ]);
   // Only transparent cut-outs (.webp): flat PNGs from before 2026-10-30 show as boxes cutting through the ring.
   const looks = (rows || []).filter((r) => r.generated_image_path?.endsWith('.webp'));
@@ -36,7 +37,7 @@ export async function todaysLooks(userId) {
   }
   for (const j of jobs || []) if (['pending', 'processing'].includes(j.status)) tabs[tabFor(j.payload?.occasion || '')].making = true;
   const weather = looks.find((r) => r.weather)?.weather || (jobs || []).find((j) => j.payload?.weather)?.payload.weather;
-  return { tabs, temperature: temperatureOf(weather), hasBase: Boolean(profile?.base_path), jobsToday: (jobs || []).length };
+  return { tabs, temperature: temperatureOf(weather), hasBase: Boolean(profile?.base_path), later: Boolean(profile?.onboarding_later_at), jobsToday: (jobs || []).length, outfitPhotos: outfitPhotos || 0 };
 }
 
 /** Queues looks for a tab and wakes the worker. Refuses a second job for the same tab while one is running, and more
@@ -61,7 +62,7 @@ export async function askForLooks(userId, label) {
   return { queued: true };
 }
 
-async function wakeWorker() {
+export async function wakeWorker() {
   const url = process.env.WORKER_URL, secret = process.env.WORKER_SECRET;
   if (!url || !secret) return; // the job waits until the worker next wakes (the morning run)
   await fetch(new URL('/wake', url), { method: 'POST', headers: { 'x-worker-secret': secret }, signal: AbortSignal.timeout(8000) }).catch(() => {});

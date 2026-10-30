@@ -46,7 +46,7 @@ function ShootButton({ onShoot }) {
  *  (local preview). Picking a tab with no looks yet asks the worker for some; while any are being made the mirror asks
  *  the server again every few seconds, and each look joins the ring as soon as it's ready. */
 export default function DailyMirror({
-  name = '', avatar = '/samples/avatar.png', today = null, temperature = '24º', onShoot = () => {},
+  name = '', avatar = '/samples/avatar.png', today = null, temperature = '24º',
 }) {
   const [now, setNow] = useState(null); // set on the client, so the time is the viewer's own
   const [index, setIndex] = useState(0);
@@ -72,6 +72,22 @@ export default function DailyMirror({
     if (r.error) setProblem(r.error);
     refresh();
   }, [refresh]);
+  // "Shoot your outfit": the photo joins the wardrobe and is read on the next run (the morning looks, or "Make looks").
+  const [note, setNote] = useState(null);
+  const onShoot = useCallback(async (file) => {
+    if (!live) return;
+    setProblem(null); setNote('Adding your outfit…');
+    try {
+      const { fileToJpeg } = await import('../onboarding/resize.js');
+      const form = new FormData();
+      form.append('kind', 'outfit'); form.append('photo', await fileToJpeg(file), 'outfit.jpg');
+      const res = await fetch('/api/onboarding/photo', { method: 'POST', body: form });
+      const r = await res.json().catch(() => ({}));
+      if (r.error) { setNote(null); setProblem(r.error); return; }
+      setNote(r.advice ? `Outfit added. ${r.advice.title}: ${r.advice.hint}` : 'Outfit added. It’ll be in your next looks.');
+      setData((d) => ({ ...d, outfitPhotos: (d.outfitPhotos || 0) + 1 }));
+    } catch (e) { setNote(null); setProblem(e.message || 'Could not add the photo'); }
+  }, [live]);
   const setOccasion = (label) => {
     setOccasionState(label); setIndex(0);
     if (live && data.hasBase && !data.tabs[label].looks.length && !data.tabs[label].making) ask(label);
@@ -90,6 +106,33 @@ export default function DailyMirror({
   const first = Math.max(0, Math.min(current - Math.floor(MAX_DOTS / 2), count - MAX_DOTS));
   const dots = outfits.slice(first, first + MAX_DOTS).map((o, i) => ({ outfit: o, i: first + i }));
 
+  // "Skip" in onboarding (Figma 162:545): no tabs or bottom bar, just the way back in.
+  if (live && !data.hasBase) {
+    return (
+      <div className="mirror is-waiting">
+        <header className="mirror-header"><Logo className="mirror-logo" /></header>
+        <main className="mirror-content">
+          <div className="mirror-top">
+            <p className="mirror-meta" suppressHydrationWarning>
+              <span>{dayLine(shown)}</span>
+              <img className="mirror-sep" src="/brand/sep.svg" width="5" height="11" alt="" />
+              <span>{timeLine(shown)}</span>
+            </p>
+          </div>
+          <section className="mirror-waiting">
+            <img src="/brand/symbol.svg" width="56" height="44" alt="" />
+            <div><h1>Your mirror is waiting</h1><p>It needs only 3 face photos and one outfit to show you in your own clothes.</p></div>
+            <div className="mirror-waiting-cta">
+              <p className="mirror-waiting-time">About 3 minutes.</p>
+              <a className="ds-button is-large" href="/onboarding">Let’s start</a>
+            </div>
+          </section>
+        </main>
+      </div>
+    );
+  }
+
+  const more = live ? Math.max(0, 3 - (data.outfitPhotos || 0)) : 0;
   return (
     <div className="mirror">
       <header className="mirror-header">
@@ -157,6 +200,8 @@ export default function DailyMirror({
             )}
             {count > 1 && <button type="button" className="ds-round-button mirror-arrow" onClick={() => go(1)} aria-label="Next outfit"><Icon name="arrow-right" size={20} /></button>}
           </div>
+          {(note || (problem && count > 0)) && <p className="mirror-note" role="status">{note || problem}</p>}
+          {!note && count <= 1 && more > 0 && <p className="mirror-nudge">Add {more} more outfit{more > 1 ? 's' : ''} for new looks every day</p>}
           {count > 1 && (
             <div className="ds-pager" role="group" aria-label="Choose an outfit">
               {dots.map(({ outfit, i }) => (

@@ -4,7 +4,7 @@
 import { NextResponse } from 'next/server';
 
 const SESSION_COOKIE = /^(sb-.+-auth-token(\.\d+)?|preview_user)$/;
-const PRIVATE_PAGES = new Set(['/']);
+const PRIVATE_PAGES = new Set(['/', '/onboarding']);
 
 export function middleware(request) {
   const { pathname, searchParams } = request.nextUrl;
@@ -17,4 +17,4 @@ export function middleware(request) {
   return res;
 }
 
-export const config = { matcher: ['/', '/login'] };
+export const config = { matcher: ['/', '/login', '/onboarding'] };

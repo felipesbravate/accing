@@ -113,7 +113,10 @@ async function runJob(job) {
     if (job.job_type === 'prepare_base') {
       for (const r of summary.prep.filter((x) => x.ok)) uploaded[r.file] = await upload('outfits', `${job.user_id}/base/${job.id}/${r.file}`, await readFile(join(summary.dir, r.file)));
       const options = baseOptions(summary, uploaded);
-      if (!options.length) throw new Error('None of the prepared base photos passed the checks. Try another full-body photo: standing, face visible, plain background.');
+      // A newer full-body photo was taken while this one was being prepared (onboarding retake): its own job decides.
+      const { data: now } = await db.from('users').select('base_source_path').eq('id', job.user_id).single();
+      if (now?.base_source_path !== user.base_source_path) return { result: { superseded: true, base_options: options }, cost: summary.spent };
+      if (!options.length) throw new Error('None of the prepared versions passed our checks. Try another full-body photo: standing, face visible, plain background.');
       const { error } = await db.from('users').update({ base_options: options, base_path: null }).eq('id', job.user_id);
       if (error) throw new Error(error.message);
       return { result: { base_options: options }, cost: summary.spent };

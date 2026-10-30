@@ -770,11 +770,13 @@ async function main() {
     if (blanked) prompt = prompt.replace('- The face: rebuild it from the face photos', '- The face: in image 1 it is covered by a plain grey oval on purpose. Paint the real face there, from the face photos');
     const label = (k) => (k === 0 ? (blanked ? 'the photo to prepare (face covered on purpose)' : 'the photo to prepare') : k <= faces.length ? faces[k - 1].label : 'pose reference: a faceless mannequin; copy only its pose');
     // Every try is made and the passing one closest to her face photos is kept: this photo is the face of every look.
+    // The tries run in parallel (2026-10-30: one after another took ~160 s, the longest wait in onboarding).
     let best = null;
-    for (let attempt = 1; attempt <= opts.anchorTries; attempt++) {
+    const tries = await Promise.all(Array.from({ length: opts.anchorTries }, async (_, k) => {
+      const attempt = k + 1;
       const file = `base-prepared-${attempt}.png`;
       const r = await generate(prepModel, { n: 0 }, 1, file, imgs, prompt, label, { ...opts, faceCount: faces.length });
-      if (r.error) continue;
+      if (r.error) return null;
       const img = { file, bytes: r.image, mime: 'image/png' };
       const [id, after, look] = await Promise.all([
         idOf(img).catch(() => null),
@@ -791,8 +793,11 @@ async function main() {
       const left = [...after.blocking, ...after.fixes.filter((f) => f !== 'room or objects in the background'), ...lookReasons.filter((x) => !x.startsWith('added:')), ...(added.length ? [`added: ${added.join(', ')}`] : [])];
       if (id == null || id < minId) left.unshift(`identity ${id == null ? 'no face' : id.toFixed(3)} < ${minId.toFixed(3)}`);
       console.log(`  prepared base ${attempt}: identity ${id == null ? '–' : id.toFixed(3)} (original photo ${origId == null ? '–' : origId.toFixed(3)})${left.length ? ' — rejected: ' + left.join('; ') : ' — ok'}`);
-      prepRows.push({ ...r, file, reasons: left, identity: id });
-      if (!left.length && (!best || id > best.id)) best = { ...img, id };
+      return { row: { ...r, file, reasons: left, identity: id }, img: { ...img, id }, ok: !left.length };
+    }));
+    for (const t of tries.filter(Boolean)) {
+      prepRows.push(t.row);
+      if (t.ok && (!best || t.img.id > best.id)) best = t.img;
     }
     if (!best) throw new Error(`Could not prepare the base photo in ${opts.anchorTries} tries (attempts are in ${out}). Try a photo without a mirror, or --no-prep to use it as it is.`);
     await mkdir(PREPARED_DIR, { recursive: true });

@@ -14,6 +14,8 @@ export default async function Page() {
   const first = (user.name || '').split(' ')[0] || (user.email ? user.email.split('@')[0] : '');
   // Real looks for signed-in people; the local preview account (no Supabase) keeps the sample looks.
   const today = supabaseConfigured() && user.id !== 'preview' ? await todaysLooks(user.id).catch(() => null) : null;
+  // No picked base photo yet: onboarding, unless they chose "Skip" (then the mirror says it's waiting for them).
+  if (today && !today.hasBase && !today.later) redirect('/onboarding');
   return (
     <>
       <Splash name={first} />
