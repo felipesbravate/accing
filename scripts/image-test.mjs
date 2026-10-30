@@ -68,6 +68,9 @@ function args() {
     else if (k === 'no-prep') out.prep = false;
     else if (k === 'reprep') out.reprep = true;
     else if (k === 'prepared') out.prepared = v;
+    else if (k === 'prep-only') out.prepOnly = true;
+    else if (k === 'cutout-cache') out.cutoutCache = v;
+    else if (k === 'json-out') out.jsonOut = v;
     else if (k === 'prep-model') out.prepModel = v;
     else if (k === 'openai-size') { if (!/^\d{3,4}x\d{3,4}$/.test(v)) throw new Error('--openai-size=WIDTHxHEIGHT, e.g. 1536x2304'); out.openaiSize = v; }
     else if (k === 'hd') out.openaiSize = '1536x2304';
@@ -503,7 +506,8 @@ async function main() {
   if (identityCard && !existsSync(join(INPUTS, 'identity.txt'))) console.log(`Identity card: ${identityCard}\n  (saved as image-test/inputs/identity-read.txt; correct it and save it as identity.txt to use your own words)`);
   readings.forEach((r, i) => console.log(`  photo ${i + 1} = image ${faces.length + i + 1}, ${outfits[i].file}: ${r.items.map((x) => `${x.description} [${x.category}${x.visibility === 'full' ? '' : ', ' + x.visibility}]`).join('; ') || 'nothing recognised'}`));
   const seed = opts.seed ?? (Date.now() % 100000);
-  const looks = composeLooks(wardrobe, { count: opts.looks, seed, occasion: opts.occasion, weather: opts.weather });
+  // With --prep-only no look is made, so a wardrobe that can't make one yet (onboarding) must not stop the base photo.
+  const looks = (() => { try { return composeLooks(wardrobe, { count: opts.looks, seed, occasion: opts.occasion, weather: opts.weather }); } catch (e) { if (!opts.prepOnly) throw e; return Object.assign([], { skipped: [], occasion: { name: 'any', min: 1, max: 5, maxExposure: 'high' } }); } })();
   if (looks.skipped.length) console.log(`Left out for "${opts.occasion}" / "${opts.weather}" (${looks.occasion.name}): ${looks.skipped.map((x) => `${x.description} (${x.why})`).join('; ')}`);
   if (looks.length < opts.looks) console.warn(`Only ${looks.length} different look(s) are possible from these photos (asked for ${opts.looks}).`);
   // Pose reference (npm run make-pose-reference): a mannequin in the house pose, matching the body and the shoes of the
@@ -562,11 +566,18 @@ async function main() {
   // Outfit photos are cut out onto a plain background before they are sent: clutter in mirror selfies (a red table, a
   // bed) came back as blurry ghosts in the looks (2026-10-27). The face photos are sent as they are.
   if (cleaner && opts.cleanRefs) {
+    // Each photo is cut out once and kept (keyed by its bytes): cutting out 8 photos on every run cost ~30 s of CPU and,
+    // on Fly's shared CPU, the burst budget that the looks then lacked (2026-10-30). --cutout-cache=dir sets the folder.
+    const cacheDir = opts.cutoutCache ? resolve(opts.cutoutCache) : join(PREPARED_DIR, 'cutouts');
+    await mkdir(cacheDir, { recursive: true });
+    let reused = 0;
     for (const o of outfits) {
-      try { o.bytes = (await cleanBackground(cleaner, o.bytes, { background: opts.background })).bytes; o.mime = 'image/png'; }
+      const file = join(cacheDir, createHash('sha1').update(o.bytes).update(opts.background).update('isnet-1').digest('hex').slice(0, 16) + '.png');
+      if (existsSync(file)) { o.bytes = await readFile(file); o.mime = 'image/png'; reused++; continue; }
+      try { o.bytes = (await cleanBackground(cleaner, o.bytes, { background: opts.background })).bytes; o.mime = 'image/png'; await writeFile(file, o.bytes); }
       catch (e) { console.log(`(could not cut out ${o.file}: ${e.message})`); }
     }
-    console.log(`Cut out ${outfits.length} outfit photo(s) onto a plain background.`);
+    console.log(`Cut out ${outfits.length - reused} outfit photo(s) onto a plain background${reused ? ` (${reused} reused from earlier runs)` : ''}.`);
   }
   // Garment close-ups for edits (base and anchor mode): one small image per garment instead of whole outfit photos.
   if (opts.garmentCrops) {
@@ -632,9 +643,10 @@ async function main() {
       if (cleaner) {
         try {
           const t1 = performance.now();
-          const cleaned = await cleanBackground(cleaner, r.image, { background: opts.background });
+          const cleaned = await cleanBackground(cleaner, r.image, { background: opts.background, cutout: look.n > 0 });
           await writeFile(join(out, file.replace(/\.png$/, '-raw.png')), raw);
           r.image = cleaned.bytes;
+          if (cleaned.cutout) { r.cutout = file.replace(/\.png$/, '-cutout.webp'); await writeFile(join(out, r.cutout), cleaned.cutout); }
           r.clean = { before: cleaned.before, seconds: (performance.now() - t1) / 1000, pose: cleaned.pose };
         } catch (e) { console.log(`(background not cleaned: ${e.message})`); }
       }
@@ -681,8 +693,15 @@ async function main() {
     ]);
     why.push(...dropGarments(refGeometry ? baseReasons(face.reasons) : face.reasons));
     if (!fit.ok) {
-      const claims = [...(fit.missing || []).map((x) => 'missing ' + x), ...(fit.extra || []).map((x) => 'extra ' + x), ...(fit.different || []).map((x) => 'different ' + x)];
-      const kept = await confirmClaims(img, look.items, claims.length ? claims : [fit.note]);
+      // Second look, per garment: a difference is confirmed with that garment's close-up only; missing and extra by name.
+      const named = [...(fit.missing || []).map((x) => 'missing ' + x), ...(fit.extra || []).map((x) => 'extra ' + x)];
+      const byItem = new Map();
+      for (const d of fit.differentBy || []) byItem.set(d.item, [...(byItem.get(d.item) || []), 'different ' + d.text]);
+      const kept = (await Promise.all([
+        named.length ? confirmClaims(img, look.items.map(({ crop, ...x }) => x), named) : [],
+        ...[...byItem].map(([item, claims]) => confirmClaims(img, [item], claims)),
+      ])).flat();
+      if (!named.length && !byItem.size) kept.push(fit.note);
       if (kept.length) why.push(`outfit: ${kept.join(', ')}`);
       else console.log(`  (outfit check said "${fit.note.slice(0, 120)}", not confirmed on a second look; accepted)`);
     }
@@ -879,6 +898,30 @@ PHOTO
     dropped.push({ look, tries: r.attempt || opts.anchorTries, reasons, retake });
     console.log(`  look ${look.n} dropped: it failed the checks on all ${opts.anchorTries} tries (last: ${reasons.join('; ')})${retake ? `\n  → ${retake}` : ''}`);
   };
+  // Machine-readable summary for the worker (--json-out=path): what was made, where, what it cost, and what failed.
+  const writeSummary = async (stage, extra = {}) => {
+    if (!opts.jsonOut) return;
+    const spentNow = [...rows, ...rejected, ...prepRows].reduce((t, r) => t + (r.cost || 0), 0);
+    const okPrep = prepRows.filter((r) => !r.reasons.length && r.identity != null).sort((a, b) => b.identity - a.identity);
+    const item = (x) => ({ description: x.description, category: x.category, photo: x.photo, ...(x.formality ? { formality: x.formality } : {}), ...(x.exposure ? { exposure: x.exposure } : {}), ...(x.season ? { season: x.season } : {}) });
+    const summary = {
+      stage, dir: out, spent: spentNow,
+      prep: prepRows.map((r) => ({ file: r.file, identity: r.identity, ok: !r.reasons.length, reasons: r.reasons, cost: r.cost || 0, best: okPrep[0]?.file === r.file })),
+      wardrobe: readings.map((r, i) => ({ photo: i, file: outfits[i].file, items: r.items.map(item) })),
+      skipped: looks.skipped || [],
+      rejected: rejected.map((r) => ({ file: r.file, look: r.look?.n ?? null, reasons: r.reasons })),
+      looks: stage === 'prep' ? [] : looks.map((l) => {
+        const row = rows.find((r) => r.look === l && !r.error), bad = rows.find((r) => r.look === l && r.error), drop = dropped.find((d) => d.look === l);
+        const cost = [...rows, ...rejected].filter((r) => r.look === l || r.m && r.look === l).reduce((t, r) => t + (r.cost || 0), 0);
+        return { n: l.n, items: l.items.map(item), cost,
+          ...(row ? { status: 'ready', file: row.file, ...(row.cutout ? { cutout: row.cutout } : {}), identity: row.check?.identity ?? null, attempt: row.attempt ?? 1 }
+            : drop ? { status: 'dropped', reasons: drop.reasons, retake: drop.retake || null }
+            : bad ? { status: bad.refused ? 'refused' : 'failed', reasons: [bad.error] } : { status: 'failed', reasons: ['not made'] }) };
+      }),
+      ...extra,
+    };
+    await writeFile(resolve(opts.jsonOut), JSON.stringify(summary, null, 2));
+  };
   if (base) {
     // BASE PHOTO MODE: every look is the person's own photo with only the clothes changed, so face, body, hair and pose
     // are real. The face is then put back from the base photo itself (same light, same angle), and the background
@@ -888,6 +931,8 @@ PHOTO
     const takeOff = baseReading.items.filter((x) => ['outerwear', 'top', 'dress', 'bottom', 'shoes'].includes(x.category)).map((x) => x.description);
     console.log(`Base photo ${base.file}: wears ${takeOff.join('; ') || 'nothing recognised'}`);
     const src = opts.prep && !base.generated ? await prepareBase(base, baseReading) : base;
+    // --prep-only (worker onboarding): stop after preparing the base photo; the user picks 1 of the tries.
+    if (opts.prepOnly) { await writeSummary('prep'); console.log('Prepared the base photo only (--prep-only).'); return; }
     // Look check against her face photos and the (prepared) base photo only: her outfit photos are mirror selfies with
     // other hair and jewellery, and the check then "saw" a bun and a choker that were not there (2026-10-28).
     const baseRefs = [...faces, src];
@@ -922,15 +967,18 @@ PHOTO
         const t0 = performance.now();
         let shownAt = null;
         const ready = (r) => { r.readySeconds = (performance.now() - t0) / 1000; r.shownSeconds = shownAt ?? r.readySeconds; rows.push(r); };
+        // For the worker: a look that passed its checks is announced at once, so it can be uploaded and shown while the
+        // next one is made (one line per look: @@LOOK {n, file, items}).
+        const announce = (r) => { if (opts.jsonOut) console.log('@@LOOK ' + JSON.stringify({ n: look.n, file: join(out, r.file), ...(r.cutout ? { cutout: join(out, r.cutout) } : {}), items: look.items.map((x) => ({ description: x.description, category: x.category, photo: x.photo })) })); };
         for (let attempt = 1; attempt <= opts.anchorTries; attempt++) {
           const r = await generate(m, look, run, name(m, look, run), edit.images, edit.prompt, edit.label, { ...opts, faceCount: 1 }, lockToBase);
           r.attempt = attempt;
           if (!r.error && shownAt == null) shownAt = (performance.now() - t0) / 1000;
           const last = attempt === opts.anchorTries;
           if (r.error) { ready(r); break; }
-          if (!opts.check) { remember(r); ready(r); break; }
+          if (!opts.check) { remember(r); ready(r); announce(r); break; }
           const why = await lookProblems(look, r, baseGeometry, baseRefs);
-          if (!why.length) { remember(r); ready(r); break; }
+          if (!why.length) { remember(r); ready(r); announce(r); break; }
           const rej = r.file.replace(/\.png$/, `-rejected-${attempt}.png`);
           await writeFile(join(out, rej), r.image);
           rejected.push({ file: rej, reasons: why, cost: r.cost, look });
@@ -1108,6 +1156,7 @@ ${models.map((m) => `<h3>${esc(m.key)}</h3><div class="row">${rows.filter((r) =>
     ? `<figure><div class="err">${esc(r.error)}</div><figcaption>run ${r.run}</figcaption></figure>`
     : `<figure><img src="${esc(r.file)}"><figcaption>run ${r.run} · ${r.seconds.toFixed(1)}s · ~$${fmt(r.cost)}${r.check ? `<br><b style="color:${r.check.pass ? '#1b7f3b' : '#b3261e'}">${r.check.pass ? 'PASS' : 'FAIL'}</b> · identity ${fmt(r.check.identity)}${r.check.reasons.length ? '<br>' + esc(r.check.reasons.join('; ')) : ''}` : ''}</figcaption></figure>`).join('')}</div>`).join('')}`).join('')}`;
   await writeFile(join(out, 'index.html'), html);
+  await writeSummary('looks');
   console.log(`\nDone. Open ${join(out, 'index.html')} to compare, and ${join(out, 'report.md')} for the numbers.`);
 }
 

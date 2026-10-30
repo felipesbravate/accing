@@ -1,0 +1,5 @@
+# Only scripts/ and worker/ go into the worker image.
+*
+!scripts/
+!worker/
+scripts/assets/*-house.png

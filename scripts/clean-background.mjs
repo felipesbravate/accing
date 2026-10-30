@@ -86,7 +86,10 @@ export async function measurePose(c, input) {
 }
 
 /** Returns { bytes (PNG), before, after, pose } where before/after are the mean edge brightness (0–255). */
-export async function cleanBackground(c, input, { background = BACKGROUND } = {}) {
+/** cutout: also return `cutout`, a WebP with alpha: the person plus the floor shadow as a translucent black layer, for
+ *  the app's ring of overlapping looks (an opaque background showed as cards cutting through the people behind).
+ *  Over the background colour it gives exactly `bytes`; over any other colour the shadow darkens it the same way. */
+export async function cleanBackground(c, input, { background = BACKGROUND, cutout = false } = {}) {
   const colour = hexToRgb(background);
   const { data, info } = await c.sharp(input).removeAlpha().raw().toBuffer({ resolveWithObject: true });
   const { width, height } = info, n = width * height;
@@ -119,7 +122,7 @@ export async function cleanBackground(c, input, { background = BACKGROUND } = {}
   const fw = Math.max(1, fx1 - fx0), cx = (fx0 + fx1) / 2, cy = bottom - ph * SHADOW.poolBehind;
   const ax = Math.max(1, Math.min((fw / 2) * SHADOW.poolWidth, Math.min(cx - px0, px1 - cx) / 2)), ay = ph * SHADOW.poolHeight;
 
-  const out = Buffer.alloc(n * 3);
+  const out = Buffer.alloc(n * 3), rgba = cutout ? Buffer.alloc(n * 4) : null;
   for (let i = 0; i < n; i++) {
     const x = i % width, y = (i - x) / width;
     const d2 = ((x - cx) / ax) ** 2 + ((y - cy) / ay) ** 2;
@@ -130,8 +133,15 @@ export async function cleanBackground(c, input, { background = BACKGROUND } = {}
     const shadow = 1 - (1 - pool) * (1 - con) * (1 - cst);
     const m = mask[i];
     for (let ch = 0; ch < 3; ch++) out[i * 3 + ch] = Math.round(data[i * 3 + ch] * m + colour[ch] * (1 - shadow) * (1 - m));
+    if (rgba) {
+      // out = a·C + (1 − a)·B for any background B: 1 − a = (1 − shadow)(1 − m), and a·C = m·person (the shadow is black).
+      const a = 1 - (1 - shadow) * (1 - m);
+      for (let ch = 0; ch < 3; ch++) rgba[i * 4 + ch] = a > 0.002 ? Math.min(255, Math.round((data[i * 3 + ch] * m) / a)) : 0;
+      rgba[i * 4 + 3] = Math.round(a * 255);
+    }
   }
   const edge = (buf) => { let s = 0, k = 0; const sw = Math.round(width * 0.08); for (let y = 0; y < Math.round(height * 0.7); y++) for (let x = 0; x < width; x++) if (x < sw || x >= width - sw) { const i = y * width + x; s += (buf[i * 3] + buf[i * 3 + 1] + buf[i * 3 + 2]) / 3; k++; } return s / k; };
   const bytes = await c.sharp(out, { raw: { width, height, channels: 3 } }).png().toBuffer();
-  return { bytes, before: edge(data), after: edge(out), pose: poseGeometry(mask, width, height) };
+  const cut = rgba ? await c.sharp(rgba, { raw: { width, height, channels: 4 } }).webp({ quality: 88, alphaQuality: 100, effort: 4 }).toBuffer() : null;
+  return { bytes, ...(cut ? { cutout: cut } : {}), before: edge(data), after: edge(out), pose: poseGeometry(mask, width, height) };
 }
