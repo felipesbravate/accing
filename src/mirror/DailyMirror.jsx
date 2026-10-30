@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Icon } from '../ui/Icon.jsx';
 import { Logo } from '../ui/Logo.jsx';
 import { wrap } from './carousel.js';
-import { dayLine, timeLine, vibeQuestion } from './greeting.js';
+import { dayLine, isNight, timeLine, vibeQuestion } from './greeting.js';
 import LookViewer from './LookViewer.jsx';
 import OutfitRing from './OutfitRing.jsx';
 import { defaultTab, OCCASION_TABS } from './occasions.js';
@@ -97,8 +97,8 @@ export default function DailyMirror({
       const r = await res.json().catch(() => ({}));
       if (r.error) { setNote(null); setProblem(r.error); return; }
       const tip = r.advice ? ` ${r.advice.title}: ${r.advice.hint}` : '';
-      setNote(r.queued ? `Outfit added. Making looks with it for every occasion it suits, starting with ${occasion.toLowerCase()}… the first in about a minute.${tip}`
-        : r.queueError ? `Outfit added. ${r.queueError}` : `Outfit added. It’ll be in your next looks.${tip}`);
+      setNote(r.queued ? `Outfit added! Your look will be ready in about a minute.${tip}`
+        : r.queueError ? `Outfit added! ${r.queueError}` : `Outfit added! It’ll be in your next looks.${tip}`);
       if (r.queued) { setSeason(SEASONS[0]); refresh(); }
       setData((d) => ({ ...d, outfitPhotos: (d.outfitPhotos || 0) + 1 }));
     } catch (e) { setNote(null); setProblem(e.message || 'Could not add the photo'); }
@@ -176,7 +176,7 @@ export default function DailyMirror({
               <img className="mirror-sep" src="/brand/sep.svg" width="5" height="11" alt="" />
               <span>{timeLine(shown)}</span>
               <img className="mirror-sep" src="/brand/sep.svg" width="5" height="11" alt="" />
-              <span className="mirror-weather"><Icon name="sun" size={16} label="Weather" />{(live && data.temperature) || temperature}</span>
+              <span className="mirror-weather"><Icon name={isNight(shown) ? 'moon' : 'sun'} size={16} label="Weather" />{(live && data.temperature) || temperature}</span>
             </p>
           </div>
 

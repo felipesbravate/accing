@@ -34,7 +34,9 @@ export function ringOffset(i, position, length) {
  *  `depth` 1 = front, 0 = back. Sizes come from the layout: `radius` (px from the centre to the side of the circle),
  *  `backScale` (scale at the very back) and `lift` (px the back of the circle sits above the front).
  *  With fewer than `minSlots` looks they are spread as if there were `minSlots`, so 2–3 looks keep a natural spacing;
- *  the empty back of the ring is where a look fades out on one side and back in on the other (`opacity`). */
+ *  the empty back of the ring is where a look fades out on one side and back in on the other (`opacity`).
+ *  With more than `minSlots` looks the spacing stays the same (2026-10-30: 12 looks under a season filter stood a
+ *  30° step apart, almost touching); only the front and one each side are on screen, the rest wait at the back. */
 export function ringPose(offset, length, { radius, backScale, lift, minSlots = 5 }) {
   const slots = minSlots;
   const angle = (offset / slots) * 2 * Math.PI;
@@ -45,7 +47,7 @@ export function ringPose(offset, length, { radius, backScale, lift, minSlots = 5
     scale: backScale + (1 - backScale) * depth,
     depth,
     z: Math.round(depth * 100),
-    opacity: length < slots ? Math.min(1, Math.max(0, (length / 2 - Math.abs(offset)) * 2)) : 1,
+    opacity: length < slots ? Math.min(1, Math.max(0, (length / 2 - Math.abs(offset)) * 2)) : 1, // more looks: ringPresence hides the back
   };
 }
 

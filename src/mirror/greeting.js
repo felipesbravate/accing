@@ -10,6 +10,13 @@ export function timeLine(date) {
   return new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }).format(date);
 }
 
+/** Night in the viewer's own time, 20:00 to 06:59: the weather shows a moon instead of a sun. A fixed window, not
+ *  sunset (the app has no sunrise/sunset times yet); in Barcelona that's dark most of the year. */
+export function isNight(date) {
+  const h = date.getHours();
+  return h >= 20 || h < 7;
+}
+
 export function dateLine(date, locale = 'en-US') {
   return `${dayLine(date, locale)} / ${timeLine(date)}`;
 }

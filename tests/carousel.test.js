@@ -64,3 +64,8 @@ test('ringPresence keeps 3 looks on screen and fades the next one in from the ba
   assert.equal(ringPresence(2), 0);
   assert.equal(ringPresence(2, 2), 1);
 });
+
+test('ringPose keeps the same spacing with many looks (season filters show up to 12)', () => {
+  assert.equal(ringPose(1, 12, ring).x, ringPose(1, 5, ring).x);
+  assert.equal(ringPose(-1, 12, ring).x, ringPose(-1, 5, ring).x);
+});
