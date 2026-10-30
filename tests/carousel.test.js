@@ -18,3 +18,30 @@ test('swipeStep needs a real drag', () => {
   assert.equal(swipeStep(60), -1);
   assert.equal(swipeStep(10), 0);
 });
+
+import { easeInOutCubic, ringOffset, ringPose } from '../src/mirror/carousel.js';
+const ring = { radius: 400, backScale: 0.6, lift: 100 };
+test('ringOffset takes the short way round', () => {
+  assert.equal(ringOffset(0, 0, 5), 0);
+  assert.equal(ringOffset(4, 0, 5), -1);
+  assert.equal(ringOffset(1, 0, 5), 1);
+  assert.equal(ringOffset(0, 4.5, 5), 0.5);
+});
+test('ringPose: front is full size and centred, sides are smaller and higher, back is smallest', () => {
+  const front = ringPose(0, 5, ring), side = ringPose(1, 5, ring), back = ringPose(2.5, 5, ring);
+  assert.equal(front.x, 0); assert.equal(front.scale, 1); assert.equal(front.y === 0 || Object.is(front.y, -0), true);
+  assert.ok(side.x > 350 && side.scale < 1 && side.y < 0 && side.z < front.z);
+  assert.ok(Math.abs(back.x) < 1e-9 && Math.abs(back.scale - 0.6) < 1e-9 && back.z === 0);
+  assert.equal(Math.round(ringPose(-1, 5, ring).x), -Math.round(side.x));
+});
+test('ringPose spreads 3 looks as if there were 5', () => {
+  assert.equal(ringPose(1, 3, ring).x, ringPose(1, 5, ring).x);
+});
+test('easeInOutCubic starts at 0, ends at 1, passes the middle', () => {
+  assert.equal(easeInOutCubic(0), 0); assert.equal(easeInOutCubic(1), 1); assert.equal(easeInOutCubic(0.5), 0.5);
+});
+test('with 3 looks the one switching sides is invisible while it switches', () => {
+  assert.equal(ringPose(1, 3, ring).opacity, 1);
+  assert.equal(ringPose(1.5, 3, ring).opacity, 0);
+  assert.equal(ringPose(2, 5, ring).opacity, 1);
+});

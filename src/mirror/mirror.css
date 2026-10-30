@@ -29,14 +29,21 @@
 .mirror-menu { display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-lg); }
 .mirror-mobile-filters { display: none; }
 
-/* Carousel: arrows, side looks 520 high, the main look 600 high (2:3 photos), pager 10px below. */
+/* Carousel: arrows either side of the ring; pager 10px below.
+   Ring (OutfitRing.jsx): the looks stand on a circle. Sizes are ratios of the look height so the ring scales with it.
+   Desktop values put the neighbours where the Figma frame has them at rest (520 high, centres ±397 px). */
 .mirror-body { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 78px; padding: 0 var(--space-3xl) var(--space-3xl); }
-.mirror-carousel { display: flex; align-items: center; justify-content: center; gap: var(--space-lg); height: 600px; touch-action: pan-y; user-select: none; }
-.outfit { flex: none; margin: 0; overflow: hidden; }
-.outfit.is-main { height: 600px; aspect-ratio: 2 / 3; }
-.outfit.is-side { height: 520px; aspect-ratio: 2 / 3; }
-.outfit-image { display: block; width: 100%; height: 100%; object-fit: cover; }
-.mirror-arrow { flex: none; }
+.mirror-carousel { position: relative; display: flex; align-items: center; justify-content: center; gap: var(--space-lg); width: 100%; }
+.mirror-arrow { flex: none; position: relative; z-index: 2; }
+
+.ring { --look-h: 600px; --ring-radius: 0.697; --ring-back-scale: 0.615; --ring-lift: 0.193;
+  position: relative; z-index: 0; flex: 0 1 1190px; height: var(--look-h); touch-action: pan-y; user-select: none; -webkit-user-select: none; outline: none; }
+.ring:focus-visible { outline: 2px solid var(--border-accent); outline-offset: 4px; border-radius: var(--radius-lg); }
+.ring-item { position: absolute; left: 50%; bottom: 0; height: 100%; aspect-ratio: 2 / 3; margin: 0;
+  transform: translateX(-50%); transform-origin: 50% 100%; opacity: 0; will-change: transform; }
+.ring:not([data-ready]) .ring-item.is-front { opacity: 1; } /* before the first paint, only the front look shows */
+.ring-item[data-front="false"] { cursor: pointer; }
+.ring-item img { display: block; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
 
 /* Mobile */
 @media (max-width: 1023px) {
@@ -59,14 +66,13 @@
   .mirror-avatar { width: 55px; height: 48px; } /* avatar Size=48px */
   .mirror-account-menu { top: auto; bottom: calc(100% + var(--space-sm)); }
 
-  /* Carousel: the main look 200×464 centred, neighbours 160×392 cropped by the screen edges, edges faded. Heights shrink
-     on short screens so the pager stays above the bottom bar. */
+  /* Carousel: the front look 464 high, neighbours at 392 cropped by the screen edges, edges faded. The look height
+     shrinks on short screens so the pager stays above the bottom bar; the ring scales with it. */
   .mirror-body { flex: 1; justify-content: center; margin-top: 22px; padding: 0 0 var(--space-md); overflow: hidden; }
   .mirror-carousel { position: relative; width: 100%; height: auto; overflow: hidden; }
   .mirror-carousel::before, .mirror-carousel::after { content: ''; position: absolute; top: 0; bottom: 0; z-index: 1; width: 78px; pointer-events: none; }
+  .ring { --look-h: clamp(300px, 100svh - 380px, 464px); --ring-radius: 0.463; --ring-back-scale: 0.552; --ring-lift: 0.224; flex: 1 1 100%; }
   .mirror-carousel::before { left: 0; background: linear-gradient(to left, transparent, color-mix(in srgb, var(--bg-primary) 80%, transparent)); }
   .mirror-carousel::after { right: 0; background: linear-gradient(to right, transparent, color-mix(in srgb, var(--bg-primary) 80%, transparent)); }
-  .outfit.is-main { height: clamp(300px, 100svh - 380px, 464px); aspect-ratio: 200 / 464; }
-  .outfit.is-side { height: clamp(254px, calc((100svh - 380px) * 0.845), 392px); aspect-ratio: 160 / 392; }
   .mirror-arrow { display: none; }
 }
