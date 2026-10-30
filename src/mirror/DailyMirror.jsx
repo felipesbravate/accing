@@ -19,10 +19,11 @@ import './mirror.css';
 
 const MAX_DOTS = 5; // the Figma pager has 1–5 dots
 
-function Account({ avatar }) {
+/** avatar (Figma "avatar", Variation=Default): the person's initial. */
+function Account({ initial }) {
   return (
     <details className="mirror-account">
-      <summary className="ds-avatar mirror-avatar" aria-label="Account"><img src={avatar} alt="" /></summary>
+      <summary className="ds-avatar mirror-avatar" aria-label="Account"><span aria-hidden="true">{initial}</span></summary>
       <form className="mirror-account-menu" method="post" action="/auth/signout">
         <button type="submit">Sign out</button>
       </form>
@@ -46,7 +47,7 @@ function ShootButton({ onShoot }) {
  *  (local preview). Picking a tab with no looks yet asks the worker for some; while any are being made the mirror asks
  *  the server again every few seconds, and each look joins the ring as soon as it's ready. */
 export default function DailyMirror({
-  name = '', avatar = '/samples/avatar.png', today = null, temperature = '24º',
+  name = '', today = null, temperature = '24º',
 }) {
   const [now, setNow] = useState(null); // set on the client, so the time is the viewer's own
   const [index, setIndex] = useState(0);
@@ -139,7 +140,7 @@ export default function DailyMirror({
         <Logo className="mirror-logo" />
         <div className="mirror-actions">
           <ShootButton onShoot={onShoot} />
-          <Account avatar={avatar} />
+          <Account initial={(name || '·').trim().charAt(0).toUpperCase()} />
         </div>
       </header>
 
