@@ -48,6 +48,7 @@
   transform: translateX(-50%); transform-origin: 50% 100%; opacity: 0; will-change: transform; }
 .ring:not([data-ready]) .ring-item.is-front { opacity: 1; } /* before the first paint, only the front look shows */
 .ring-item[data-front="false"] { cursor: pointer; }
+.ring-item[data-front="true"] { cursor: zoom-in; }
 .ring-item img { display: block; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
 /* The fade: page colour over the look, cut to the look's shape, so the person fades without becoming see-through. */
 .ring-veil { position: absolute; inset: 0; background: var(--bg-primary); opacity: var(--fade, 0); pointer-events: none;
@@ -67,6 +68,19 @@
 .mirror-waiting .mirror-waiting-time { color: var(--text-primary); font-size: var(--fs-label-small); font-weight: var(--fw-medium); }
 .mirror-waiting .ds-button { width: 100%; }
 .mirror.is-waiting .mirror-top { padding: var(--space-xs) var(--space-4xl) 0; }
+
+/* A look full screen (LookViewer.jsx): page colour behind, the look as big as the screen allows, × top right. */
+.look-viewer { position: fixed; inset: 0; z-index: 100; background: var(--bg-primary); animation: look-viewer-in .2s ease-out; }
+.look-viewer-stage { position: absolute; inset: 0; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
+.look-viewer-frame { position: absolute; inset: calc(72px + env(safe-area-inset-top)) var(--space-md) calc(var(--space-lg) + env(safe-area-inset-bottom)); }
+.look-viewer-frame img { display: block; width: 100%; height: 100%; object-fit: contain; transform-origin: center; will-change: transform; pointer-events: none; }
+.look-viewer-close { position: absolute; z-index: 1; top: calc(var(--space-md) + env(safe-area-inset-top)); right: var(--space-md);
+  display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; padding: 0; border: 0; border-radius: var(--radius-full);
+  background: var(--bg-secondary); color: var(--icon-primary); cursor: pointer; }
+.look-viewer-close:hover { background: var(--button-secondary-tertiary-hover); }
+.look-viewer-close:focus-visible { outline: 2px solid var(--border-accent); outline-offset: 2px; }
+@keyframes look-viewer-in { from { opacity: 0; transform: scale(.98); } }
+@media (prefers-reduced-motion: reduce) { .look-viewer { animation: none; } }
 
 /* Mobile */
 @media (max-width: 1023px) {

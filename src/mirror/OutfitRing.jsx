@@ -1,7 +1,8 @@
 'use client';
 // The looks stand on a turntable: the chosen one in front, the others round the ring, smaller and higher as they go
 // back. The ring turns to bring a look to the front (arrows, pager, swipe/drag, tapping a look, ← →) and spins in
-// once when the mirror opens. With prefers-reduced-motion it changes without turning.
+// once when the mirror opens. Tapping the front look (or Enter) opens it full screen (onOpen).
+// With prefers-reduced-motion it changes without turning.
 // Geometry lives in mirror.css as ratios of the look height (--ring-radius, --ring-lift) and --ring-back-scale;
 // the maths is in carousel.js. Transforms are written straight to the DOM each frame, not through React state.
 // Needs transparent looks (cut-outs with their floor shadow); opaque backgrounds would show as cards overlapping.
@@ -18,7 +19,7 @@ const INTRO_SLOTS = 1.5; // the opening spin covers one and a half looks
 const SWIPE_PX = 40;
 const TAP_PX = 6;
 
-export default function OutfitRing({ outfits, index, onChange }) {
+export default function OutfitRing({ outfits, index, onChange, onOpen = () => {} }) {
   const count = outfits.length;
   const stage = useRef(null);
   const items = useRef([]);
@@ -93,13 +94,14 @@ export default function OutfitRing({ outfits, index, onChange }) {
   const settle = (to) => { turnTo(to); onChange(wrap(to, count)); };
 
   const onPointerDown = (e) => {
-    if (count < 2 || e.button > 0) return;
+    if (e.button > 0) return;
     cancelAnimationFrame(frame.current);
     drag.current = { x: e.clientX, from: pos.current, moved: false, id: e.pointerId };
   };
   const onPointerMove = (e) => {
     const d = drag.current; if (!d || d.id !== e.pointerId) return;
     const dx = e.clientX - d.x;
+    if (count < 2) return; // one look: nothing to turn, only taps
     if (!d.moved && Math.abs(dx) > TAP_PX) { d.moved = true; stage.current.setPointerCapture?.(e.pointerId); }
     if (d.moved) { pos.current = d.from - dx / geo.current.slotPx; paint(); }
   };
@@ -108,8 +110,8 @@ export default function OutfitRing({ outfits, index, onChange }) {
     const dx = e.clientX - d.x;
     if (!d.moved) { // a tap: bring the tapped look to the front
       const hit = e.target.closest?.('[data-i]');
-      if (hit && hit.dataset.front !== 'true') { const i = Number(hit.dataset.i); settle(pos.current + ringOffset(i, pos.current, count)); }
-      else turnTo(target.current);
+      if (hit && hit.dataset.front !== 'true' && count > 1) { const i = Number(hit.dataset.i); settle(pos.current + ringOffset(i, pos.current, count)); }
+      else { turnTo(target.current); if (hit) onOpen(Number(hit.dataset.i)); } // the front look: open it full screen
       return;
     }
     let to = Math.round(pos.current);
@@ -119,10 +121,11 @@ export default function OutfitRing({ outfits, index, onChange }) {
   const onKeyDown = (e) => {
     if (e.key === 'ArrowRight') { e.preventDefault(); settle(Math.round(target.current) + 1); }
     if (e.key === 'ArrowLeft') { e.preventDefault(); settle(Math.round(target.current) - 1); }
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(index); }
   };
 
   return (
-    <div className="ring" ref={stage} tabIndex={count > 1 ? 0 : -1} aria-label="Outfits. Use the arrow keys to turn."
+    <div className="ring" ref={stage} tabIndex={0} aria-label="Outfits. Use the arrow keys to turn, Enter to see the look full screen."
       onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
       onPointerCancel={() => { drag.current = null; turnTo(target.current); }} onKeyDown={onKeyDown}>
       {outfits.map((o, i) => (

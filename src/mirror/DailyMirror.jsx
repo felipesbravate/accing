@@ -8,6 +8,7 @@ import { Icon } from '../ui/Icon.jsx';
 import { Logo } from '../ui/Logo.jsx';
 import { wrap } from './carousel.js';
 import { dayLine, timeLine, vibeQuestion } from './greeting.js';
+import LookViewer from './LookViewer.jsx';
 import OutfitRing from './OutfitRing.jsx';
 import { defaultTab, OCCASION_TABS } from './occasions.js';
 import { SAMPLE_OUTFITS, SEASONS } from './outfits.js';
@@ -56,6 +57,7 @@ export default function DailyMirror({
   const [occasion, setOccasionState] = useState(() => defaultTab());
   const [data, setData] = useState(today);
   const [problem, setProblem] = useState(null);
+  const [viewing, setViewing] = useState(null); // the look shown full screen
   useEffect(() => { setNow(new Date()); const t = setInterval(() => setNow(new Date()), 60_000); return () => clearInterval(t); }, []);
 
   const live = Boolean(data);
@@ -192,7 +194,7 @@ export default function DailyMirror({
         <section className="mirror-body" aria-roledescription="carousel" aria-label={`${occasion} outfits, ${season}`}>
           <div className="mirror-carousel">
             {count > 1 && <button type="button" className="ds-round-button mirror-arrow" onClick={() => go(-1)} aria-label="Previous outfit"><Icon name="arrow-left" size={20} /></button>}
-            {count ? <OutfitRing key={occasion} outfits={outfits} index={current} onChange={setIndex} /> : (
+            {count ? <OutfitRing key={occasion} outfits={outfits} index={current} onChange={setIndex} onOpen={(i) => setViewing(outfits[i])} /> : (
               <div className="mirror-empty" role="status">
                 {!data.hasBase ? <p>Add your photos to see yourself in your own clothes.</p>
                   : tab.making ? <p>Making your {occasion.toLowerCase()} looks… the first one takes about a minute.</p>
@@ -213,6 +215,7 @@ export default function DailyMirror({
           )}
         </section>
       </main>
+      {viewing && <LookViewer look={viewing} onClose={() => setViewing(null)} />}
     </div>
   );
 }
