@@ -693,8 +693,15 @@ async function main() {
     ]);
     why.push(...dropGarments(refGeometry ? baseReasons(face.reasons) : face.reasons));
     if (!fit.ok) {
-      const claims = [...(fit.missing || []).map((x) => 'missing ' + x), ...(fit.extra || []).map((x) => 'extra ' + x), ...(fit.different || []).map((x) => 'different ' + x)];
-      const kept = await confirmClaims(img, look.items, claims.length ? claims : [fit.note]);
+      // Second look, per garment: a difference is confirmed with that garment's close-up only; missing and extra by name.
+      const named = [...(fit.missing || []).map((x) => 'missing ' + x), ...(fit.extra || []).map((x) => 'extra ' + x)];
+      const byItem = new Map();
+      for (const d of fit.differentBy || []) byItem.set(d.item, [...(byItem.get(d.item) || []), 'different ' + d.text]);
+      const kept = (await Promise.all([
+        named.length ? confirmClaims(img, look.items.map(({ crop, ...x }) => x), named) : [],
+        ...[...byItem].map(([item, claims]) => confirmClaims(img, [item], claims)),
+      ])).flat();
+      if (!named.length && !byItem.size) kept.push(fit.note);
       if (kept.length) why.push(`outfit: ${kept.join(', ')}`);
       else console.log(`  (outfit check said "${fit.note.slice(0, 120)}", not confirmed on a second look; accepted)`);
     }
@@ -902,6 +909,7 @@ PHOTO
       prep: prepRows.map((r) => ({ file: r.file, identity: r.identity, ok: !r.reasons.length, reasons: r.reasons, cost: r.cost || 0, best: okPrep[0]?.file === r.file })),
       wardrobe: readings.map((r, i) => ({ photo: i, file: outfits[i].file, items: r.items.map(item) })),
       skipped: looks.skipped || [],
+      rejected: rejected.map((r) => ({ file: r.file, look: r.look?.n ?? null, reasons: r.reasons })),
       looks: stage === 'prep' ? [] : looks.map((l) => {
         const row = rows.find((r) => r.look === l && !r.error), bad = rows.find((r) => r.look === l && r.error), drop = dropped.find((d) => d.look === l);
         const cost = [...rows, ...rejected].filter((r) => r.look === l || r.m && r.look === l).reduce((t, r) => t + (r.cost || 0), 0);

@@ -112,6 +112,12 @@ for (;;) {
     const { data } = await db.storage.from('outfits').download(p);
     await writeFile(join(out, job.job_type === 'prepare_base' ? `option-${i + 1}.png` : p.split('/').pop()), Buffer.from(await data.arrayBuffer()));
   }
+  if (j.result?.debug) {
+    const { data: files } = await db.storage.from('outfits').list(j.result.debug, { limit: 200 });
+    await mkdir(join(out, 'dropped'), { recursive: true });
+    for (const f of files || []) { const { data } = await db.storage.from('outfits').download(`${j.result.debug}/${f.name}`); if (data) await writeFile(join(out, 'dropped', f.name), Buffer.from(await data.arrayBuffer())); }
+    console.log(`Evidence for the dropped look(s) (tries, close-ups, debug.json) in ${join(out, 'dropped')}`);
+  }
   console.log(`Saved ${paths.length} image(s) in ${out}${job.job_type === 'prepare_base' ? '\nPick one with --pick=N (1 = the first listed, best identity).' : ''}`);
   break;
 }

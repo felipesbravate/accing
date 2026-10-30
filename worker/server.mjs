@@ -124,12 +124,27 @@ async function runJob(job) {
     for (const r of rows.filter((x) => early.has(x.look_n))) await db.from('outfits').update({ cost: r.cost, validation_confidence: r.validation_confidence }).eq('job_id', job.id).eq('look_n', r.look_n);
     const rest = rows.filter((x) => !early.has(x.look_n));
     if (rest.length) { const { error } = await db.from('outfits').insert(rest); if (error) throw new Error(error.message); }
+    // Evidence for dropped looks (every try, the garment close-ups, what the checker said), so a wrong drop can be
+    // looked at instead of guessed: outfits/<user>/debug/<job>/. Only the user and the service role can read it.
+    const droppedNs = summary.looks.filter((x) => x.status === 'dropped').map((x) => x.n);
+    let debug = null;
+    if (droppedNs.length) {
+      debug = `${job.user_id}/debug/${job.id}`;
+      const tries = (summary.rejected || []).filter((r) => droppedNs.includes(r.look));
+      const crops = (await readdir(summary.dir)).filter((f) => /^garment-.*\.jpe?g$/.test(f));
+      for (const f of [...tries.map((r) => r.file), ...crops]) {
+        await db.storage.from('outfits').upload(`${debug}/${f}`, await readFile(join(summary.dir, f)), { contentType: f.endsWith('.png') ? 'image/png' : 'image/jpeg', upsert: true }).catch(() => {});
+      }
+      const notes = { job: job.id, payload: job.payload, dropped: summary.looks.filter((x) => x.status === 'dropped'), tries, wardrobe: summary.wardrobe };
+      await db.storage.from('outfits').upload(`${debug}/debug.json`, Buffer.from(JSON.stringify(notes, null, 2)), { contentType: 'application/json', upsert: true }).catch(() => {});
+      log(`dropped look evidence saved in outfits/${debug}`);
+    }
     // A garment that made every try fail: ask for a new photo of it (shown in the app next to that photo).
     for (const l of summary.looks.filter((x) => x.retake)) {
       const photo = files.filter((f) => f.photoId)[l.items.find((i) => l.retake.includes(i.description.split(',')[0]))?.photo ?? -1];
       if (photo) await db.from('wardrobe_photos').update({ retake_hint: l.retake }).eq('id', photo.photoId);
     }
-    return { result: { ready: rows.filter((r) => r.status === 'ready').length, asked: rows.length }, cost: summary.spent };
+    return { result: { ready: rows.filter((r) => r.status === 'ready').length, asked: rows.length, ...(debug ? { debug } : {}) }, cost: summary.spent };
   } finally {
     await rm(inputs, { recursive: true, force: true });
     await rm(tmp, { recursive: true, force: true });

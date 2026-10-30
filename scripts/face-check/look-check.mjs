@@ -98,34 +98,42 @@ export async function poseCheck(anchor, image, { model = LOOK_MODEL, key = proce
 const OUTFIT_SCHEMA = { type: 'OBJECT', properties: { missing: { type: 'ARRAY', items: { type: 'STRING' } }, different: { type: 'ARRAY', items: { type: 'STRING' } }, extra: { type: 'ARRAY', items: { type: 'STRING' } } }, required: ['missing', 'different', 'extra'] };
 
 /** image: { bytes, mime }; items: [{ category, description, crop? }]; defaultShoes: text when the look names no shoes.
- *  Garments with a close-up (crop) are compared by eye, not only by name: on 2026-10-28 a plain V-neck tank came out with
- *  racerback straps and the name-only check passed it. */
+ *  Two kinds of call, in parallel:
+ *  - one call for the whole outfit, names only: what is missing and what is extra;
+ *  - one call per garment that has a close-up, with only that close-up: how this garment differs.
+ *  With all close-ups in one prompt the check mixed them up (2026-10-30: the henley "shows a yellow shirt with a green
+ *  number 9", which was the shirt under the blazer in another close-up) and dropped a correct look.
+ *  Returns { ok, missing, extra, different, differentBy: [{ item, text }], note }. */
 export async function outfitCheck(image, items, defaultShoes, { model = LOOK_MODEL, key = process.env.GEMINI_API_KEY } = {}) {
   if (!key) throw new Error('GEMINI_API_KEY is not set');
-  const refs = items.filter((x) => x.crop);
+  const part = (img) => ({ inlineData: { mimeType: img.mime, data: img.bytes.toString('base64') } });
+  const ask = async (parts, schema) => {
+    const res = await fetch(`${GEMINI_BASE}/v1beta/models/${model}:generateContent`, {
+      method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
+      body: JSON.stringify({ contents: [{ role: 'user', parts }], generationConfig: { responseMimeType: 'application/json', responseSchema: schema, temperature: 0 } }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(`${res.status}: ${json.error?.message || 'no details'}`);
+    return JSON.parse(json.candidates?.[0]?.content?.parts?.map((p) => p.text).join('') || '{}');
+  };
   // Garments with a close-up are named without colours: with "metallic silver" in the name the check kept rejecting
   // gold sandals that matched their close-up exactly (2026-10-28, twice, despite being told to trust the image).
-  const COLOUR = /\b(metallic|silver|gold(en)?|black|white|off-white|cream|ivory|beige|tan|camel|brown|grey|gray|charcoal|navy|blue|light|dark|pale|red|pink|blush|green|olive|khaki|yellow|orange|purple|lilac|burgundy|nude)\b[- ]?/gi;
   const named = (x) => (x.crop ? x.description.replace(COLOUR, '').replace(/\s{2,}/g, ' ').trim() : x.description);
-  const list = [...items.map((x) => `${named(x)} (${x.category})${x.crop ? ` — reference image ${refs.indexOf(x) + 2}` : ''}`), ...(defaultShoes ? [`${defaultShoes} (shoes)`] : [])];
-  const prompt = `Image 1 is a photo of a person. ${refs.length ? `Images 2 to ${refs.length + 1} are close-ups of the real garments they should wear. ` : ''}The person should wear exactly these garments and nothing else:\n${list.map((x) => '- ' + x).join('\n')}
-missing: any garment from the list that is not visible or is clearly a different garment (other colour, cut or type).
-different: for each garment that has a reference image, any visible difference from it in the photo: neckline, straps or back construction, collar, sleeves, length, fit, closures (buttons, zips, drawstring), pockets, pattern, colour or fabric. Name the garment and the difference, e.g. "white tank top: racerback straps instead of plain straps". Ignore folds, lighting and the angle of view.
-The written names come from a quick reading and can be wrong about colour or details (gold read as silver, cream as white). When a garment has a reference image, the reference image is the truth: compare the photo with the image, never with the words, and do not report a difference that only the words have. Each close-up shows its garment as it was worn, often with other garments, a bag, a strap or a hand around or over it (a jacket over a cardigan): judge only the named garment and ignore everything else in the close-up; never report a missing bag or an extra layer because a close-up shows one. Parts of a garment covered by another garment cannot be seen (a knee-high boot shaft under wide trousers, a tucked-in hem, a top under a jacket): never report a difference or a missing garment for what is covered, only for what is visible. Close-ups are often lit by coloured room light (one side pinker or yellower): that is the light, not a two-tone garment; judge the garment's own colour.
-extra: any outerwear, top, bottom, dress or shoes the person wears that is not on the list (e.g. a jacket or blazer that should not be there). Ignore belts, jewellery, underwear and small details. Empty lists if it matches.`;
-  const part = (img) => ({ inlineData: { mimeType: img.mime, data: img.bytes.toString('base64') } });
-  const res = await fetch(`${GEMINI_BASE}/v1beta/models/${model}:generateContent`, {
-    method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
-    body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'Image 1 (the photo):' }, part(image), ...refs.flatMap((x, i) => [{ text: `Image ${i + 2} (${named(x)}):` }, part(x.crop)]), { text: prompt }] }],
-      generationConfig: { responseMimeType: 'application/json', responseSchema: OUTFIT_SCHEMA, temperature: 0 } }),
-  });
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(`${res.status}: ${json.error?.message || 'no details'}`);
-  const r = JSON.parse(json.candidates?.[0]?.content?.parts?.map((p) => p.text).join('') || '{}');
-  const missing = Array.isArray(r.missing) ? r.missing : [], extra = Array.isArray(r.extra) ? r.extra : [];
-  const different = Array.isArray(r.different) ? r.different : [];
-  return { ok: !missing.length && !extra.length && !different.length, missing, extra, different, note: [...missing.map((x) => 'missing ' + x), ...extra.map((x) => 'extra ' + x), ...different.map((x) => 'different ' + x)].join(', ') };
+  const list = [...items.map((x) => `${named(x)} (${x.category})`), ...(defaultShoes ? [`${defaultShoes} (shoes)`] : [])];
+  const whole = ask([{ text: 'The photo:' }, part(image), { text: `The person in the photo should wear exactly these garments and nothing else:\n${list.map((x) => '- ' + x).join('\n')}
+missing: any garment from the list that is not visible, or is clearly another type of garment. Parts covered by another garment (a tucked hem, a top under a jacket, boots under wide trousers) count as visible.
+extra: any outerwear, top, bottom, dress or shoes the person wears that is not on the list (e.g. a jacket that should not be there). Ignore belts, jewellery, bags, underwear and small details. Empty lists if it matches.` }],
+    { type: 'OBJECT', properties: { missing: { type: 'ARRAY', items: { type: 'STRING' } }, extra: { type: 'ARRAY', items: { type: 'STRING' } } }, required: ['missing', 'extra'] });
+  const each = items.filter((x) => x.crop).map((x) => ask([{ text: 'Image 1, the photo:' }, part(image), { text: `Image 2, a close-up of the real ${x.category} (${named(x)}) as it was photographed:` }, part(x.crop), { text: `Compare only this ${x.category} in image 1 with the one in image 2. Image 2 may also show other garments, a bag, a strap, a hand or coloured room light around or over it: ignore all of that, and judge the garment's own colour, not the light.
+different: the visible differences of this ${x.category} only: neckline, straps or back construction, collar, sleeves, length, fit, closures (buttons, zips, drawstring), pockets, pattern, logo, colour or fabric. Only what is plainly visible in both images; ignore folds, lighting, the angle of view, and parts hidden in either image. Empty list if they match.` }],
+    { type: 'OBJECT', properties: { different: { type: 'ARRAY', items: { type: 'STRING' } } }, required: ['different'] })
+    .then((r) => (Array.isArray(r.different) ? r.different : []).map((text) => ({ item: x, text: `${named(x)}: ${text}` }))));
+  const [w, ...per] = await Promise.all([whole, ...each]);
+  const missing = Array.isArray(w.missing) ? w.missing : [], extra = Array.isArray(w.extra) ? w.extra : [];
+  const differentBy = per.flat(), different = differentBy.map((d) => d.text);
+  return { ok: !missing.length && !extra.length && !different.length, missing, extra, different, differentBy, note: [...missing.map((x) => 'missing ' + x), ...extra.map((x) => 'extra ' + x), ...different.map((x) => 'different ' + x)].join(', ') };
 }
+const COLOUR = /\b(metallic|silver|gold(en)?|black|white|off-white|cream|ivory|beige|tan|camel|brown|grey|gray|charcoal|navy|blue|light|dark|pale|red|pink|blush|green|olive|khaki|yellow|orange|purple|lilac|burgundy|nude)\b[- ]?/gi;
 
 // Photo check for the base photo (before and after preparing it). Seen 2026-10-28: a mirror selfie as base photo made
 // every look hold a phone and look at it, because base mode keeps the pose. Users will upload selfies, so the base photo
