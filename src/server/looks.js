@@ -4,7 +4,8 @@ import { authClient } from './auth.js';
 import { OCCASION_TABS, startOfToday, tabFor, temperatureOf } from '../mirror/occasions.js';
 
 const URL_SECONDS = 60 * 60;
-const MAX_JOBS_PER_DAY = 8;  // on-demand jobs per person per day (each ~$0.15–0.40)
+const MAX_JOBS_PER_DAY = 8;
+const MAX_PER_TAB = 5;      // the ring is designed for up to 5 looks; more crowd it (2026-10-30: 23 test looks in one tab)  // on-demand jobs per person per day (each ~$0.15–0.40)
 
 /** { tabs: { [label]: { looks: [{ id, image, alt }], making: bool } }, temperature, hasBase } */
 export async function todaysLooks(userId) {
@@ -17,7 +18,8 @@ export async function todaysLooks(userId) {
       .gte('created_at', since).order('created_at', { ascending: false }),
     sb.from('users').select('base_path').eq('id', userId).single(),
   ]);
-  const looks = rows || [];
+  // Only transparent cut-outs (.webp): flat PNGs from before 2026-10-30 show as boxes cutting through the ring.
+  const looks = (rows || []).filter((r) => r.generated_image_path?.endsWith('.webp'));
   const paths = looks.map((r) => r.generated_image_path).filter(Boolean);
   const signed = paths.length ? (await sb.storage.from('outfits').createSignedUrls(paths, URL_SECONDS)).data || [] : [];
   const urlOf = new Map(signed.filter((s) => s.signedUrl).map((s) => [s.path, s.signedUrl]));
@@ -28,7 +30,7 @@ export async function todaysLooks(userId) {
   for (const list of byJob.values()) {
     for (const r of list.sort((a, b) => a.look_n - b.look_n)) {
       const image = urlOf.get(r.generated_image_path);
-      if (image) tabs[tabFor(r.occasion)].looks.push({ id: r.id, image, alt: (r.items || []).map((i) => i.description).join(', ') || 'Today\'s look' });
+      if (image && tabs[tabFor(r.occasion)].looks.length < MAX_PER_TAB) tabs[tabFor(r.occasion)].looks.push({ id: r.id, image, alt: (r.items || []).map((i) => i.description).join(', ') || 'Today\'s look' });
     }
   }
   for (const j of jobs || []) if (['pending', 'processing'].includes(j.status)) tabs[tabFor(j.payload?.occasion || '')].making = true;
