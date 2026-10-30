@@ -30,5 +30,5 @@ primary_region = "cdg"            # Paris, next to Vercel (cdg1)
 
 [[vm]]
   memory = "4gb"                   # 2 GB was killed for memory on the first job (2026-10-29: the pipeline alone used 1.9 GB)
-  cpu_kind = "shared"
-  cpus = 2                         # Fly allows up to 2 GB per shared CPU
+  cpu_kind = "performance"         # dedicated: on shared CPUs Fly throttled the background step from 4 s to 61 s per look (2026-10-30)
+  cpus = 2
