@@ -3,8 +3,10 @@
 -- The worker fills in the weather (Open-Meteo, from home_lat/home_lon) and the occasion (default_occasion, or work on
 -- weekdays and a relaxed day at weekends).
 --
--- Before running this file: Database → Extensions → enable pg_cron and pg_net. After it, store the worker's address and
--- secret once (see the end of this file).
+-- After running it, store the worker's address and secret once (see the end of this file).
+
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+CREATE EXTENSION IF NOT EXISTS pg_net;
 
 ALTER TABLE public.users
   ADD COLUMN IF NOT EXISTS home_lat DOUBLE PRECISION,
