@@ -53,6 +53,20 @@ function MakingLooks({ occasion }) {
   );
 }
 
+/** No looks to show (Figma 206:5879): illustration, "No Party looks yet", a line, and the shutter. */
+function NoLooks({ title, text, onShoot }) {
+  return (
+    <div className="mirror-empty is-none" role="status">
+      <img src="/brand/no-looks.svg" width="222" height="142" alt="" />
+      <div>
+        <p className="mirror-making-title">{title}</p>
+        <p>{text}</p>
+      </div>
+      {onShoot && <ShootButton onShoot={onShoot} compact />}
+    </div>
+  );
+}
+
 function NoFavorites({ onBack }) {
   return (
     <div className="mirror-empty is-favorites" role="status">
@@ -78,13 +92,14 @@ function Account({ initial }) {
   );
 }
 
-function ShootButton({ onShoot }) {
+function ShootButton({ onShoot, compact = false }) {
   // No `capture` attribute on purpose: phones then offer their own menu (iPhone: Take Photo, Photo Library, Choose
   // File; Android: camera or gallery). With `capture` they open only the camera (2026-10-30, Felipe).
+  // compact: the 40px shutter of the "No looks yet" state (Figma 206:6044).
   return (
-    <label className="ds-button mirror-shoot">
+    <label className={compact ? 'ds-button mirror-shutter' : 'ds-button mirror-shoot'} aria-label={compact ? 'Shoot your outfit' : undefined}>
       <Icon name="camera" size={20} />
-      <span>Shoot your outfit</span>
+      {!compact && <span>Shoot your outfit</span>}
       <input className="visually-hidden" type="file" accept="image/*"
         onChange={(e) => { const file = e.target.files?.[0]; if (file) onShoot(file); e.target.value = ''; }} />
     </label>
@@ -119,6 +134,8 @@ export default function DailyMirror({
   const [hearts, setHearts] = useState(() => new Map()); // look id → hearted, for changes made on this page
   const [hidden, setHidden] = useState(() => new Set()); // garment combinations hidden on this page
   const [toast, setToast] = useState(null);
+  // After a new outfit photo starts looks for this tab: show "Making your … looks" until the first new one arrives.
+  const [awaiting, setAwaiting] = useState(null); // { tab, known: Set of look ids already there }
   const [leavingId, setLeavingId] = useState(null);   // the look fading out after "hide"
   const [arrivingId, setArrivingId] = useState(null); // the look that takes its place, fading in
   const pending = useRef(new Set()); // marks still on their way, so a Favorites fetch waits for them
@@ -139,7 +156,8 @@ export default function DailyMirror({
     if (r.error) setProblem(r.error);
     refresh();
   }, [refresh]);
-  // "Shoot your outfit": the photo joins the wardrobe and is read on the next run (the morning looks, or "Make looks").
+  // "Shoot your outfit": the photo joins the wardrobe and is read on the next run (the morning looks, or a tester's
+// instant looks, src/lib/plans.js).
   const [note, setNote] = useState(null);
   const onShoot = useCallback(async (file) => {
     if (!live) return;
@@ -152,12 +170,18 @@ export default function DailyMirror({
       const r = await res.json().catch(() => ({}));
       if (r.error) { setNote(null); setProblem(r.error); return; }
       const tip = r.advice ? ` ${r.advice.title}: ${r.advice.hint}` : '';
-      setNote(r.queued ? `Outfit added! Your look will be ready in about a minute.${tip}`
+      // Looks on their way: the "Making your … looks" screen says so (Figma 206:5722); a note only for photo advice.
+      setNote(r.queued ? (tip ? `Outfit added!${tip}` : null)
         : r.queueError ? `Outfit added! ${r.queueError}` : `Outfit added! It’ll be in your next looks.${tip}`);
-      if (r.queued) { setSeason(SEASONS[0]); refresh(); }
+      if (r.queued) {
+        setSeason(SEASONS[0]);
+        setAwaiting({ tab: occasion, known: new Set((data?.tabs?.[occasion]?.looks || []).map((l) => l.id)) });
+        setData((d) => ({ ...d, tabs: { ...d.tabs, [occasion]: { ...d.tabs[occasion], making: true } } }));
+        refresh();
+      }
       setData((d) => ({ ...d, outfitPhotos: (d.outfitPhotos || 0) + 1 }));
     } catch (e) { setNote(null); setProblem(e.message || 'Could not add the photo'); }
-  }, [live, occasion, refresh]);
+  }, [live, occasion, refresh, data]);
   const setOccasion = (label) => {
     setOccasionState(label); setIndex(0);
     if (live && today_ && data.hasBase && !data.tabs[label].looks.length && !data.tabs[label].making) ask(label);
@@ -176,6 +200,12 @@ export default function DailyMirror({
   // Opening the mirror on a tab with no looks today (the morning run hasn't happened, or another occasion) asks for some.
   useEffect(() => { if (live && data.hasBase && !tab.looks.length && !tab.making) ask(occasion); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // The making screen after a new outfit ends when a new look arrives or that tab's looks are done.
+  useEffect(() => {
+    if (!awaiting || !data) return;
+    const t = data.tabs[awaiting.tab];
+    if (!t?.making || t.looks.some((l) => !awaiting.known.has(l.id))) setAwaiting(null);
+  }, [data, awaiting]);
   // Toasts leave after ~5 s; a new one replaces the last.
   useEffect(() => {
     if (!toast) return undefined;
@@ -226,7 +256,10 @@ export default function DailyMirror({
   // With more looks than dots, the pager shows a window of up to five around the current one.
   const first = Math.max(0, Math.min(current - Math.floor(MAX_DOTS / 2), count - MAX_DOTS));
   const dots = outfits.slice(first, first + MAX_DOTS).map((o, i) => ({ outfit: o, i: first + i }));
-  const front = count ? outfits[current] : null;
+  // The making screen: a tab with nothing to show yet while looks are made, or right after a new outfit photo.
+  const awaitingHere = live && today_ && awaiting?.tab === occasion;
+  const showMaking = live && today_ && data.hasBase && tab.making && (!count || (awaitingHere && !tab.looks.some((l) => !awaiting.known.has(l.id))));
+  const front = count && !showMaking ? outfits[current] : null;
   const loading = live && !today_ && tab.loading;
 
   // "Skip" in onboarding (Figma 162:545): no tabs or bottom bar, just the way back in.
@@ -312,19 +345,19 @@ export default function DailyMirror({
 
         <section className="mirror-body" aria-roledescription="carousel" aria-label={`${occasion} outfits, ${season}`}>
           <div className="mirror-carousel">
-            {count > 1 && <button type="button" className="ds-round-button mirror-arrow" onClick={() => go(-1)} aria-label="Previous outfit"><Icon name="arrow-left" size={20} /></button>}
-            {count ? <OutfitRing key={`${occasion}|${filter}`} outfits={outfits} index={current} onChange={setIndex} onOpen={(i) => setViewing(outfits[i])} leavingId={leavingId} arrivingId={arrivingId} />
+            {count > 1 && !showMaking && <button type="button" className="ds-round-button mirror-arrow" onClick={() => go(-1)} aria-label="Previous outfit"><Icon name="arrow-left" size={20} /></button>}
+            {showMaking ? <MakingLooks occasion={occasion} />
+              : count ? <OutfitRing key={`${occasion}|${filter}`} outfits={outfits} index={current} onChange={setIndex} onOpen={(i) => setViewing(outfits[i])} leavingId={leavingId} arrivingId={arrivingId} />
               : favoritesView && !loading && !problem ? <NoFavorites onBack={() => pickSeason(SEASONS[0])} />
-              : live && data.hasBase && today_ && tab.making ? <MakingLooks occasion={occasion} /> : (
+              : live && tab?.loading ? <div className="mirror-empty" role="status"><p>Loading…</p></div>
+              : live && data.hasBase ? <NoLooks title={today_ ? `No ${occasion} looks yet` : `No ${season} ${occasion} looks yet`}
+                  text={problem || 'Shoot your first outfit.'} onShoot={onShoot} />
+              : (
               <div className="mirror-empty" role="status">
-                {!live ? <p>No looks left here. Reload the page to see them again.</p>
-                  : !data.hasBase ? <p>Add your photos to see yourself in your own clothes.</p>
-                  : !today_ ? <p>{tab.loading ? 'Loading…' : problem || `No ${season.toLowerCase()} ${occasion.toLowerCase()} looks yet.`}</p>
-                  : <><p>{problem || `No ${occasion.toLowerCase()} looks yet today.`}</p>
-                    {!problem && <button type="button" className="ds-button" onClick={() => ask(occasion)}>Make looks</button>}</>}
+                <p>{!live ? 'No looks left here. Reload the page to see them again.' : 'Add your photos to see yourself in your own clothes.'}</p>
               </div>
             )}
-            {count > 1 && <button type="button" className="ds-round-button mirror-arrow" onClick={() => go(1)} aria-label="Next outfit"><Icon name="arrow-right" size={20} /></button>}
+            {count > 1 && !showMaking && <button type="button" className="ds-round-button mirror-arrow" onClick={() => go(1)} aria-label="Next outfit"><Icon name="arrow-right" size={20} /></button>}
           </div>
           {(note || (problem && count > 0)) && <p className="mirror-note" role="status">{note || problem}</p>}
           {!note && count <= 1 && more > 0 && <p className="mirror-nudge">Add {more} more outfit{more > 1 ? 's' : ''} for new looks every day</p>}
