@@ -25,12 +25,14 @@ import './mirror.css';
 
 const MAX_DOTS = 5; // the Figma pager has 1–5 dots
 const TOAST_MS = 5000; // Figma toast: "Shows for ~5 s"
+const TOAST_OUT_MS = 250; // its exit animation (mirror.css mirror-toast-out)
+const HIDE_FADE_MS = 350; // a hidden look fades out before it leaves the ring (mirror.css ring-leave)
 
 /** toast (Figma 191:1373): a short confirmation with one action. Sits just above the hide · pager · heart row. */
 function Toast({ toast }) {
   if (!toast) return null;
   return (
-    <div className="ds-toast mirror-toast" role="status">
+    <div className={`ds-toast mirror-toast${toast.leaving ? ' is-leaving' : ''}`} role="status">
       <span>{toast.message}</span>
       <button type="button" className="ds-toast-action" onClick={toast.onAction}>{toast.action}</button>
     </div>
@@ -104,6 +106,8 @@ export default function DailyMirror({
   const [hearts, setHearts] = useState(() => new Map()); // look id → hearted, for changes made on this page
   const [hidden, setHidden] = useState(() => new Set()); // garment combinations hidden on this page
   const [toast, setToast] = useState(null);
+  const [leavingId, setLeavingId] = useState(null);   // the look fading out after "hide"
+  const [arrivingId, setArrivingId] = useState(null); // the look that takes its place, fading in
   const pending = useRef(new Set()); // marks still on their way, so a Favorites fetch waits for them
   const isFav = (o) => (hearts.has(o.id) ? hearts.get(o.id) : Boolean(o.favorite));
   const comboOf = (o) => o.combo || o.id;
@@ -160,7 +164,12 @@ export default function DailyMirror({
   useEffect(() => { if (live && data.hasBase && !tab.looks.length && !tab.making) ask(occasion); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Toasts leave after ~5 s; a new one replaces the last.
-  useEffect(() => { if (!toast) return undefined; const t = setTimeout(() => setToast(null), TOAST_MS); return () => clearTimeout(t); }, [toast]);
+  useEffect(() => {
+    if (!toast) return undefined;
+    if (toast.leaving) { const t = setTimeout(() => setToast(null), TOAST_OUT_MS); return () => clearTimeout(t); }
+    const t = setTimeout(() => setToast((x) => (x && x.id === toast.id ? { ...x, leaving: true } : x)), TOAST_MS);
+    return () => clearTimeout(t);
+  }, [toast]);
   const mark = useCallback((id, action) => {
     if (!live) return; // the preview account keeps hearts and hides on this page only
     // Before migration 007 runs the server can't keep them; they still hold until the page reloads.
@@ -175,8 +184,19 @@ export default function DailyMirror({
     setToast(on ? { id: Date.now(), message: 'Saved to Favorites', action: 'View', onAction: () => { setToast(null); pickSeason('Favorites'); } } : null);
   };
   const hide = (look) => {
+    if (leavingId) return;
     const combo = comboOf(look);
-    setHidden((h) => new Set(h).add(combo)); // the ring now shows the next look where this one stood
+    // The look fades out where it stands, then leaves the ring; the next one takes its place and fades in.
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    setLeavingId(look.id);
+    const next = outfits.filter((o) => comboOf(o) !== combo);
+    setTimeout(() => {
+      setHidden((h) => new Set(h).add(combo));
+      setLeavingId(null);
+      const arriving = next.length ? next[wrap(index, next.length)] : null;
+      setArrivingId(arriving?.id || null);
+      setTimeout(() => setArrivingId(null), 400);
+    }, reduce ? 0 : HIDE_FADE_MS);
     mark(look.id, 'hide');
     setToast({ id: Date.now(), message: 'Look hidden. You won’t see it again.', action: 'Undo', onAction: () => {
       setToast(null);
@@ -224,7 +244,7 @@ export default function DailyMirror({
 
   const more = live ? Math.max(0, 3 - (data.outfitPhotos || 0)) : 0;
   return (
-    <div className="mirror">
+    <div className={`mirror${(note || (problem && count > 0) || (!note && count <= 1 && more > 0)) ? ' has-note' : ''}`}>
       <header className="mirror-header">
         <Logo className="mirror-logo" />
         <div className="mirror-actions">
@@ -280,7 +300,7 @@ export default function DailyMirror({
         <section className="mirror-body" aria-roledescription="carousel" aria-label={`${occasion} outfits, ${season}`}>
           <div className="mirror-carousel">
             {count > 1 && <button type="button" className="ds-round-button mirror-arrow" onClick={() => go(-1)} aria-label="Previous outfit"><Icon name="arrow-left" size={20} /></button>}
-            {count ? <OutfitRing key={`${occasion}|${filter}`} outfits={outfits} index={current} onChange={setIndex} onOpen={(i) => setViewing(outfits[i])} />
+            {count ? <OutfitRing key={`${occasion}|${filter}`} outfits={outfits} index={current} onChange={setIndex} onOpen={(i) => setViewing(outfits[i])} leavingId={leavingId} arrivingId={arrivingId} />
               : favoritesView && !loading && !problem ? <NoFavorites onBack={() => pickSeason(SEASONS[0])} /> : (
               <div className="mirror-empty" role="status">
                 {!live ? <p>No looks left here. Reload the page to see them again.</p>
@@ -300,7 +320,7 @@ export default function DailyMirror({
             <Toast key={toast?.id} toast={toast} />
             {front && (
               <div className="mirror-look-actions">
-                <button type="button" className="ds-icon-button is-large is-tertiary mirror-look-action" onClick={() => hide(front)}
+                <button type="button" className="ds-icon-button is-large is-tertiary mirror-look-action" onClick={() => hide(front)} disabled={Boolean(leavingId)}
                   aria-label="Hide this look" title="Hide this look"><Icon name="eye-off" size={24} strokeWidth={5 / 3} /></button>
                 {count > 1 && (
                   <div className="ds-pager" role="group" aria-label="Choose an outfit">

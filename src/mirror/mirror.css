@@ -39,7 +39,7 @@
 .mirror-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-md); min-height: 320px; max-width: 360px; text-align: center; color: var(--text-secondary); }
 .mirror-empty p { margin: 0; }
 
-.ring { --look-h: clamp(320px, 100dvh - 290px, 600px); --ring-radius: 0.697; --ring-back-scale: 0.615; --ring-lift: 0.193;
+.ring { --look-h: clamp(320px, 100dvh - 320px, 600px); /* 320: header, filters, the hide · pager · heart row */ --ring-radius: 0.697; --ring-back-scale: 0.615; --ring-lift: 0.193;
   --ring-side-strength: 0.68; --ring-back-strength: 0.44; /* sides 32% faded; looks heading to the back fade further */
   --ring-visible-slots: 1; /* 3 looks on screen: the front one and one each side */
   position: relative; z-index: 0; flex: 0 1 1190px; height: var(--look-h); touch-action: pan-y; user-select: none; -webkit-user-select: none; outline: none; }
@@ -62,9 +62,21 @@
 .ds-icon-button.mirror-look-action { color: var(--icon-primary); }
 .ds-icon-button.mirror-look-action[aria-pressed="true"] { color: var(--icon-accent); }
 .mirror-look-action[aria-pressed="true"] svg { fill: currentColor; }
-.mirror-toast { position: absolute; z-index: 5; left: 50%; bottom: calc(100% + var(--space-sm)); transform: translateX(-50%); animation: mirror-toast-in .2s ease-out; }
-@keyframes mirror-toast-in { from { opacity: 0; transform: translate(-50%, 8px); } }
-@media (prefers-reduced-motion: reduce) { .mirror-toast { animation: none; } }
+.mirror-toast { position: absolute; z-index: 5; left: 50%; bottom: calc(100% + var(--space-sm)); transform: translateX(-50%);
+  animation: mirror-toast-in .35s cubic-bezier(.2, .8, .2, 1) both; }
+/* The toast rises out of the top of the hide · pager · heart row and fades in; it sinks back and fades on its way out. */
+@keyframes mirror-toast-in { from { opacity: 0; transform: translate(-50%, calc(100% + var(--space-sm))); } }
+.mirror-toast.is-leaving { animation: mirror-toast-out .25s ease-in both; }
+@keyframes mirror-toast-out { to { opacity: 0; transform: translate(-50%, calc(100% + var(--space-sm))); } }
+/* Hide: the look fades out (and settles a little) before leaving the ring; the one taking its place fades in. */
+.ring-item.is-leaving img, .ring-item.is-leaving .ring-veil { transition: opacity .35s ease-out, transform .35s ease-out; opacity: 0; transform: scale(.97); transform-origin: 50% 100%; }
+.ring-item.is-arriving img { animation: ring-arrive .4s ease-out both; }
+@keyframes ring-arrive { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .mirror-toast, .mirror-toast.is-leaving, .ring-item.is-arriving img { animation: none; } .ring-item.is-leaving img { transition: none; } }
+
+/* A note line under the looks (outfit added, add more outfits) takes its height from the looks, not the page. */
+.mirror.has-note .ring { --look-h: clamp(300px, 100dvh - 350px, 600px); }
+@media (max-width: 1023px) { .mirror.has-note .ring { --look-h: clamp(170px, 100svh - 415px, 464px); } }
 
 /* Favorites with nothing hearted yet (Figma 192:1750): illustration, title, text, link back to today's looks. */
 .mirror-empty.is-favorites { gap: var(--space-lg); max-width: 310px; }
@@ -131,7 +143,7 @@
   .mirror-body { flex: 1; justify-content: center; margin-top: 22px; padding: 0 0 var(--space-md); overflow: hidden; }
   .mirror-carousel { position: relative; width: 100%; height: auto; overflow: hidden; }
   .mirror-carousel::before, .mirror-carousel::after { content: ''; position: absolute; top: 0; bottom: 0; z-index: 1; width: 78px; pointer-events: none; }
-  .ring { --look-h: clamp(200px, 100svh - 345px, 464px); --ring-radius: 0.463; --ring-back-scale: 0.552; --ring-lift: 0.224; flex: 1 1 100%; }
+  .ring { --look-h: clamp(180px, 100svh - 385px, 464px); --ring-radius: 0.463; --ring-back-scale: 0.552; --ring-lift: 0.224; flex: 1 1 100%; }
   .mirror-carousel::before { left: 0; background: linear-gradient(to left, transparent, color-mix(in srgb, var(--bg-primary) 80%, transparent)); }
   .mirror-carousel::after { right: 0; background: linear-gradient(to right, transparent, color-mix(in srgb, var(--bg-primary) 80%, transparent)); }
   .mirror-arrow { display: none; }

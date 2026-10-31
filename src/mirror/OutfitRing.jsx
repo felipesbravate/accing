@@ -19,7 +19,7 @@ const INTRO_SLOTS = 1.5; // the opening spin covers one and a half looks
 const SWIPE_PX = 40;
 const TAP_PX = 6;
 
-export default function OutfitRing({ outfits, index, onChange, onOpen = () => {} }) {
+export default function OutfitRing({ outfits, index, onChange, onOpen = () => {}, leavingId = null, arrivingId = null }) {
   const count = outfits.length;
   const stage = useRef(null);
   const items = useRef([]);
@@ -129,7 +129,7 @@ export default function OutfitRing({ outfits, index, onChange, onOpen = () => {}
       onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
       onPointerCancel={() => { drag.current = null; turnTo(target.current); }} onKeyDown={onKeyDown}>
       {outfits.map((o, i) => (
-        <figure key={o.id} className={`ring-item${i === index ? ' is-front' : ''}`} data-i={i} ref={(el) => { items.current[i] = el; }} aria-hidden={i !== index || undefined}>
+        <figure key={o.id} className={`ring-item${i === index ? ' is-front' : ''}${o.id === leavingId ? ' is-leaving' : ''}${o.id === arrivingId ? ' is-arriving' : ''}`} data-i={i} ref={(el) => { items.current[i] = el; }} aria-hidden={i !== index || undefined}>
           <img src={o.image} alt={i === index ? o.alt : ''} draggable={false} />
           <span className="ring-veil" aria-hidden="true" style={{ WebkitMaskImage: `url(${o.image})`, maskImage: `url(${o.image})` }} />
         </figure>
