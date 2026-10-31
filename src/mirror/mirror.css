@@ -80,6 +80,11 @@
 
 /* Favorites with nothing hearted yet (Figma 192:1750): illustration, title, text, link back to today's looks. */
 .mirror-empty.is-favorites { gap: var(--space-lg); max-width: 310px; }
+/* Making looks (Figma 206:5722): illustration 120×140, then two lines in Heading/H3 (18 px medium). */
+.mirror-empty.is-making { gap: var(--space-lg); max-width: none; }
+.mirror-empty.is-making > div { display: flex; flex-direction: column; gap: var(--space-xs); }
+.mirror-empty.is-making p { font-size: var(--fs-h3); font-weight: var(--fw-medium); line-height: normal; color: var(--text-secondary); }
+.mirror-empty.is-making .mirror-making-title { color: var(--text-primary); }
 .mirror-empty.is-favorites > div { display: flex; flex-direction: column; gap: var(--space-sm); }
 .mirror-empty.is-favorites h2 { margin: 0; font-size: var(--fs-h2); font-weight: var(--fw-medium); line-height: normal; color: var(--text-primary); }
 .mirror-empty.is-favorites p { font-size: var(--fs-body-large); line-height: normal; color: var(--text-secondary); }

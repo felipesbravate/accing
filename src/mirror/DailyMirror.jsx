@@ -40,6 +40,19 @@ function Toast({ toast }) {
 }
 
 /** "Favorites" with nothing hearted yet (Figma 192:1750). */
+/** Looks on their way and none to show yet (Figma 206:5722): illustration, "Making your Party looks", the wait. */
+function MakingLooks({ occasion }) {
+  return (
+    <div className="mirror-empty is-making" role="status" aria-live="polite">
+      <img src="/brand/making-looks.svg" width="120" height="140" alt="" />
+      <div>
+        <p className="mirror-making-title">Making your {occasion} looks</p>
+        <p>The first one takes about a minute.</p>
+      </div>
+    </div>
+  );
+}
+
 function NoFavorites({ onBack }) {
   return (
     <div className="mirror-empty is-favorites" role="status">
@@ -301,12 +314,12 @@ export default function DailyMirror({
           <div className="mirror-carousel">
             {count > 1 && <button type="button" className="ds-round-button mirror-arrow" onClick={() => go(-1)} aria-label="Previous outfit"><Icon name="arrow-left" size={20} /></button>}
             {count ? <OutfitRing key={`${occasion}|${filter}`} outfits={outfits} index={current} onChange={setIndex} onOpen={(i) => setViewing(outfits[i])} leavingId={leavingId} arrivingId={arrivingId} />
-              : favoritesView && !loading && !problem ? <NoFavorites onBack={() => pickSeason(SEASONS[0])} /> : (
+              : favoritesView && !loading && !problem ? <NoFavorites onBack={() => pickSeason(SEASONS[0])} />
+              : live && data.hasBase && today_ && tab.making ? <MakingLooks occasion={occasion} /> : (
               <div className="mirror-empty" role="status">
                 {!live ? <p>No looks left here. Reload the page to see them again.</p>
                   : !data.hasBase ? <p>Add your photos to see yourself in your own clothes.</p>
                   : !today_ ? <p>{tab.loading ? 'Loading…' : problem || `No ${season.toLowerCase()} ${occasion.toLowerCase()} looks yet.`}</p>
-                  : tab.making ? <p>Making your {occasion.toLowerCase()} looks… the first one takes about a minute.</p>
                   : <><p>{problem || `No ${occasion.toLowerCase()} looks yet today.`}</p>
                     {!problem && <button type="button" className="ds-button" onClick={() => ask(occasion)}>Make looks</button>}</>}
               </div>
