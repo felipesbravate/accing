@@ -55,6 +55,26 @@
   -webkit-mask-size: contain; mask-size: contain; -webkit-mask-position: center; mask-position: center;
   -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; }
 
+/* hide · pager · heart under the front look (Figma 191:1385; desktop 198:5697): 48px tertiary icon-buttons with 24px
+   icons in icon/primary; the heart fills with icon/accent once hearted. The toast floats just above the row. */
+.mirror-look-bar { position: relative; display: flex; justify-content: center; width: 100%; }
+.mirror-look-actions { display: flex; align-items: center; justify-content: center; gap: var(--space-lg); padding: 0 var(--space-md); }
+.ds-icon-button.mirror-look-action { color: var(--icon-primary); }
+.ds-icon-button.mirror-look-action[aria-pressed="true"] { color: var(--icon-accent); }
+.mirror-look-action[aria-pressed="true"] svg { fill: currentColor; }
+.mirror-toast { position: absolute; z-index: 5; left: 50%; bottom: calc(100% + var(--space-sm)); transform: translateX(-50%); animation: mirror-toast-in .2s ease-out; }
+@keyframes mirror-toast-in { from { opacity: 0; transform: translate(-50%, 8px); } }
+@media (prefers-reduced-motion: reduce) { .mirror-toast { animation: none; } }
+
+/* Favorites with nothing hearted yet (Figma 192:1750): illustration, title, text, link back to today's looks. */
+.mirror-empty.is-favorites { gap: var(--space-lg); max-width: 310px; }
+.mirror-empty.is-favorites > div { display: flex; flex-direction: column; gap: var(--space-sm); }
+.mirror-empty.is-favorites h2 { margin: 0; font-size: var(--fs-h2); font-weight: var(--fw-medium); line-height: normal; color: var(--text-primary); }
+.mirror-empty.is-favorites p { font-size: var(--fs-body-large); line-height: normal; color: var(--text-secondary); }
+.mirror-link { padding: 0; border: 0; background: transparent; color: var(--text-accent); font-size: var(--fs-label-large); font-weight: var(--fw-medium); line-height: normal; }
+.mirror-link:hover { text-decoration: underline; }
+.mirror-link:focus-visible { outline: 2px solid var(--border-accent); outline-offset: 2px; border-radius: var(--radius-sm); }
+
 /* Under the looks: outfit-photo nudge (Figma 162:540) and short status notes. */
 .mirror-nudge, .mirror-note { margin: 0; padding: 0 var(--space-md); text-align: center; font-size: var(--fs-label-medium); font-weight: var(--fw-medium); line-height: normal; color: var(--text-primary); }
 .mirror-note { color: var(--text-secondary); }

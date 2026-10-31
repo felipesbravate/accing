@@ -3,7 +3,9 @@
 // mobile below 1024px "Daily Mirror - Mobile" (145:1617). One markup; mirror.css lays it out per breakpoint.
 // Desktop: season filter-items + occasion menu column, arrows. Mobile: occasion tabs + season dropdown, swipe,
 // and a bottom bar with "Shoot your outfit" and the avatar. The looks turn on a ring (OutfitRing.jsx).
-import { useCallback, useEffect, useState } from 'react';
+// Under the front look: hide · pager · heart (Figma "Favorite & hide", 191:1372). Hiding takes the look's garment
+// combination out of the mirror for good, with Undo; hearted looks come back under the "Favorites" filter.
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Icon } from '../ui/Icon.jsx';
 import { Logo } from '../ui/Logo.jsx';
 import { wrap } from './carousel.js';
@@ -22,6 +24,32 @@ import '../ui/components.css';
 import './mirror.css';
 
 const MAX_DOTS = 5; // the Figma pager has 1–5 dots
+const TOAST_MS = 5000; // Figma toast: "Shows for ~5 s"
+
+/** toast (Figma 191:1373): a short confirmation with one action. Sits just above the hide · pager · heart row. */
+function Toast({ toast }) {
+  if (!toast) return null;
+  return (
+    <div className="ds-toast mirror-toast" role="status">
+      <span>{toast.message}</span>
+      <button type="button" className="ds-toast-action" onClick={toast.onAction}>{toast.action}</button>
+    </div>
+  );
+}
+
+/** "Favorites" with nothing hearted yet (Figma 192:1750). */
+function NoFavorites({ onBack }) {
+  return (
+    <div className="mirror-empty is-favorites" role="status">
+      <img src="/brand/no-favorites.svg" width="155" height="106" alt="" />
+      <div>
+        <h2>No favorites yet</h2>
+        <p>Tap the heart on a look you love. It comes back here, ready to wear again.</p>
+      </div>
+      <button type="button" className="mirror-link" onClick={onBack}>See today’s suggestions</button>
+    </div>
+  );
+}
 
 /** avatar (Figma "avatar", Variation=Default): the person's initial. */
 function Account({ initial }) {
@@ -68,9 +96,19 @@ export default function DailyMirror({
   const today_ = filter === 'today';
 
   const live = Boolean(data);
+  const favoritesView = filter === 'favorites';
   const seasonTabs = !today_ && past?.key === filter ? past.tabs : null;
   const tab = live ? (today_ ? data.tabs[occasion] : seasonTabs?.[occasion] || { looks: [], making: false, loading: true }) : null;
-  const outfits = live ? tab.looks : SAMPLE_OUTFITS;
+
+  // Hearts and hides change on screen at once; the server is told in the background (POST /api/looks/mark).
+  const [hearts, setHearts] = useState(() => new Map()); // look id → hearted, for changes made on this page
+  const [hidden, setHidden] = useState(() => new Set()); // garment combinations hidden on this page
+  const [toast, setToast] = useState(null);
+  const pending = useRef(new Set()); // marks still on their way, so a Favorites fetch waits for them
+  const isFav = (o) => (hearts.has(o.id) ? hearts.get(o.id) : Boolean(o.favorite));
+  const comboOf = (o) => o.combo || o.id;
+  const outfits = (live ? tab.looks : SAMPLE_OUTFITS)
+    .filter((o) => !hidden.has(comboOf(o)) && (!favoritesView || isFav(o)));
   const making = live && Object.values(data.tabs).some((t) => t.making);
   const refresh = useCallback(async () => {
     const res = await fetch('/api/looks', { cache: 'no-store' }).catch(() => null);
@@ -112,7 +150,7 @@ export default function DailyMirror({
   useEffect(() => {
     if (!live || today_) return;
     let gone = false;
-    fetch(`/api/looks?season=${filter}`, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).catch(() => null)
+    Promise.all([...pending.current]).then(() => fetch(`/api/looks?season=${filter}`, { cache: 'no-store' })).then((r) => (r.ok ? r.json() : null)).catch(() => null)
       .then((r) => { if (!gone) { if (r?.tabs) setPast({ key: filter, tabs: r.tabs }); else setProblem('Could not load those looks. Try again.'); } });
     return () => { gone = true; };
   }, [filter, live, today_]);
@@ -120,6 +158,32 @@ export default function DailyMirror({
   useEffect(() => { if (!making) return undefined; const t = setInterval(refresh, POLL_MS); return () => clearInterval(t); }, [making, refresh]);
   // Opening the mirror on a tab with no looks today (the morning run hasn't happened, or another occasion) asks for some.
   useEffect(() => { if (live && data.hasBase && !tab.looks.length && !tab.making) ask(occasion); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Toasts leave after ~5 s; a new one replaces the last.
+  useEffect(() => { if (!toast) return undefined; const t = setTimeout(() => setToast(null), TOAST_MS); return () => clearTimeout(t); }, [toast]);
+  const mark = useCallback((id, action) => {
+    if (!live) return; // the preview account keeps hearts and hides on this page only
+    // Before migration 007 runs the server can't keep them; they still hold until the page reloads.
+    const p = fetch('/api/looks/mark', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id, action }) })
+      .catch(() => null).finally(() => pending.current.delete(p));
+    pending.current.add(p);
+  }, [live]);
+  const toggleFavorite = (look) => {
+    const on = !isFav(look);
+    setHearts((m) => new Map(m).set(look.id, on));
+    mark(look.id, on ? 'favorite' : 'unfavorite');
+    setToast(on ? { id: Date.now(), message: 'Saved to Favorites', action: 'View', onAction: () => { setToast(null); pickSeason('Favorites'); } } : null);
+  };
+  const hide = (look) => {
+    const combo = comboOf(look);
+    setHidden((h) => new Set(h).add(combo)); // the ring now shows the next look where this one stood
+    mark(look.id, 'hide');
+    setToast({ id: Date.now(), message: 'Look hidden. You won’t see it again.', action: 'Undo', onAction: () => {
+      setToast(null);
+      setHidden((h) => { const n = new Set(h); n.delete(combo); return n; });
+      mark(look.id, 'unhide');
+    } });
+  };
 
   // The server renders with its own clock; the browser corrects it to the viewer's time right after it loads.
   const shown = now || new Date();
@@ -129,6 +193,8 @@ export default function DailyMirror({
   // With more looks than dots, the pager shows a window of up to five around the current one.
   const first = Math.max(0, Math.min(current - Math.floor(MAX_DOTS / 2), count - MAX_DOTS));
   const dots = outfits.slice(first, first + MAX_DOTS).map((o, i) => ({ outfit: o, i: first + i }));
+  const front = count ? outfits[current] : null;
+  const loading = live && !today_ && tab.loading;
 
   // "Skip" in onboarding (Figma 162:545): no tabs or bottom bar, just the way back in.
   if (live && !data.hasBase) {
@@ -214,9 +280,11 @@ export default function DailyMirror({
         <section className="mirror-body" aria-roledescription="carousel" aria-label={`${occasion} outfits, ${season}`}>
           <div className="mirror-carousel">
             {count > 1 && <button type="button" className="ds-round-button mirror-arrow" onClick={() => go(-1)} aria-label="Previous outfit"><Icon name="arrow-left" size={20} /></button>}
-            {count ? <OutfitRing key={`${occasion}|${filter}`} outfits={outfits} index={current} onChange={setIndex} onOpen={(i) => setViewing(outfits[i])} /> : (
+            {count ? <OutfitRing key={`${occasion}|${filter}`} outfits={outfits} index={current} onChange={setIndex} onOpen={(i) => setViewing(outfits[i])} />
+              : favoritesView && !loading && !problem ? <NoFavorites onBack={() => pickSeason(SEASONS[0])} /> : (
               <div className="mirror-empty" role="status">
-                {!data.hasBase ? <p>Add your photos to see yourself in your own clothes.</p>
+                {!live ? <p>No looks left here. Reload the page to see them again.</p>
+                  : !data.hasBase ? <p>Add your photos to see yourself in your own clothes.</p>
                   : !today_ ? <p>{tab.loading ? 'Loading…' : problem || `No ${season.toLowerCase()} ${occasion.toLowerCase()} looks yet.`}</p>
                   : tab.making ? <p>Making your {occasion.toLowerCase()} looks… the first one takes about a minute.</p>
                   : <><p>{problem || `No ${occasion.toLowerCase()} looks yet today.`}</p>
@@ -227,13 +295,26 @@ export default function DailyMirror({
           </div>
           {(note || (problem && count > 0)) && <p className="mirror-note" role="status">{note || problem}</p>}
           {!note && count <= 1 && more > 0 && <p className="mirror-nudge">Add {more} more outfit{more > 1 ? 's' : ''} for new looks every day</p>}
-          {count > 1 && (
-            <div className="ds-pager" role="group" aria-label="Choose an outfit">
-              {dots.map(({ outfit, i }) => (
-                <button key={outfit.id} type="button" className="ds-pager-dot" aria-current={i === current} aria-label={`Outfit ${i + 1} of ${count}`} onClick={() => setIndex(i)} />
-              ))}
-            </div>
-          )}
+          {/* hide · pager · heart under the front look (Figma 191:1385, desktop 198:5697); the toast sits just above. */}
+          <div className="mirror-look-bar">
+            <Toast key={toast?.id} toast={toast} />
+            {front && (
+              <div className="mirror-look-actions">
+                <button type="button" className="ds-icon-button is-large is-tertiary mirror-look-action" onClick={() => hide(front)}
+                  aria-label="Hide this look" title="Hide this look"><Icon name="eye-off" size={24} strokeWidth={5 / 3} /></button>
+                {count > 1 && (
+                  <div className="ds-pager" role="group" aria-label="Choose an outfit">
+                    {dots.map(({ outfit, i }) => (
+                      <button key={outfit.id} type="button" className="ds-pager-dot" aria-current={i === current} aria-label={`Outfit ${i + 1} of ${count}`} onClick={() => setIndex(i)} />
+                    ))}
+                  </div>
+                )}
+                <button type="button" className="ds-icon-button is-large is-tertiary mirror-look-action" onClick={() => toggleFavorite(front)}
+                  aria-pressed={isFav(front)} aria-label="Favorite" title={isFav(front) ? 'Remove from Favorites' : 'Save to Favorites'}>
+                  <Icon name="heart" size={24} strokeWidth={5 / 3} /></button>
+              </div>
+            )}
+          </div>
         </section>
       </main>
       {viewing && <LookViewer look={viewing} onClose={() => setViewing(null)} />}

@@ -11,8 +11,17 @@ export const SEASON_FILTERS = [
   { label: 'Mid-season', key: 'mid' },
   { label: 'Winter', key: 'winter' },
   { label: 'All', key: 'all' },
+  { label: 'Favorites', key: 'favorites' }, // the looks the person hearted (Figma 192:1652); last in the row and the dropdown
 ];
 export const seasonKey = (label) => SEASON_FILTERS.find((f) => f.label === label)?.key || 'today';
+
+/** The garments of a look as one key ("black jeans + white tee"): hiding a look hides every look made of the same
+ *  garments, today's and earlier ones (Figma 191:1465, "Look hidden"). Descriptions come from the garment reader, so
+ *  the same clothes read with other words make a different key. A look without garment names hides only itself. */
+export function comboKey(items, id = '') {
+  const key = (items || []).map((x) => String(x.description || '').trim().toLowerCase()).filter(Boolean).sort().join(' + ');
+  return key || `look:${id}`;
+}
 
 /** Does a look (its garments) suit the season? summer: nothing cold-only; winter: nothing warm-only; mid-season:
  *  neither warm-only nor cold-only. */
@@ -25,12 +34,15 @@ export function fitsSeason(items, key) {
 }
 
 /** Rows (newest first) → { [tab]: rows } for the filter: per tab, each job's looks together in look order, newest job
- *  first, at most `perTab`. Only transparent cut-outs (.webp) are shown in the ring. */
-export function pickLooks(rows, { key = 'today', perTab = 5, tabs = [] } = {}) {
+ *  first, at most `perTab`. Only transparent cut-outs (.webp) are shown in the ring; hidden
+ *  garment combinations (`hidden`, comboKey) are left out; the Favorites filter keeps only `favorites` (look ids). */
+export function pickLooks(rows, { key = 'today', perTab = 5, tabs = [], hidden = new Set(), favorites = new Set() } = {}) {
   const out = Object.fromEntries(tabs.map((t) => [t, []]));
   const byJob = new Map();
   for (const r of rows || []) {
     if (!r.generated_image_path?.endsWith('.webp') || !fitsSeason(r.items, key)) continue;
+    if (hidden.has(comboKey(r.items, r.id))) continue;              // hidden looks never come back
+    if (key === 'favorites' && !favorites.has(r.id)) continue;
     if (!byJob.has(r.job_id)) byJob.set(r.job_id, []);
     byJob.get(r.job_id).push(r);
   }

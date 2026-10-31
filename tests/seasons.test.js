@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { fitsSeason, pickLooks, seasonKey } from '../src/mirror/seasons.js';
+import { comboKey, fitsSeason, pickLooks, seasonKey } from '../src/mirror/seasons.js';
 import { composeLooks } from '../scripts/image-test-lib.mjs';
 
 const look = (...seasons) => seasons.map((season, i) => ({ description: `g${i}`, season }));
@@ -57,4 +57,17 @@ test('occasions where nothing from the new photo fits get no looks (strict)', ()
   assert.equal(looks.mustMissed, true, 'a hoodie is not party wear');
   const casual = composeLooks(wardrobe, { count: 2, occasion: 'a relaxed casual day', weather: 'mild 20°C', mustPhoto: 1 });
   assert.equal(casual.mustMissed, false);
+});
+
+test('hidden garment combinations stay hidden, in any order, and Favorites keeps only hearted looks', () => {
+  const row = (id, job, n, descs) => ({ id, job_id: job, look_n: n, occasion: 'an office day', items: descs.map((description) => ({ description })), generated_image_path: `u/${job}/look${n}.webp` });
+  const rows = [row('a', 'j1', 1, ['White tee', 'Black jeans']), row('b', 'j1', 2, ['Red dress']), row('c', 'j0', 1, ['black jeans', 'white tee']), row('d', 'j0', 2, [])];
+  const tabs = ['Office day'];
+  assert.equal(comboKey(rows[0].items), comboKey(rows[2].items), 'same garments, any order or case');
+  assert.equal(comboKey([], 'd'), 'look:d', 'a look without garment names is its own key');
+  const hidden = new Set([comboKey(rows[0].items)]);
+  assert.deepEqual(pickLooks(rows, { key: 'all', tabs, hidden })['Office day'].map((r) => r.id), ['b', 'd']);
+  assert.deepEqual(pickLooks(rows, { key: 'all', tabs, hidden: new Set(['look:d']) })['Office day'].map((r) => r.id), ['a', 'b', 'c']);
+  assert.deepEqual(pickLooks(rows, { key: 'favorites', tabs, favorites: new Set(['b', 'c']) })['Office day'].map((r) => r.id), ['b', 'c']);
+  assert.equal(seasonKey('Favorites'), 'favorites');
 });

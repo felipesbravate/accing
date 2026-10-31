@@ -28,7 +28,7 @@
   background: var(--bg-primary); color: var(--text-primary); font: inherit; font-size: var(--fs-label-large); font-weight: var(--fw-medium); }
 .login-field input::placeholder { color: var(--text-hover); }
 .login-field input:not(:placeholder-shown) { border-color: var(--border-secondary); }
-.login-field input:focus { border-color: var(--text-secondary); outline: 0; }
+.login-field input:focus { border-color: var(--border-active); outline: 0; }
 .login-field input:focus-visible { box-shadow: 0 0 0 2px var(--border-accent); }
 
 .login-msg { margin: 0; padding: var(--space-sm) var(--space-md); border-radius: var(--radius-md); background: #fdecea; color: var(--danger); font-size: var(--fs-body); }
