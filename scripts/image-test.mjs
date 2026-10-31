@@ -64,6 +64,7 @@ function args() {
     else if (k === 'only') out.only = v;
     else if (k === 'must-photo') out.mustPhoto = v; // an outfit photo's file name: every look wears something from it
     else if (k === 'must-strict') out.mustStrict = true; // with --must-photo: no looks at all if nothing from it fits
+    else if (k === 'avoid') out.avoidFile = v; // JSON list of combinations not to make ("0/top + 1/bottom + 2/shoes")
     else if (k === 'looks') out.looks = Math.max(1, Math.min(8, parseInt(v, 10) || 1));
     else if (k === 'dry-run') out.dryRun = true;
     else if (k === 'no-check') out.check = false;
@@ -509,12 +510,14 @@ async function main() {
   readings.forEach((r, i) => console.log(`  photo ${i + 1} = image ${faces.length + i + 1}, ${outfits[i].file}: ${r.items.map((x) => `${x.description} [${x.category}${x.visibility === 'full' ? '' : ', ' + x.visibility}]`).join('; ') || 'nothing recognised'}`));
   const seed = opts.seed ?? (Date.now() % 100000);
   // With --prep-only no look is made, so a wardrobe that can't make one yet (onboarding) must not stop the base photo.
+  const avoid = opts.avoidFile ? new Set(JSON.parse(await readFile(opts.avoidFile, 'utf8'))) : null;
   const mustIndex = opts.mustPhoto ? outfits.findIndex((o) => o.file === opts.mustPhoto) : null;
   if (mustIndex != null && mustIndex >= 0) {
     const w = weatherForGarments(readings[mustIndex].items, opts.weather);
     if (w.changed) { console.log(`Today's weather (${opts.weather}) rules out everything in ${opts.mustPhoto}: making its looks for ${w.weather}.`); opts.weather = w.weather; }
   }
-  const looks = (() => { try { return composeLooks(wardrobe, { count: opts.looks, seed, occasion: opts.occasion, weather: opts.weather, mustPhoto: mustIndex }); } catch (e) { if (!opts.prepOnly) throw e; return Object.assign([], { skipped: [], occasion: { name: 'any', min: 1, max: 5, maxExposure: 'high' } }); } })();
+  const looks = (() => { try { return composeLooks(wardrobe, { count: opts.looks, seed, occasion: opts.occasion, weather: opts.weather, mustPhoto: mustIndex, avoid }); } catch (e) { if (!opts.prepOnly) throw e; return Object.assign([], { skipped: [], occasion: { name: 'any', min: 1, max: 5, maxExposure: 'high' } }); } })();
+  if (looks.avoided) console.log(`Left out ${looks.avoided} combination(s) the person hid.`);
   if (looks.mustMissed && opts.mustStrict) {
     // The new garment doesn't suit this occasion (a hoodie for a party): no looks here; other occasions get theirs.
     console.log(`Nothing from ${opts.mustPhoto} suits "${opts.occasion}" / "${opts.weather}": no looks for this occasion.`);
@@ -989,7 +992,7 @@ PHOTO
         const ready = (r) => { r.readySeconds = (performance.now() - t0) / 1000; r.shownSeconds = shownAt ?? r.readySeconds; rows.push(r); };
         // For the worker: a look that passed its checks is announced at once, so it can be uploaded and shown while the
         // next one is made (one line per look: @@LOOK {n, file, items}).
-        const announce = (r) => { if (opts.jsonOut) console.log('@@LOOK ' + JSON.stringify({ n: look.n, file: join(out, r.file), ...(r.cutout ? { cutout: join(out, r.cutout) } : {}), items: look.items.map((x) => ({ description: x.description, category: x.category, photo: x.photo })) })); };
+        const announce = (r) => { if (opts.jsonOut) console.log('@@LOOK ' + JSON.stringify({ n: look.n, file: join(out, r.file), ...(r.cutout ? { cutout: join(out, r.cutout) } : {}), items: look.items.map((x) => ({ description: x.description, category: x.category, photo: x.photo, ...(x.formality ? { formality: x.formality } : {}), ...(x.exposure ? { exposure: x.exposure } : {}), ...(x.season ? { season: x.season } : {}) })) })); }; // tags too: the season filters read them
         for (let attempt = 1; attempt <= opts.anchorTries; attempt++) {
           const r = await generate(m, look, run, name(m, look, run), edit.images, edit.prompt, edit.label, { ...opts, faceCount: 1 }, lockToBase);
           r.attempt = attempt;

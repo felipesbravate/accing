@@ -11,7 +11,7 @@ import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { timingSafeEqual } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
-import { baseOptions, defaultOccasion, inputsFor, outfitRows, pipelineArgs, weatherText } from './jobs.mjs';
+import { avoidKeys, baseOptions, defaultOccasion, inputsFor, outfitRows, pipelineArgs, weatherText } from './jobs.mjs';
 
 const ROOT = resolve(import.meta.dirname, '..');
 const env = (k) => { const v = process.env[k]; if (!v) throw new Error(`Missing secret ${k} (fly secrets set ${k}=…)`); return v; };
@@ -77,6 +77,15 @@ async function runJob(job) {
     const mustPath = job.job_type === 'make_looks' ? job.payload?.include_path || null : null; // "see my new outfit now" (testers)
     const files = inputsFor(user, photos, { prepared: job.job_type === 'make_looks', mustPath });
     const mustPhoto = files.find((f) => mustPath && f.path === mustPath)?.as || null;
+    // The pipeline's photo i is the i-th outfit photo here (photo-01, photo-02…): garments keep their photo's id, and
+    // combinations the person hid are passed as indices so they aren't made again (migration 007; none before it).
+    const photoIds = files.filter((f) => f.photoId).map((f) => f.photoId);
+    let avoidFile = null;
+    if (job.job_type === 'make_looks') {
+      const { data: hidden } = await db.from('hidden_combinations').select('combo').eq('user_id', job.user_id);
+      const keys = avoidKeys((hidden || []).map((h) => h.combo), photoIds);
+      if (keys.length) { avoidFile = join(tmp, 'avoid.json'); await writeFile(avoidFile, JSON.stringify(keys)); }
+    }
     let preparedFile = null;
     for (const f of files) {
       const bytes = await download(f.bucket, f.path);
@@ -102,12 +111,12 @@ async function runJob(job) {
     const early = new Map(), pending = [];
     const onLook = (l) => pending.push((async () => {
       const path = await saveLook(job, l.n, l.file, l.cutout);
-      const [row] = outfitRows(job, { looks: [{ n: l.n, status: 'ready', items: l.items, cost: 0 }] }, { [l.n]: path });
+      const [row] = outfitRows(job, { looks: [{ n: l.n, status: 'ready', items: l.items, cost: 0 }] }, { [l.n]: path }, photoIds);
       const { error } = await db.from('outfits').insert(row);
       if (error) throw new Error(error.message);
       early.set(l.n, path); log(`look ${l.n} shown`);
     })().catch((e) => log(`look ${l.n} not shown early: ${e.message}`)));
-    await runPipeline(pipelineArgs(job, person, jsonOut, preparedFile, cutouts, mustPhoto), job.job_type === 'make_looks' ? onLook : null);
+    await runPipeline(pipelineArgs(job, person, jsonOut, preparedFile, cutouts, mustPhoto, avoidFile), job.job_type === 'make_looks' ? onLook : null);
     await Promise.all(pending);
     for (const name of await readdir(cutouts)) if (!known.has(name)) await upload('outfits', `${cutoutPrefix}/${name}`, await readFile(join(cutouts, name))).catch((e) => log('cut-out not kept:', e.message));
     const summary = JSON.parse(await readFile(jsonOut, 'utf8'));
@@ -124,7 +133,7 @@ async function runJob(job) {
       return { result: { base_options: options }, cost: summary.spent };
     }
     for (const l of summary.looks.filter((x) => x.status === 'ready')) uploaded[l.n] = early.get(l.n) || await saveLook(job, l.n, join(summary.dir, l.file), l.cutout && join(summary.dir, l.cutout));
-    const rows = outfitRows(job, summary, uploaded);
+    const rows = outfitRows(job, summary, uploaded, photoIds);
     // Looks already listed get their final cost and identity; dropped, refused and late ones are added now.
     for (const r of rows.filter((x) => early.has(x.look_n))) await db.from('outfits').update({ cost: r.cost, validation_confidence: r.validation_confidence }).eq('job_id', job.id).eq('look_n', r.look_n);
     const rest = rows.filter((x) => !early.has(x.look_n));

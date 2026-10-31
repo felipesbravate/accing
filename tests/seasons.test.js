@@ -71,3 +71,29 @@ test('hidden garment combinations stay hidden, in any order, and Favorites keeps
   assert.deepEqual(pickLooks(rows, { key: 'favorites', tabs, favorites: new Set(['b', 'c']) })['Office day'].map((r) => r.id), ['b', 'c']);
   assert.equal(seasonKey('Favorites'), 'favorites');
 });
+
+test('a hidden combination is known by its photos, however the reader words the garments', async () => {
+  const { comboKey } = await import('../src/mirror/seasons.js');
+  const a = [{ description: 'black high-waisted jeans', category: 'bottom', photo_id: 'p2' }, { description: 'light blue tank', category: 'top', photo_id: 'p1' }];
+  const b = [{ description: 'black jeans', category: 'bottom', photo_id: 'p2' }, { description: 'blue racer top', category: 'top', photo_id: 'p1' }];
+  assert.equal(comboKey(a), comboKey(b));
+  assert.equal(comboKey(a), 'photos:p1/top + p2/bottom');
+  assert.equal(comboKey([{ description: 'Black Jeans' }, { description: 'white tee' }]), 'black jeans + white tee', 'older looks: descriptions');
+  assert.equal(comboKey([], 'x1'), 'look:x1');
+});
+
+test('the worker turns hidden combinations into this run\'s photo numbers, and the pipeline leaves them out', async () => {
+  const { avoidKeys, outfitRows } = await import('../worker/jobs.mjs');
+  const { lookKey } = await import('../scripts/image-test-lib.mjs');
+  const ids = ['p1', 'p2', 'p3'];
+  assert.deepEqual(avoidKeys(['photos:p2/bottom + p1/top', 'photos:p9/top + p1/bottom', 'black jeans + white tee'], ids), ['0/top + 1/bottom']);
+  const g = (photo, category, description) => ({ photo, category, description, visibility: 'full', formality: 2, exposure: 'low', season: 'any' });
+  const wardrobe = [g(0, 'top', 'tee'), g(1, 'bottom', 'jeans'), g(2, 'top', 'shirt'), g(2, 'shoes', 'sneakers')];
+  const all = composeLooks(wardrobe, { count: 5, occasion: 'a relaxed casual day', weather: 'mild 20°C' });
+  const hide = lookKey(all[0].items);
+  const after = composeLooks(wardrobe, { count: 5, occasion: 'a relaxed casual day', weather: 'mild 20°C', avoid: new Set([hide]) });
+  assert.ok(after.every((l) => lookKey(l.items) !== hide));
+  assert.equal(after.avoided, 1);
+  const [row] = outfitRows({ id: 'j', user_id: 'u', payload: {} }, { looks: [{ n: 1, status: 'ready', items: [{ description: 'tee', category: 'top', photo: 1 }] }] }, { 1: 'u/x.webp' }, ids);
+  assert.equal(row.items[0].photo_id, 'p2');
+});

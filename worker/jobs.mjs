@@ -35,7 +35,7 @@ export function inputsFor(user, photos, { prepared = false, mustPath = null } = 
 const ext = (p) => (/\.(jpe?g|png|webp)$/i.exec(p)?.[0] || '.jpg').toLowerCase();
 
 /** Arguments for scripts/image-test.mjs. Quality settings are fixed (Felipe: medium looks, high base, HD). */
-export function pipelineArgs(job, person, jsonOut, preparedFile = null, cutoutCache = null, mustPhoto = null) {
+export function pipelineArgs(job, person, jsonOut, preparedFile = null, cutoutCache = null, mustPhoto = null, avoidFile = null) {
   const p = job.payload || {};
   const base = [`--person=${person}`, '--only=openai-2.5-flare-medium', '--hd', '--runs=1', `--json-out=${jsonOut}`, ...(cutoutCache ? [`--cutout-cache=${cutoutCache}`] : [])];
   if (job.job_type === 'prepare_base') return [...base, '--looks=1', '--prep-only', '--reprep'];
@@ -44,19 +44,37 @@ export function pipelineArgs(job, person, jsonOut, preparedFile = null, cutoutCa
   const clean = (s, d) => (typeof s === 'string' && s.trim() ? s.trim().slice(0, 80) : d);
   return [...base, `--looks=${looks}`, `--occasion=${clean(p.occasion, 'an ordinary day')}`, `--weather=${clean(p.weather, 'mild')}`,
     ...(p.seed ? [`--seed=${parseInt(p.seed, 10) || 1}`] : []), ...(preparedFile ? [`--prepared=${preparedFile}`] : []),
-    ...(mustPhoto ? [`--must-photo=${mustPhoto}`, ...(p.strict ? ['--must-strict'] : [])] : [])];
+    ...(mustPhoto ? [`--must-photo=${mustPhoto}`, ...(p.strict ? ['--must-strict'] : [])] : []),
+    ...(avoidFile ? [`--avoid=${avoidFile}`] : [])];
 }
 
-/** Rows for public.outfits from the pipeline summary (one per look asked for, ready or not). */
-export function outfitRows(job, summary, uploaded) {
+/** Rows for public.outfits from the pipeline summary (one per look asked for, ready or not). photoIds[i] is the
+ *  wardrobe_photos id of the pipeline's photo i: each garment keeps it (photo_id), so a hidden combination is
+ *  recognised by its photos, not by how the reader worded the garments. */
+export function outfitRows(job, summary, uploaded, photoIds = []) {
   const p = job.payload || {};
   return (summary.looks || []).map((l) => ({
     user_id: job.user_id, job_id: job.id, look_n: l.n, status: l.status,
-    generated_image_path: uploaded[l.n] || null, items: l.items, reasons: l.reasons || null, retake: l.retake || null,
+    generated_image_path: uploaded[l.n] || null,
+    items: (l.items || []).map((x) => (photoIds[x.photo] ? { ...x, photo_id: photoIds[x.photo] } : x)), reasons: l.reasons || null, retake: l.retake || null,
     cost: Number((l.cost || 0).toFixed(4)), occasion: p.occasion || null, weather: p.weather || null,
     contextual_date: p.date || new Date().toISOString(), daypart: p.daypart || 'morning',
     validation_status: l.status === 'ready' ? 'validated' : 'failed', validation_confidence: l.identity ?? null,
   }));
+}
+
+/** Hidden combinations (hidden_combinations.combo, src/mirror/seasons.js comboKey) in the pipeline's terms for this
+ *  run: "<photo index>/<category> + …" (scripts/image-test-lib.mjs lookKey). Combinations with a photo not in this
+ *  run, or stored before photo ids existed (garment descriptions), are left out. */
+export function avoidKeys(combos, photoIds = []) {
+  const index = new Map(photoIds.map((id, i) => [id, i]));
+  const out = [];
+  for (const c of combos || []) {
+    if (typeof c !== 'string' || !c.startsWith('photos:')) continue;
+    const parts = c.slice(7).split(' + ').map((p) => { const [id, cat] = p.split('/'); return index.has(id) && cat ? `${index.get(id)}/${cat}` : null; });
+    if (parts.length && parts.every(Boolean)) out.push(parts.sort().join(' + '));
+  }
+  return out;
 }
 
 /** The prepared base photos the user can pick from (passing tries only, best first). */

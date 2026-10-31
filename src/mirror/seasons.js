@@ -15,11 +15,18 @@ export const SEASON_FILTERS = [
 ];
 export const seasonKey = (label) => SEASON_FILTERS.find((f) => f.label === label)?.key || 'today';
 
-/** The garments of a look as one key ("black jeans + white tee"): hiding a look hides every look made of the same
- *  garments, today's and earlier ones (Figma 191:1465, "Look hidden"). Descriptions come from the garment reader, so
- *  the same clothes read with other words make a different key. A look without garment names hides only itself. */
+/** The garments of a look as one key: hiding a look hides every look made of the same garments, today's and earlier
+ *  ones (Figma 191:1465, "Look hidden"), and the worker no longer makes it (worker/jobs.mjs avoidKeys).
+ *  Looks made since 2026-10-31 know which outfit photo each garment came from (items[].photo_id): the key is
+ *  "photos:<photo id>/<category> + …", the same however the reader words the garments. Older looks fall back to the
+ *  garment descriptions ("black jeans + white tee"), which change when the reader words them differently.
+ *  A look without either hides only itself. */
 export function comboKey(items, id = '') {
-  const key = (items || []).map((x) => String(x.description || '').trim().toLowerCase()).filter(Boolean).sort().join(' + ');
+  const list = items || [];
+  if (list.length && list.every((x) => x.photo_id && x.category)) {
+    return 'photos:' + list.map((x) => `${x.photo_id}/${x.category}`).sort().join(' + ');
+  }
+  const key = list.map((x) => String(x.description || '').trim().toLowerCase()).filter(Boolean).sort().join(' + ');
   return key || `look:${id}`;
 }
 

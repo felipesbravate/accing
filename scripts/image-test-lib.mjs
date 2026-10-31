@@ -101,7 +101,13 @@ export function composeOutfit(wardrobe, { seed = 1 } = {}) {
  * with or without outerwear), new combinations first, each next look chosen to reuse as few already-used garments
  * as possible. Fewer looks come back when the wardrobe cannot make `count` different ones.
  */
-export function composeLooks(wardrobe, { count = 1, seed = 1, occasion = '', weather = '', mustPhoto = null } = {}) {
+/** A look's garments as "<photo index>/<category> + …", sorted: how hidden combinations are named for the pipeline
+ *  (worker/jobs.mjs avoidKeys). */
+export function lookKey(items) {
+  return items.map((x) => `${x.photo}/${x.category}`).sort().join(' + ');
+}
+
+export function composeLooks(wardrobe, { count = 1, seed = 1, occasion = '', weather = '', mustPhoto = null, avoid = null } = {}) {
   const all = dedupeWardrobe(wardrobe).filter((x) => x.visibility !== 'hidden');
   const occ = occasionProfile(occasion), wx = weatherProfile(weather);
   const skipped = [];
@@ -129,6 +135,13 @@ export function composeLooks(wardrobe, { count = 1, seed = 1, occasion = '', wea
     const fitScore = clash + Math.max(0, ...chosen.map((x) => offTarget(x, occ))) /* the look's furthest item: three casual items are not 3x worse than one */ + (wx.cold && !o.length ? 1 : 0) + (wx.hot && o.length ? 1 : 0);
     candidates.push({ chosen, fresh: isNew(chosen), fit: fitScore, full: chosen.filter((x) => x.visibility === 'full').length, tie: rand() });
   }
+  // Combinations the person hid in the app ("Look hidden. You won't see it again.") are never made again.
+  let avoided = 0;
+  if (avoid?.size) {
+    const kept = candidates.filter((c) => !avoid.has(lookKey(c.chosen)));
+    avoided = candidates.length - kept.length;
+    candidates.splice(0, candidates.length, ...kept);
+  }
   // mustPhoto (index of an outfit photo): every look wears something from it, if any look can (the app's "see my new
   // outfit now"). If its garments don't fit the occasion or weather, the looks are made as usual and say so.
   let mustMissed = false;
@@ -150,6 +163,7 @@ export function composeLooks(wardrobe, { count = 1, seed = 1, occasion = '', wea
   }
   looks.skipped = skipped;
   looks.mustMissed = mustMissed;
+  looks.avoided = avoided;
   looks.occasion = occ;
   return looks;
 }
