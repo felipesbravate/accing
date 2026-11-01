@@ -89,8 +89,10 @@
 .mirror-empty.is-making > div { display: flex; flex-direction: column; gap: var(--space-xs); }
 .mirror-empty.is-making p { font-size: var(--fs-h3); font-weight: var(--fw-medium); line-height: normal; color: var(--text-secondary); }
 .mirror-empty.is-making .mirror-making-title { color: var(--text-primary); }
-/* No looks yet (Figma 206:5879): illustration 222×142, two lines, the 40px shutter; 16px apart. */
-.mirror-empty.is-none { gap: var(--space-md); max-width: none; }
+/* No looks yet (Figma 206:5879 desktop, 212:6480 phone): illustration 222×142 (drawing 20px left of centre), two lines,
+   the 40px shutter (desktop only); 16px apart. */
+.mirror-empty.is-none { gap: var(--space-md); max-width: none;
+  min-height: calc(clamp(320px, 100dvh - 326px, 600px) + 54px); } /* desktop: centred where the looks and hide · heart would be */
 .mirror-empty.is-none > div { display: flex; flex-direction: column; gap: var(--space-xs); }
 .mirror-empty.is-none p { font-size: var(--fs-h3); font-weight: var(--fw-medium); line-height: normal; color: var(--text-secondary); }
 .mirror-empty.is-none .mirror-making-title { color: var(--text-primary); }
@@ -166,4 +168,11 @@
   .mirror.is-waiting { padding-bottom: 0; }
   .mirror.is-waiting .mirror-top { padding: var(--space-xs) var(--space-lg) 0; }
   .mirror-waiting { margin-top: 140px; }
+  /* No looks yet, phone (Figma 212:6480): no shutter (the bottom bar has one); the message centred between the filters and
+     the bottom bar. */
+  .mirror-empty.is-none .mirror-shutter { display: none; }
+  .mirror:has(.mirror-empty.is-none) .mirror-content { flex: 1; display: flex; flex-direction: column; }
+  .mirror-body:has(.mirror-empty.is-none) { margin-top: 0; padding-bottom: 0; gap: 0; }
+  .mirror-body:has(.mirror-empty.is-none) .mirror-carousel { flex: 1; }
+  .mirror-empty.is-none { flex: 1; min-height: 0; }
 }
