@@ -39,13 +39,13 @@ function Toast({ toast }) {
 }
 
 /** "Favorites" with nothing hearted yet (Figma 192:1750). */
-/** Looks on their way and none to show yet (Figma 206:5722): illustration, "Making your Party looks", the wait. */
-function MakingLooks({ occasion }) {
+/** Looks on their way and none to show yet (Figma 206:5722): illustration, "Making your looks", the wait. */
+function MakingLooks() {
   return (
     <div className="mirror-empty is-making" role="status" aria-live="polite">
       <img src="/brand/making-looks.svg" width="120" height="140" alt="" />
       <div>
-        <p className="mirror-making-title">Making your {occasion} looks</p>
+        <p className="mirror-making-title">Making your looks</p>
         <p>The first one takes about a minute.</p>
       </div>
     </div>
@@ -347,7 +347,7 @@ export default function DailyMirror({
         <section className="mirror-body" aria-roledescription="carousel" aria-label={`${occasion} outfits, ${season}`}>
           <div className="mirror-carousel">
             {count > 1 && !showMaking && <button type="button" className="ds-round-button mirror-arrow" onClick={() => go(-1)} aria-label="Previous outfit"><Icon name="arrow-left" size={20} /></button>}
-            {showMaking ? <MakingLooks occasion={occasion} />
+            {showMaking ? <MakingLooks />
               : count ? <OutfitRing key={`${occasion}|${filter}`} outfits={outfits} index={current} onChange={setIndex} onOpen={(i) => setViewing(outfits[i])} leavingId={leavingId} arrivingId={arrivingId} />
               : favoritesView && !loading && !problem ? <NoFavorites onBack={() => pickSeason(SEASONS[0])} />
               : live && tab?.loading ? <div className="mirror-empty" role="status"><p>Loading…</p></div>
@@ -362,13 +362,18 @@ export default function DailyMirror({
           </div>
           {(note || (problem && count > 0)) && <p className="mirror-note" role="status">{note || problem}</p>}
           {!note && count <= 1 && more > 0 && <p className="mirror-nudge">Add {more} more outfit{more > 1 ? 's' : ''} for new looks every day</p>}
-          {/* hide · pager · heart under the front look (Figma 191:1385, desktop 198:5697); the toast sits just above. */}
+          {/* hide · heart with the pager under them (Figma 191:1385); the toast sits just above. */}
           <div className="mirror-look-bar">
             <Toast key={toast?.id} toast={toast} />
             {front && (
               <div className="mirror-look-actions">
-                <button type="button" className="ds-icon-button is-large is-tertiary mirror-look-action" onClick={() => hide(front)} disabled={Boolean(leavingId)}
-                  aria-label="Hide this look" title="Hide this look"><Icon name="eye-off" size={24} strokeWidth={5 / 3} /></button>
+                <div className="mirror-look-buttons">
+                  <button type="button" className="ds-icon-button is-large is-tertiary mirror-look-action" onClick={() => hide(front)} disabled={Boolean(leavingId)}
+                    aria-label="Hide this look" title="Hide this look"><Icon name="eye-off" size={24} strokeWidth={5 / 3} /></button>
+                  <button type="button" className="ds-icon-button is-large is-tertiary mirror-look-action" onClick={() => toggleFavorite(front)}
+                    aria-pressed={isFav(front)} aria-label="Favorite" title={isFav(front) ? 'Remove from Favorites' : 'Save to Favorites'}>
+                    <Icon name="heart" size={24} strokeWidth={5 / 3} /></button>
+                </div>
                 {count > 1 && (
                   <div className={'ds-pager' + density} role="group" aria-label="Choose an outfit">
                     {outfits.map((outfit, i) => (
@@ -376,9 +381,6 @@ export default function DailyMirror({
                     ))}
                   </div>
                 )}
-                <button type="button" className="ds-icon-button is-large is-tertiary mirror-look-action" onClick={() => toggleFavorite(front)}
-                  aria-pressed={isFav(front)} aria-label="Favorite" title={isFav(front) ? 'Remove from Favorites' : 'Save to Favorites'}>
-                  <Icon name="heart" size={24} strokeWidth={5 / 3} /></button>
               </div>
             )}
           </div>

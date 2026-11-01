@@ -39,7 +39,7 @@
 .mirror-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-md); min-height: 320px; max-width: 360px; text-align: center; color: var(--text-secondary); }
 .mirror-empty p { margin: 0; }
 
-.ring { --look-h: clamp(320px, 100dvh - 320px, 600px); /* 320: header, filters, the hide · pager · heart row */ --ring-radius: 0.697; --ring-back-scale: 0.615; --ring-lift: 0.193;
+.ring { --look-h: clamp(320px, 100dvh - 326px, 600px); /* 326: header, filters, hide · heart and the pager under them */ --ring-radius: 0.697; --ring-back-scale: 0.615; --ring-lift: 0.193;
   --ring-side-strength: 0.68; --ring-back-strength: 0.44; /* sides 32% faded; looks heading to the back fade further */
   --ring-visible-slots: 1; /* 3 looks on screen: the front one and one each side */
   position: relative; z-index: 0; flex: 0 1 1190px; height: var(--look-h); touch-action: pan-y; user-select: none; -webkit-user-select: none; outline: none; }
@@ -58,7 +58,10 @@
 /* hide · pager · heart under the front look (Figma 191:1385; desktop 198:5697): 48px tertiary icon-buttons with 24px
    icons in icon/primary; the heart fills with icon/accent once hearted. The toast floats just above the row. */
 .mirror-look-bar { position: relative; display: flex; justify-content: center; width: 100%; }
-.mirror-look-actions { display: flex; align-items: center; justify-content: center; gap: var(--space-lg); padding: 0 var(--space-md); }
+/* Figma 191:1385 (mobile and desktop): hide and heart side by side, 16px apart; the pager right under them (6px). */
+.mirror-look-actions { display: flex; flex-direction: column; align-items: center; min-height: 54px; padding: 0 var(--space-md); max-width: 100%; }
+.mirror-look-buttons { display: flex; gap: var(--space-md); }
+.mirror-look-actions .ds-pager { max-width: 100%; }
 .ds-icon-button.mirror-look-action { color: var(--icon-primary); }
 .ds-icon-button.mirror-look-action[aria-pressed="true"] { color: var(--icon-accent); }
 .mirror-look-action[aria-pressed="true"] svg { fill: currentColor; }
@@ -75,8 +78,8 @@
 @media (prefers-reduced-motion: reduce) { .mirror-toast, .mirror-toast.is-leaving, .ring-item.is-arriving img { animation: none; } .ring-item.is-leaving img { transition: none; } }
 
 /* A note line under the looks (outfit added, add more outfits) takes its height from the looks, not the page. */
-.mirror.has-note .ring { --look-h: clamp(300px, 100dvh - 350px, 600px); }
-@media (max-width: 1023px) { .mirror.has-note .ring { --look-h: clamp(170px, 100svh - 415px, 464px); } }
+.mirror.has-note .ring { --look-h: clamp(300px, 100dvh - 356px, 600px); }
+@media (max-width: 1023px) { .mirror.has-note .ring { --look-h: clamp(170px, 100svh - 421px, 464px); } }
 
 /* Favorites with nothing hearted yet (Figma 192:1750): illustration, title, text, link back to today's looks. */
 .mirror-empty.is-favorites { gap: var(--space-lg); max-width: 310px; }
@@ -155,7 +158,7 @@
   .mirror-body { flex: 1; justify-content: center; margin-top: 22px; padding: 0 0 var(--space-md); overflow: hidden; }
   .mirror-carousel { position: relative; width: 100%; height: auto; overflow: hidden; }
   .mirror-carousel::before, .mirror-carousel::after { content: ''; position: absolute; top: 0; bottom: 0; z-index: 1; width: 78px; pointer-events: none; }
-  .ring { --look-h: clamp(180px, 100svh - 385px, 464px); --ring-radius: 0.463; --ring-back-scale: 0.552; --ring-lift: 0.224; flex: 1 1 100%; }
+  .ring { --look-h: clamp(180px, 100svh - 391px, 464px); --ring-radius: 0.463; --ring-back-scale: 0.552; --ring-lift: 0.224; flex: 1 1 100%; }
   .mirror-carousel::before { left: 0; background: linear-gradient(to left, transparent, color-mix(in srgb, var(--bg-primary) 80%, transparent)); }
   .mirror-carousel::after { right: 0; background: linear-gradient(to right, transparent, color-mix(in srgb, var(--bg-primary) 80%, transparent)); }
   .mirror-arrow { display: none; }
