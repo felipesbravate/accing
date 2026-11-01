@@ -5,6 +5,7 @@ import { dailyLimit } from '../lib/plans.js';
 import { conditionOf, OCCASION_TABS, startOfToday, tabFor, temperatureOf } from '../mirror/occasions.js';
 import { comboKey, pickLooks } from '../mirror/seasons.js';
 import { jobFailureText } from '../lib/job-errors.js';
+import { climateFor, rememberLocation } from './location.js';
 
 const URL_SECONDS = 60 * 60;
 
@@ -40,13 +41,15 @@ const MAX_PER_TAB_HISTORY = 40;
 /** Every look so far that suits the season filter (Summer, Mid-season, Winter, All, Favorites), per tab, newest first. */
 export async function seasonLooks(userId, key) {
   const sb = await authClient();
-  const mine = await marks(sb, userId);
+  const [mine, { data: profile }] = await Promise.all([marks(sb, userId), sb.from('users').select('*').eq('id', userId).single()]);
+  // Summer, Mid-season, Winter: judged against the typical temperature of each season where the person lives.
+  const climate = ['summer', 'mid', 'winter'].includes(key) ? await climateFor(sb, userId, profile).catch(() => null) : null;
   let query = sb.from('outfits').select('id, job_id, look_n, generated_image_path, items, occasion, created_at')
     .eq('user_id', userId).eq('status', 'ready');
   if (key === 'favorites') query = query.in('id', [...mine.favorites].slice(0, HISTORY_ROWS)); // favourites of any age
   const { data: rows } = mine.favorites.size || key !== 'favorites'
     ? await query.order('created_at', { ascending: false }).limit(HISTORY_ROWS) : { data: [] };
-  const picked = pickLooks(rows, { key, perTab: MAX_PER_TAB_HISTORY, tabs: OCCASION_TABS.map((t) => t.label), unique: true, ...mine });
+  const picked = pickLooks(rows, { key, perTab: MAX_PER_TAB_HISTORY, tabs: OCCASION_TABS.map((t) => t.label), unique: true, ...mine, ...(climate ? { climate } : {}) });
   const entries = await Promise.all(OCCASION_TABS.map(async (t) => [t.label, { looks: await signLooks(sb, picked[t.label], mine.favorites), making: false }]));
   return { tabs: Object.fromEntries(entries) };
 }
@@ -64,6 +67,8 @@ export async function todaysLooks(userId) {
     sb.from('wardrobe_photos').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('is_active', true),
     marks(sb, userId),
   ]);
+  // Home from the IP location the first time it's missing (morning weather, season filters); best effort.
+  await rememberLocation(sb, userId, profile).catch(() => null);
   const picked = pickLooks(rows, { key: 'today', perTab: MAX_PER_TAB, tabs: OCCASION_TABS.map((t) => t.label), hidden: mine.hidden, unique: true });
   const tabs = Object.fromEntries(await Promise.all(OCCASION_TABS.map(async (t) => [t.label, { looks: await signLooks(sb, picked[t.label], mine.favorites), making: false }])));
   for (const j of jobs || []) if (['pending', 'processing'].includes(j.status)) tabs[tabFor(j.payload?.occasion || '')].making = true;

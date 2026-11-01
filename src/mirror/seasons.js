@@ -1,9 +1,11 @@
 // The season filter under the tabs ("Today's suggestions", Summer, Mid-season, Winter, All). Pure, shared by the
 // server and the browser; tested in tests/seasons.test.js.
 // Today's suggestions: today's looks (made for today's occasion and weather). The others look back over every look
-// made so far for that tab, judged by the garments' own season tags from the pipeline's reader ("warm": sandals,
-// linen, shorts; "cold": wool coat, heavy knit, lined boots; "any"). Looks made before the tags existed count as "any".
+// made so far for that tab that is comfortable at the typical temperature of that season where the person lives
+// (fitsSeason below).
 import { tabFor } from './occasions.js';
+import { fitsTemperature } from './warmth.js';
+import { DEFAULT_CLIMATE } from '../lib/climate.js';
 
 export const SEASON_FILTERS = [
   { label: "Today's suggestions", key: 'today' },
@@ -30,28 +32,24 @@ export function comboKey(items, id = '') {
   return key || `look:${id}`;
 }
 
-const LONG_SLEEVES = /long[- ]sleeve/i;
-
-/** Does a look (its garments) suit the season? summer: nothing cold-only, no jacket or coat and no long-sleeved top
- *  (Felipe, 2026-11-01: a windbreaker look showed under Summer); winter: nothing warm-only; mid-season: neither
- *  warm-only nor cold-only. Trousers stay in summer: office and dinner looks need them. */
-export function fitsSeason(items, key) {
-  const list = items || [];
-  const tags = list.map((x) => x.season || 'any');
-  if (key === 'summer') return !tags.includes('cold') && !list.some((x) => x.category === 'outerwear' || (x.category === 'top' && LONG_SLEEVES.test(x.description || '')));
-  if (key === 'winter') return !tags.includes('warm');
-  if (key === 'mid') return !tags.includes('warm') && !tags.includes('cold');
-  return true;
+/** Does a look suit the season? Its warmth (src/mirror/warmth.js) against the typical daytime high of that season where
+ *  the person lives (`climate`, src/lib/climate.js; a temperate default until their location is known). In Barcelona:
+ *  summer ~28 °C keeps a tee with shorts or jeans and leaves out jackets and long sleeves; winter ~15 °C wants long
+ *  sleeves or more. "all" (and anything else) keeps every look. */
+export function fitsSeason(items, key, climate = DEFAULT_CLIMATE) {
+  const season = (climate || DEFAULT_CLIMATE)[key];
+  if (!season) return true;
+  return fitsTemperature(items, season.high);
 }
 
 /** Rows (newest first) → { [tab]: rows } for the filter: per tab, each job's looks together in look order, newest job
  *  first, at most `perTab`. Only transparent cut-outs (.webp) are shown in the ring; hidden
  *  garment combinations (`hidden`, comboKey) are left out; the Favorites filter keeps only `favorites` (look ids). */
-export function pickLooks(rows, { key = 'today', perTab = 5, tabs = [], hidden = new Set(), favorites = new Set(), unique = false } = {}) {
+export function pickLooks(rows, { key = 'today', perTab = 5, tabs = [], hidden = new Set(), favorites = new Set(), unique = false, climate = DEFAULT_CLIMATE } = {}) {
   const out = Object.fromEntries(tabs.map((t) => [t, []]));
   const byJob = new Map();
   for (const r of rows || []) {
-    if (!r.generated_image_path?.endsWith('.webp') || !fitsSeason(r.items, key)) continue;
+    if (!r.generated_image_path?.endsWith('.webp') || !fitsSeason(r.items, key, climate)) continue;
     if (hidden.has(comboKey(r.items, r.id))) continue;              // hidden looks never come back
     if (key === 'favorites' && !favorites.has(r.id)) continue;
     if (!byJob.has(r.job_id)) byJob.set(r.job_id, []);
