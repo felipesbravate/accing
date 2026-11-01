@@ -23,18 +23,20 @@
 .ds-icon-button { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0;
   border: 0; border-radius: var(--radius-lg); background: var(--button-primary); color: var(--icon-tertiary); transition: background-color .15s; }
 .ds-icon-button.is-large { width: 48px; height: 48px; }
-.ds-icon-button:hover { background: var(--button-primary-hover); }
+@media (hover: hover) { .ds-icon-button:hover { background: var(--button-primary-hover); } }
 .ds-icon-button:active { background: var(--button-primary-press); }
 .ds-icon-button.is-secondary { background: var(--button-secondary-tertiary); border: 1px solid var(--border-accent); color: var(--icon-accent); }
 .ds-icon-button.is-tertiary { background: var(--button-secondary-tertiary); color: var(--icon-accent); }
-.ds-icon-button.is-secondary:hover, .ds-icon-button.is-tertiary:hover { background: var(--button-secondary-tertiary-hover); }
+@media (hover: hover) { .ds-icon-button.is-secondary:hover, .ds-icon-button.is-tertiary:hover { background: var(--button-secondary-tertiary-hover); } }
 .ds-icon-button.is-secondary:active, .ds-icon-button.is-tertiary:active { background: var(--button-secondary-tertiary-press); }
 .ds-icon-button:disabled { opacity: var(--opacity-disabled); pointer-events: none; }
 
-/* avatar — Size=40px (46×40) | 48px (55×48); Variation=Default (initial) | Image */
-.ds-avatar { display: flex; align-items: center; justify-content: center; width: 46px; height: 40px; border-radius: var(--radius-lg); overflow: hidden;
-  background: var(--bg-accent); color: var(--text-tertiary); font-size: var(--fs-label-large); font-weight: var(--fw-medium); }
-.ds-avatar.is-large { width: 55px; height: 48px; }
+/* avatar (Thread, 2026-11-01) — a circle, Size=40px | 48px; Variation=Default: the initial (18px medium) on blue-100 with a
+   border/default ring | Image */
+.ds-avatar { display: flex; align-items: center; justify-content: center; box-sizing: border-box; width: 40px; height: 40px; border-radius: var(--radius-full);
+  overflow: hidden; border: 1px solid var(--border-default); background: var(--blue-100); color: var(--text-primary); font-size: var(--fs-h3);
+  font-weight: var(--fw-medium); line-height: 1; }
+.ds-avatar.is-large { width: 48px; height: 48px; }
 .ds-avatar img { display: block; width: 100%; height: 100%; object-fit: cover; }
 
 /* round-button — Size=Small (32×24), State=Default | Hover; swaps a 20px icon */
@@ -104,6 +106,7 @@
 .ds-toast-content { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: var(--space-sm); }
 .ds-toast-main { display: flex; align-items: center; gap: var(--space-md); min-height: 28px; }
 .ds-toast-message { flex: 1 1 auto; min-width: 0; }
+.ds-toast-main:has(> .ds-toast-action) { min-width: 224px; } /* with an action: 288 wide at least, the action on the right (Thread 135:1403) */
 .ds-toast-action { flex: none; display: inline-flex; align-items: center; justify-content: center; gap: var(--space-xs); height: 28px; padding: 0 var(--space-sm);
   border: 0; border-radius: var(--radius-md); background: transparent; color: var(--text-tertiary); font: inherit; font-size: var(--fs-label-medium);
   font-weight: var(--fw-medium); line-height: normal; white-space: nowrap; cursor: pointer; }

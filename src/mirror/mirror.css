@@ -10,7 +10,7 @@
 .mirror-shoot:has(input:focus-visible) { outline: 2px solid var(--border-accent); outline-offset: 2px; }
 .mirror-account { position: relative; }
 .mirror-account > summary { list-style: none; cursor: pointer; }
-.mirror-avatar { background: var(--bg-secondary); color: var(--text-primary); font-size: var(--fs-h2); } /* Figma 162:472: initial on bg/secondary */
+/* .mirror-avatar: the Thread avatar as it is (src/ui/components.css): 40px circle here, 48px in the phone's bottom bar. */
 .mirror-account > summary::-webkit-details-marker { display: none; }
 .mirror-account-menu { position: absolute; right: 0; top: calc(100% + var(--space-sm)); z-index: 10; padding: var(--space-xs); border: 1px solid var(--border-default);
   border-radius: var(--radius-md); background: var(--bg-primary); }
@@ -18,28 +18,29 @@
 .mirror-account-menu button:hover { background: var(--bg-secondary); }
 
 /* Top: question and date on the left; season filters and the occasion column pinned to the right. */
-.mirror-top { position: relative; padding: 0 var(--space-4xl); }
+.mirror-top { position: relative; padding: var(--space-lg) var(--space-4xl) 0; } /* Figma 192:1854: the question and the filters 24px under the header */
 .mirror-intro { display: flex; flex-direction: column; gap: var(--space-xs); }
 .mirror-question { font-size: var(--fs-h3); font-weight: var(--fw-medium); line-height: normal; color: var(--text-primary); }
 .mirror-meta { display: flex; align-items: center; gap: var(--space-sm); color: var(--text-secondary); font-size: var(--fs-body); line-height: normal; white-space: nowrap; }
 .mirror-sep { display: block; flex: none; }
 .mirror-weather { display: inline-flex; align-items: center; gap: var(--space-xs); }
 .mirror-weather .icon { color: var(--icon-secondary); }
-.mirror-nav { position: absolute; top: 0; right: var(--space-4xl); z-index: 1; display: flex; align-items: flex-start; gap: var(--space-3xl); }
+.mirror-nav { position: absolute; top: var(--space-lg); right: var(--space-4xl); z-index: 1; display: flex; align-items: flex-start; gap: var(--space-3xl); }
 .mirror-filters { display: flex; align-items: center; gap: var(--space-xl); padding-top: var(--space-xs); }
 .mirror-menu { display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-lg); }
 .mirror-mobile-filters { display: none; }
 
-/* Carousel: arrows either side of the ring; pager 10px below.
+/* Carousel: arrows either side of the ring; hide / heart and the pager right under the front look (Figma 192:1854).
    Ring (OutfitRing.jsx): the looks stand on a circle. Sizes are ratios of the look height so the ring scales with it.
-   Desktop values put the neighbours where the Figma frame has them at rest (520 high, centres ±397 px). */
-.mirror-body { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 78px; padding: 0 var(--space-3xl) var(--space-3xl); }
+   Desktop values put the neighbours where the Figma frame has them at rest (520 high, centres ±397 px).
+   Desktop (1512×893): the looks start 71px below the question (183px from the top), 600 high, then the 62px row. */
+.mirror-body { display: flex; flex-direction: column; align-items: center; gap: 0; margin-top: 24px; padding: 0 var(--space-3xl) var(--space-3xl); }
 .mirror-carousel { position: relative; display: flex; align-items: center; justify-content: center; gap: var(--space-lg); width: 100%; }
 .mirror-arrow { flex: none; position: relative; z-index: 2; }
 .mirror-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-md); min-height: 320px; max-width: 360px; text-align: center; color: var(--text-secondary); }
 .mirror-empty p { margin: 0; }
 
-.ring { --look-h: clamp(320px, 100dvh - 326px, 600px); /* 326: header, filters, hide · heart and the pager under them */ --ring-radius: 0.697; --ring-back-scale: 0.615; --ring-lift: 0.193;
+.ring { --look-h: clamp(320px, 100dvh - 293px, 600px); /* 293: header and question (183), the hide / heart row (62), 48 below */ --ring-radius: 0.697; --ring-back-scale: 0.615; --ring-lift: 0.193;
   --ring-side-strength: 0.68; --ring-back-strength: 0.44; /* sides 32% faded; looks heading to the back fade further */
   --ring-visible-slots: 1; /* 3 looks on screen: the front one and one each side */
   position: relative; z-index: 0; flex: 0 1 1190px; height: var(--look-h); touch-action: pan-y; user-select: none; -webkit-user-select: none; outline: none; }
@@ -58,14 +59,17 @@
 /* hide · pager · heart under the front look (Figma 191:1385; desktop 198:5697): 48px tertiary icon-buttons with 24px
    icons in icon/primary; the heart fills with icon/accent once hearted. The toast floats just above the row. */
 .mirror-look-bar { position: relative; display: flex; justify-content: center; width: 100%; }
-/* Figma 191:1385 (mobile and desktop): hide and heart side by side, 16px apart; the pager right under them (6px). */
-.mirror-look-actions { display: flex; flex-direction: column; align-items: center; min-height: 54px; padding: 0 var(--space-md); max-width: 100%; }
-.mirror-look-buttons { display: flex; gap: var(--space-md); }
+/* Figma 221:1792 (phone and desktop): hide / heart, 48px buttons 16px either side of a 7×14 "/" in icon/secondary; the
+   pager 8px under them. 62px in all. */
+.mirror-look-actions { display: flex; flex-direction: column; align-items: center; gap: var(--space-sm); min-height: 62px; padding: 0 var(--space-md); max-width: 100%; }
+.mirror-look-buttons { display: flex; align-items: center; gap: var(--space-md); }
+.mirror-look-sep { display: block; flex: none; width: 7px; height: auto; }
 .mirror-look-actions .ds-pager { max-width: 100%; }
 .ds-icon-button.mirror-look-action { color: var(--icon-primary); }
 .ds-icon-button.mirror-look-action[aria-pressed="true"] { color: var(--icon-accent); }
 .mirror-look-action[aria-pressed="true"] svg { fill: currentColor; }
-.mirror-toast { position: absolute; z-index: 5; left: 50%; bottom: calc(100% + var(--space-sm)); transform: translateX(-50%);
+/* The toast sits right on top of the hide / heart row (Figma 191:1462, 210:6295: its bottom on the row's top). */
+.mirror-toast { position: absolute; z-index: 5; left: 50%; bottom: 100%; transform: translateX(-50%);
   width: max-content; max-width: calc(100vw - 2 * var(--space-md)); white-space: normal; /* long messages wrap on a phone */
   animation: mirror-toast-in .35s cubic-bezier(.2, .8, .2, 1) both; }
 .mirror-toast.is-wide { width: min(342px, calc(100vw - 2 * var(--space-lg))); } /* with extra actions (Figma 216:1373) */
@@ -80,20 +84,22 @@
 @media (prefers-reduced-motion: reduce) { .mirror-toast, .mirror-toast.is-leaving, .ring-item.is-arriving img { animation: none; } .ring-item.is-leaving img { transition: none; } }
 
 /* A note line under the looks (outfit added, add more outfits) takes its height from the looks, not the page. */
-.mirror.has-note .ring { --look-h: clamp(300px, 100dvh - 356px, 600px); }
-@media (max-width: 1023px) { .mirror.has-note .ring { --look-h: clamp(170px, 100svh - 421px, 464px); } }
+.mirror.has-note .ring { --look-h: clamp(300px, 100dvh - 323px, 600px); }
+@media (max-width: 1023px) { .mirror.has-note .ring { --look-h: clamp(170px, 100svh - env(safe-area-inset-top) - 375px, 440px); } }
 
 /* Favorites with nothing hearted yet (Figma 192:1750): illustration, title, text, link back to today's looks. */
-.mirror-empty.is-favorites { gap: var(--space-lg); max-width: 310px; }
+.mirror-empty.is-favorites { gap: var(--space-lg); max-width: 310px;
+  min-height: calc(clamp(320px, 100dvh - 293px, 600px) + 62px); } /* desktop: centred where the looks and hide / heart would be */
 /* Making looks (Figma 206:5722): illustration 120×140, then two lines in Heading/H3 (18 px medium). */
-.mirror-empty.is-making { gap: var(--space-lg); max-width: none; }
+.mirror-empty.is-making { gap: var(--space-lg); max-width: none;
+  min-height: calc(clamp(320px, 100dvh - 293px, 600px) + 62px); } /* desktop: centred where the looks and hide / heart would be */
 .mirror-empty.is-making > div { display: flex; flex-direction: column; gap: var(--space-xs); }
 .mirror-empty.is-making p { font-size: var(--fs-h3); font-weight: var(--fw-medium); line-height: normal; color: var(--text-secondary); }
 .mirror-empty.is-making .mirror-making-title { color: var(--text-primary); }
 /* No looks yet (Figma 206:5879 desktop, 212:6480 phone): illustration 222×142 (drawing 20px left of centre), two lines,
    the 40px shutter (desktop only); 16px apart. */
 .mirror-empty.is-none { gap: var(--space-md); max-width: none;
-  min-height: calc(clamp(320px, 100dvh - 326px, 600px) + 54px); } /* desktop: centred where the looks and hide · heart would be */
+  min-height: calc(clamp(320px, 100dvh - 293px, 600px) + 62px); } /* desktop: centred where the looks and hide · heart would be */
 .mirror-empty.is-none > div { display: flex; flex-direction: column; gap: var(--space-xs); }
 .mirror-empty.is-none p { font-size: var(--fs-h3); font-weight: var(--fw-medium); line-height: normal; color: var(--text-secondary); }
 .mirror-empty.is-none .mirror-making-title { color: var(--text-primary); }
@@ -148,21 +154,23 @@
   .mirror-mobile-filters .ds-tabs { align-self: stretch; }
 
   /* Short phones (SE, Safari with both toolbars): less room above the looks so they stay big. */
-  @media (max-height: 640px) { .mirror-mobile-filters { margin-top: var(--space-lg); } .mirror-body { margin-top: var(--space-sm); } }
+  @media (max-height: 640px) { .mirror-mobile-filters { margin-top: var(--space-lg); } }
 
   /* Bottom bar: the button fills the row, the avatar sits on the right. */
   .mirror-actions { position: fixed; z-index: 20; left: 0; right: 0; bottom: 0; gap: var(--space-md);
     padding: var(--space-lg) var(--space-xl); padding-bottom: calc(var(--space-lg) + env(safe-area-inset-bottom)); background: var(--bg-primary); }
   .mirror-shoot { flex: 1 1 auto; height: 48px; font-size: var(--fs-label-large); } /* button Size=Large */
-  .mirror-avatar { width: 55px; height: 48px; } /* avatar Size=48px */
+  .mirror-avatar { width: 48px; height: 48px; } /* avatar Size=48px */
   .mirror-account-menu { top: auto; bottom: calc(100% + var(--space-sm)); }
 
-  /* Carousel: the front look 464 high, neighbours at 392 cropped by the screen edges, edges faded. The look height
-     shrinks on short screens so the pager stays above the bottom bar; the ring scales with it. */
-  .mirror-body { flex: 1; justify-content: center; margin-top: 22px; padding: 0 0 var(--space-md); overflow: hidden; }
+  /* Carousel (Figma 191:1419): right under the filters, the front look 440 high, neighbours 352.8 high (centres ±183.6,
+     raised 43.6) cropped by the screen edges, edges faded; the 62px hide / heart row ends on the bottom bar. 345 = header
+     and filters (187 below the status bar) + the row (62) + the bottom bar (96). Shorter screens shrink the looks; the
+     ring scales with them. */
+  .mirror-body { flex: 1; justify-content: center; margin-top: 0; padding: 0; overflow: hidden; }
   .mirror-carousel { position: relative; width: 100%; height: auto; overflow: hidden; }
   .mirror-carousel::before, .mirror-carousel::after { content: ''; position: absolute; top: 0; bottom: 0; z-index: 1; width: 78px; pointer-events: none; }
-  .ring { --look-h: clamp(180px, 100svh - 391px, 464px); --ring-radius: 0.463; --ring-back-scale: 0.552; --ring-lift: 0.224; flex: 1 1 100%; }
+  .ring { --look-h: clamp(180px, 100svh - env(safe-area-inset-top) - 345px, 440px); --ring-radius: 0.4387; --ring-back-scale: 0.4263; --ring-lift: 0.2868; flex: 1 1 100%; }
   .mirror-carousel::before { left: 0; background: linear-gradient(to left, transparent, color-mix(in srgb, var(--bg-primary) 80%, transparent)); }
   .mirror-carousel::after { right: 0; background: linear-gradient(to right, transparent, color-mix(in srgb, var(--bg-primary) 80%, transparent)); }
   .mirror-arrow { display: none; }
@@ -172,8 +180,9 @@
   /* No looks yet, phone (Figma 212:6480): no shutter (the bottom bar has one); the message centred between the filters and
      the bottom bar. */
   .mirror-empty.is-none .mirror-shutter { display: none; }
-  .mirror:has(.mirror-empty.is-none) .mirror-content { flex: 1; display: flex; flex-direction: column; }
-  .mirror-body:has(.mirror-empty.is-none) { margin-top: 0; padding-bottom: 0; gap: 0; }
-  .mirror-body:has(.mirror-empty.is-none) .mirror-carousel { flex: 1; }
-  .mirror-empty.is-none { flex: 1; min-height: 0; }
+  /* Making looks and Favorites empty (Figma 192:1750), phone: the same, centred between the filters and the bottom bar. */
+  .mirror:has(.mirror-empty.is-none, .mirror-empty.is-making, .mirror-empty.is-favorites) .mirror-content { flex: 1; display: flex; flex-direction: column; }
+  .mirror-body:has(.mirror-empty.is-none, .mirror-empty.is-making, .mirror-empty.is-favorites) { margin-top: 0; padding-bottom: 0; gap: 0; }
+  .mirror-body:has(.mirror-empty.is-none, .mirror-empty.is-making, .mirror-empty.is-favorites) .mirror-carousel { flex: 1; }
+  .mirror-empty.is-none, .mirror-empty.is-making, .mirror-empty.is-favorites { flex: 1; min-height: 0; }
 }

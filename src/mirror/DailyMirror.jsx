@@ -83,7 +83,7 @@ function NoLooks({ title, text, onShoot }) {
 function NoFavorites({ onBack }) {
   return (
     <div className="mirror-empty is-favorites" role="status">
-      <img src="/brand/no-favorites.svg" width="155" height="106" alt="" />
+      <img src="/brand/no-favorites.svg" width="140" height="96" alt="" />
       <div>
         <h2>No favorites yet</h2>
         <p>Tap the heart on a look you love. It comes back here, ready to wear again.</p>
@@ -393,7 +393,7 @@ export default function DailyMirror({
           </div>
           {(note || (problem && count > 0)) && <p className="mirror-note" role="status">{note || problem}</p>}
           {!note && count <= 1 && more > 0 && <p className="mirror-nudge">Add {more} more outfit{more > 1 ? 's' : ''} for new looks every day</p>}
-          {/* hide · heart with the pager under them (Figma 191:1385); the toast sits just above. */}
+          {/* hide / heart with the pager under them (Figma 221:1792); the toast sits right on top. */}
           <div className="mirror-look-bar">
             <Toast key={toast?.id} toast={toast} />
             {front && (
@@ -401,6 +401,7 @@ export default function DailyMirror({
                 <div className="mirror-look-buttons">
                   <button type="button" className="ds-icon-button is-large is-tertiary mirror-look-action" onClick={() => hide(front)} disabled={Boolean(leavingId)}
                     aria-label="Hide this look" title="Hide this look"><Icon name="eye-off" size={24} strokeWidth={5 / 3} /></button>
+                  <img className="mirror-look-sep" src="/brand/sep.svg" width="7" height="14" alt="" />
                   <button type="button" className="ds-icon-button is-large is-tertiary mirror-look-action" onClick={() => toggleFavorite(front)}
                     aria-pressed={isFav(front)} aria-label="Favorite" title={isFav(front) ? 'Remove from Favorites' : 'Save to Favorites'}>
                     <Icon name="heart" size={24} strokeWidth={5 / 3} /></button>
