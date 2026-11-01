@@ -23,7 +23,6 @@ const POLL_MS = 5000;
 import '../ui/components.css';
 import './mirror.css';
 
-const MAX_DOTS = 5; // the Figma pager has 1–5 dots
 const TOAST_MS = 5000; // Figma toast: "Shows for ~5 s"
 const TOAST_OUT_MS = 250; // its exit animation (mirror.css mirror-toast-out)
 const HIDE_FADE_MS = 350; // a hidden look fades out before it leaves the ring (mirror.css ring-leave)
@@ -256,9 +255,8 @@ export default function DailyMirror({
   const count = outfits.length;
   const current = wrap(index, count);
   const go = (delta) => setIndex((i) => wrap(i + delta, count));
-  // With more looks than dots, the pager shows a window of up to five around the current one.
-  const first = Math.max(0, Math.min(current - Math.floor(MAX_DOTS / 2), count - MAX_DOTS));
-  const dots = outfits.slice(first, first + MAX_DOTS).map((o, i) => ({ outfit: o, i: first + i }));
+  // One dot per look (Felipe, 2026-11-01); the dots get smaller as the count grows so up to 40 fit a phone row.
+  const density = count > 24 ? ' is-tiny' : count > 12 ? ' is-dense' : '';
   // The making screen: a tab with nothing to show yet while looks are made, or right after a new outfit photo.
   const awaitingHere = live && today_ && awaiting?.tab === occasion;
   const showMaking = live && today_ && data.hasBase && tab.making && (!count || (awaitingHere && !tab.looks.some((l) => !awaiting.known.has(l.id))));
@@ -372,8 +370,8 @@ export default function DailyMirror({
                 <button type="button" className="ds-icon-button is-large is-tertiary mirror-look-action" onClick={() => hide(front)} disabled={Boolean(leavingId)}
                   aria-label="Hide this look" title="Hide this look"><Icon name="eye-off" size={24} strokeWidth={5 / 3} /></button>
                 {count > 1 && (
-                  <div className="ds-pager" role="group" aria-label="Choose an outfit">
-                    {dots.map(({ outfit, i }) => (
+                  <div className={'ds-pager' + density} role="group" aria-label="Choose an outfit">
+                    {outfits.map((outfit, i) => (
                       <button key={outfit.id} type="button" className="ds-pager-dot" aria-current={i === current} aria-label={`Outfit ${i + 1} of ${count}`} onClick={() => setIndex(i)} />
                     ))}
                   </div>

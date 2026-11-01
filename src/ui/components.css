@@ -84,6 +84,12 @@
 .ds-pager { display: flex; align-items: center; gap: var(--space-xs); }
 .ds-pager-dot { display: block; width: 6px; height: 6px; padding: 0; border: 0; border-radius: var(--radius-full); background: var(--border-secondary); transition: width .2s; }
 .ds-pager-dot[aria-current="true"] { width: 16px; background: var(--bg-tertiary); }
+/* Many looks: smaller dots so one per look still fits (13–24, then 25+). */
+.ds-pager.is-dense { gap: 3px; }
+.ds-pager.is-dense .ds-pager-dot { width: 4px; height: 4px; }
+.ds-pager.is-tiny { gap: 2px; }
+.ds-pager.is-tiny .ds-pager-dot { width: 3px; height: 3px; }
+.ds-pager.is-dense .ds-pager-dot[aria-current="true"], .ds-pager.is-tiny .ds-pager-dot[aria-current="true"] { width: 12px; }
 
 /* toast — local to Accing (Figma 191:1373): a short confirmation with one action (Undo, View), ~5 s. */
 .ds-toast { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-md); min-height: 40px; padding: var(--space-xs) var(--space-md);
