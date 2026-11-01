@@ -66,6 +66,7 @@
 .ds-icon-button.mirror-look-action[aria-pressed="true"] { color: var(--icon-accent); }
 .mirror-look-action[aria-pressed="true"] svg { fill: currentColor; }
 .mirror-toast { position: absolute; z-index: 5; left: 50%; bottom: calc(100% + var(--space-sm)); transform: translateX(-50%);
+  width: max-content; max-width: calc(100vw - 2 * var(--space-md)); white-space: normal; /* long messages wrap on a phone */
   animation: mirror-toast-in .35s cubic-bezier(.2, .8, .2, 1) both; }
 /* The toast rises out of the top of the hide · pager · heart row and fades in; it sinks back and fades on its way out. */
 @keyframes mirror-toast-in { from { opacity: 0; transform: translate(-50%, calc(100% + var(--space-sm))); } }

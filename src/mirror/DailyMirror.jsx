@@ -133,7 +133,7 @@ export default function DailyMirror({
   const [hearts, setHearts] = useState(() => new Map()); // look id → hearted, for changes made on this page
   const [hidden, setHidden] = useState(() => new Set()); // garment combinations hidden on this page
   const [toast, setToast] = useState(null);
-  // After a new outfit photo starts looks for this tab: show "Making your … looks" until the first new one arrives.
+  // After a new outfit photo starts looks for this tab: the making screen (no looks yet) or toast until the first new one arrives.
   const [awaiting, setAwaiting] = useState(null); // { tab, known: Set of look ids already there }
   const [leavingId, setLeavingId] = useState(null);   // the look fading out after "hide"
   const [arrivingId, setArrivingId] = useState(null); // the look that takes its place, fading in
@@ -169,11 +169,13 @@ export default function DailyMirror({
       const r = await res.json().catch(() => ({}));
       if (r.error) { setNote(null); setProblem(r.error); return; }
       const tip = r.advice ? ` ${r.advice.title}: ${r.advice.hint}` : '';
-      // Looks on their way: the "Making your … looks" screen says so (Figma 206:5722); a note only for photo advice.
+      // Looks on their way: the making screen or toast says so; a note only for photo advice.
       setNote(r.queued ? (tip ? `Outfit added!${tip}` : null)
         : r.queueError ? `Outfit added! ${r.queueError}` : `Outfit added! It’ll be in your next looks.${tip}`);
       if (r.queued) {
         setSeason(SEASONS[0]);
+        // Looks already on screen: they stay, and a toast says new ones are coming (Figma 210:6191) until one arrives.
+        if (data?.tabs?.[occasion]?.looks?.length) setToast({ id: Date.now(), making: true, message: 'Making your new looks. The first one takes about a minute.', action: 'Dismiss', onAction: () => setToast(null) });
         setAwaiting({ tab: occasion, known: new Set((data?.tabs?.[occasion]?.looks || []).map((l) => l.id)) });
         setData((d) => ({ ...d, tabs: { ...d.tabs, [occasion]: { ...d.tabs[occasion], making: true } } }));
         refresh();
@@ -205,12 +207,14 @@ export default function DailyMirror({
     const t = data.tabs[awaiting.tab];
     if (t?.making && !t.looks.some((l) => !awaiting.known.has(l.id))) return;
     setAwaiting(null);
+    setToast((x) => (x?.making ? { ...x, leaving: true } : x)); // the "making" toast leaves once a new look is in
     // Done without a new look: say why (out of credit, nothing suited the occasion…), not just the old looks again.
     if (!t?.making && t?.failed) setToast({ id: Date.now(), message: `Couldn’t make looks with your new outfit. ${t.failed}` });
   }, [data, awaiting]);
-  // Toasts leave after ~5 s; a new one replaces the last.
+  // Toasts leave after ~5 s (the "making" one when a look arrives); a new one replaces the last.
   useEffect(() => {
     if (!toast) return undefined;
+    if (toast.making && !toast.leaving) return undefined; // stays until a new look arrives or Dismiss
     if (toast.leaving) { const t = setTimeout(() => setToast(null), TOAST_OUT_MS); return () => clearTimeout(t); }
     const t = setTimeout(() => setToast((x) => (x && x.id === toast.id ? { ...x, leaving: true } : x)), TOAST_MS);
     return () => clearTimeout(t);
@@ -258,8 +262,8 @@ export default function DailyMirror({
   // One dot per look (Felipe, 2026-11-01); the dots get smaller as the count grows so up to 40 fit a phone row.
   const density = count > 24 ? ' is-tiny' : count > 12 ? ' is-dense' : '';
   // The making screen: a tab with nothing to show yet while looks are made, or right after a new outfit photo.
-  const awaitingHere = live && today_ && awaiting?.tab === occasion;
-  const showMaking = live && today_ && data.hasBase && tab.making && (!count || (awaitingHere && !tab.looks.some((l) => !awaiting.known.has(l.id))));
+  // The making screen only when the tab has nothing to show yet (Figma 206:5722); with looks there, a toast says so (210:6191).
+  const showMaking = live && today_ && data.hasBase && tab.making && !count;
   const front = count && !showMaking ? outfits[current] : null;
   const loading = live && !today_ && tab.loading;
 
