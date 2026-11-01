@@ -47,6 +47,7 @@
   --opacity-disabled: 0.24;
   --opacity-overlay: 0.88;
   --danger: #b3261e; /* not in the design system yet */
+  --bg-negative: #b51552; --bg-warning: #cea157; /* toast Negative / Warning (Thread 140:144) */
 
   /* Design Tokens: spacing */
   --space-xs: 4px; --space-sm: 8px; --space-md: 16px; --space-lg: 24px; --space-xl: 32px;

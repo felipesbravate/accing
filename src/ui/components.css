@@ -95,6 +95,10 @@
 .ds-toast { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-md); min-height: 40px; padding: var(--space-xs) var(--space-md);
   border-radius: var(--radius-md); background: var(--bg-tertiary); color: var(--text-tertiary); filter: drop-shadow(0 8px 12px rgba(12, 12, 54, .18));
   font-size: var(--fs-body); font-weight: var(--fw-regular); line-height: normal; white-space: nowrap; }
+/* toast (Thread 140:144): Default, Negative, Warning; an optional 16px icon before the message. */
+.ds-toast.is-negative { background: var(--bg-negative); }
+.ds-toast.is-warning { background: var(--bg-warning); }
+.ds-toast-icon { flex: none; }
 .ds-toast-action { display: inline-flex; align-items: center; height: 32px; padding: 0 var(--space-xs); border: 0; border-radius: var(--radius-lg);
   background: transparent; color: var(--text-tertiary); font-size: var(--fs-label-medium); font-weight: var(--fw-medium); line-height: normal; }
 .ds-toast-action:hover { background: color-mix(in srgb, var(--text-tertiary) 12%, transparent); }

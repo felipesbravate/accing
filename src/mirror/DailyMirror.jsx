@@ -27,11 +27,14 @@ const TOAST_MS = 5000; // Figma toast: "Shows for ~5 s"
 const TOAST_OUT_MS = 250; // its exit animation (mirror.css mirror-toast-out)
 const HIDE_FADE_MS = 350; // a hidden look fades out before it leaves the ring (mirror.css ring-leave)
 
-/** toast (Figma 191:1373): a short confirmation with one action. Sits just above the hide · pager · heart row. */
+/** toast (Thread 140:144): an optional icon, a short message and one action; type default | negative | warning.
+ *  Sits just above hide · heart. */
 function Toast({ toast }) {
   if (!toast) return null;
+  const type = toast.type && toast.type !== 'default' ? ` is-${toast.type}` : '';
   return (
-    <div className={`ds-toast mirror-toast${toast.leaving ? ' is-leaving' : ''}`} role="status">
+    <div className={`ds-toast mirror-toast${type}${toast.leaving ? ' is-leaving' : ''}`} role={toast.type === 'negative' ? 'alert' : 'status'}>
+      {toast.icon && <Icon name={toast.icon} size={16} className="ds-toast-icon" />}
       <span>{toast.message}</span>
       {toast.action && <button type="button" className="ds-toast-action" onClick={toast.onAction}>{toast.action}</button>}
     </div>
@@ -209,7 +212,7 @@ export default function DailyMirror({
     setAwaiting(null);
     setToast((x) => (x?.making ? { ...x, leaving: true } : x)); // the "making" toast leaves once a new look is in
     // Done without a new look: say why (out of credit, nothing suited the occasion…), not just the old looks again.
-    if (!t?.making && t?.failed) setToast({ id: Date.now(), message: `Couldn’t make looks with your new outfit. ${t.failed}` });
+    if (!t?.making && t?.failed) setToast({ id: Date.now(), type: 'negative', icon: 'alert-triangle', message: `Couldn’t make looks with your new outfit. ${t.failed}`, action: 'Dismiss', onAction: () => setToast(null) });
   }, [data, awaiting]);
   // Toasts leave after ~5 s (the "making" one when a look arrives); a new one replaces the last.
   useEffect(() => {
@@ -230,7 +233,7 @@ export default function DailyMirror({
     const on = !isFav(look);
     setHearts((m) => new Map(m).set(look.id, on));
     mark(look.id, on ? 'favorite' : 'unfavorite');
-    setToast(on ? { id: Date.now(), message: 'Saved to Favorites', action: 'View', onAction: () => { setToast(null); pickSeason('Favorites'); } } : null);
+    setToast(on ? { id: Date.now(), icon: 'check-circle', message: 'Added to favourites', action: 'View', onAction: () => { setToast(null); pickSeason('Favorites'); } } : null);
   };
   const hide = (look) => {
     if (leavingId) return;
@@ -247,7 +250,7 @@ export default function DailyMirror({
       setTimeout(() => setArrivingId(null), 400);
     }, reduce ? 0 : HIDE_FADE_MS);
     mark(look.id, 'hide');
-    setToast({ id: Date.now(), message: 'Look hidden. You won’t see it again.', action: 'Undo', onAction: () => {
+    setToast({ id: Date.now(), icon: 'eye-off', message: 'Look hidden. You won’t see it again.', action: 'Undo', onAction: () => {
       setToast(null);
       setHidden((h) => { const n = new Set(h); n.delete(combo); return n; });
       mark(look.id, 'unhide');
