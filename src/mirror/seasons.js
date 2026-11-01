@@ -4,7 +4,7 @@
 // made so far for that tab that is comfortable at the typical temperature of that season where the person lives
 // (fitsSeason below).
 import { tabFor } from './occasions.js';
-import { fitsDays } from './warmth.js';
+import { CALIBRATION, fitsDays } from './warmth.js';
 import { DEFAULT_CLIMATE, seasonDays } from '../lib/climate.js';
 
 export const SEASON_FILTERS = [
@@ -34,20 +34,20 @@ export function comboKey(items, id = '') {
 
 /** Does a look suit the season? Its insulation (src/mirror/warmth.js) against the typical days of that season where
  *  the person lives (`climate`, src/lib/climate.js; Barcelona-like until their location is known). "all" (and anything
- *  else) keeps every look. */
-export function fitsSeason(items, key, climate = DEFAULT_CLIMATE) {
+ *  else) keeps every look. `offset` (°C) is the person's own, from "too warm" / "too cold" when hiding looks. */
+export function fitsSeason(items, key, climate = DEFAULT_CLIMATE, offset = 0) {
   const days = seasonDays(climate || DEFAULT_CLIMATE, key);
-  return days ? fitsDays(items, days) : true;
+  return days ? fitsDays(items, days, offset ? { ...CALIBRATION, offset: CALIBRATION.offset + offset } : CALIBRATION) : true;
 }
 
 /** Rows (newest first) → { [tab]: rows } for the filter: per tab, each job's looks together in look order, newest job
  *  first, at most `perTab`. Only transparent cut-outs (.webp) are shown in the ring; hidden
  *  garment combinations (`hidden`, comboKey) are left out; the Favorites filter keeps only `favorites` (look ids). */
-export function pickLooks(rows, { key = 'today', perTab = 5, tabs = [], hidden = new Set(), favorites = new Set(), unique = false, climate = DEFAULT_CLIMATE } = {}) {
+export function pickLooks(rows, { key = 'today', perTab = 5, tabs = [], hidden = new Set(), favorites = new Set(), unique = false, climate = DEFAULT_CLIMATE, offset = 0 } = {}) {
   const out = Object.fromEntries(tabs.map((t) => [t, []]));
   const byJob = new Map();
   for (const r of rows || []) {
-    if (!r.generated_image_path?.endsWith('.webp') || !fitsSeason(r.items, key, climate)) continue;
+    if (!r.generated_image_path?.endsWith('.webp') || !fitsSeason(r.items, key, climate, offset)) continue;
     if (hidden.has(comboKey(r.items, r.id))) continue;              // hidden looks never come back
     if (key === 'favorites' && !favorites.has(r.id)) continue;
     if (!byJob.has(r.job_id)) byJob.set(r.job_id, []);

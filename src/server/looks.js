@@ -49,7 +49,8 @@ export async function seasonLooks(userId, key) {
   if (key === 'favorites') query = query.in('id', [...mine.favorites].slice(0, HISTORY_ROWS)); // favourites of any age
   const { data: rows } = mine.favorites.size || key !== 'favorites'
     ? await query.order('created_at', { ascending: false }).limit(HISTORY_ROWS) : { data: [] };
-  const picked = pickLooks(rows, { key, perTab: MAX_PER_TAB_HISTORY, tabs: OCCASION_TABS.map((t) => t.label), unique: true, ...mine, ...(climate ? { climate } : {}) });
+  const picked = pickLooks(rows, { key, perTab: MAX_PER_TAB_HISTORY, tabs: OCCASION_TABS.map((t) => t.label), unique: true, ...mine, ...(climate ? { climate } : {}),
+    offset: Number.isFinite(profile?.warmth_offset) ? profile.warmth_offset : 0 });
   const entries = await Promise.all(OCCASION_TABS.map(async (t) => [t.label, { looks: await signLooks(sb, picked[t.label], mine.favorites), making: false }]));
   return { tabs: Object.fromEntries(entries) };
 }
@@ -84,9 +85,14 @@ export async function todaysLooks(userId) {
   return { tabs, temperature: temperatureOf(weather), condition: conditionOf(weather), hasBase: Boolean(profile?.base_path), later: Boolean(profile?.onboarding_later_at), jobsToday: (jobs || []).length, outfitPhotos: outfitPhotos || 0 };
 }
 
-/** Heart or hide a look, or undo either (Figma 191:1372). action: favorite | unfavorite | hide | unhide.
- *  Hiding stores the look's garment combination, so every look of the same garments leaves the mirror. */
-export async function markLook(userId, outfitId, action) {
+const REASONS = ['too_warm', 'too_cold', 'not_my_style'];
+const OFFSET_STEP = 1, OFFSET_MAX = 4; // °C per "too warm" / "too cold" (migration 009)
+
+/** Heart or hide a look, or undo either (Figma 191:1372). action: favorite | unfavorite | hide | unhide | reason.
+ *  Hiding stores the look's garment combination, so every look of the same garments leaves the mirror. "reason" (Figma
+ *  216:1373) adds why to that hidden combination ({ reason, filter, occasion }); too warm / too cold also move the
+ *  person's warmth offset by a degree, which the season filters use. */
+export async function markLook(userId, outfitId, action, { reason = null, filter = null, occasion = null } = {}) {
   if (typeof outfitId !== 'string' || !/^[0-9a-f-]{36}$/i.test(outfitId)) return { error: 'Unknown look' };
   const sb = await authClient();
   if (action === 'favorite' || action === 'unfavorite') {
@@ -95,10 +101,24 @@ export async function markLook(userId, outfitId, action) {
       : await sb.from('favorites').delete().eq('user_id', userId).eq('outfit_id', outfitId);
     return error ? { error: error.message } : { ok: true };
   }
-  if (action !== 'hide' && action !== 'unhide') return { error: 'Unknown action' };
+  if (!['hide', 'unhide', 'reason'].includes(action)) return { error: 'Unknown action' };
+  if (action === 'reason' && !REASONS.includes(reason)) return { error: 'Unknown reason' };
   const { data: look } = await sb.from('outfits').select('id, items').eq('id', outfitId).eq('user_id', userId).maybeSingle();
   if (!look) return { error: 'Unknown look' };
   const combo = comboKey(look.items, look.id);
+  if (action === 'reason') {
+    const context = { filter: typeof filter === 'string' ? filter.slice(0, 20) : null, occasion: typeof occasion === 'string' ? occasion.slice(0, 40) : null };
+    const { error } = await sb.from('hidden_combinations').upsert({ user_id: userId, combo, outfit_id: look.id, reason, context }, { onConflict: 'user_id,combo' });
+    if (error) return { error: error.message };
+    if (reason !== 'not_my_style') {
+      const { data: u } = await sb.from('users').select('warmth_offset').eq('id', userId).single();
+      if (u && Number.isFinite(u.warmth_offset)) {
+        const next = Math.max(-OFFSET_MAX, Math.min(OFFSET_MAX, u.warmth_offset + (reason === 'too_warm' ? OFFSET_STEP : -OFFSET_STEP)));
+        await sb.from('users').update({ warmth_offset: next }).eq('id', userId);
+      }
+    }
+    return { ok: true, combo };
+  }
   const { error } = action === 'hide'
     ? await sb.from('hidden_combinations').upsert({ user_id: userId, combo, outfit_id: look.id }, { onConflict: 'user_id,combo', ignoreDuplicates: true })
     : await sb.from('hidden_combinations').delete().eq('user_id', userId).eq('combo', combo);

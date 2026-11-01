@@ -65,3 +65,10 @@ test('climate: hemisphere, five typical days, feels-like kept apart', () => {
   assert.deepEqual(seasonDays({ summer: { high: 28, low: 20 } }, 'summer'), [{ hi: 28, lo: 20 }], 'older stored climates');
   assert.equal(climateFrom({ time: ['2024-07-01'], temperature_2m_max: [29], temperature_2m_min: [22] }, 41.4), null, 'too few days');
 });
+
+test('a personal offset: someone who finds looks too warm is shown lighter ones', () => {
+  const look = [g('top', 'long-sleeved cotton t-shirt'), g('bottom', 'black jeans'), g('shoes', 'sneakers')];
+  const mild = { summer: { days: [{ hi: 25, lo: 21.7 }] } }; // daytime ≈ 24 °C
+  assert.equal(fitsSeason(look, 'summer', mild), true);
+  assert.equal(fitsSeason(look, 'summer', mild, 4), false, 'four "too warm"s later, long sleeves leave that summer');
+});

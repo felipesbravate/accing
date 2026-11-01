@@ -24,19 +24,30 @@ import '../ui/components.css';
 import './mirror.css';
 
 const TOAST_MS = 5000; // Figma toast: "Shows for ~5 s"
+const HIDE_TOAST_MS = 8000; // the hide toast asks why: a little longer to read and tap
 const TOAST_OUT_MS = 250; // its exit animation (mirror.css mirror-toast-out)
 const HIDE_FADE_MS = 350; // a hidden look fades out before it leaves the ring (mirror.css ring-leave)
 
-/** toast (Thread 140:144): an optional icon, a short message and one action; type default | negative | warning.
- *  Sits just above hide · heart. */
+/** toast (Thread 140:144): an optional icon, a short message, one action and optional extra actions under it (the hide
+ *  reasons, Figma 216:1373); type default | negative | warning. Sits just above hide · heart. */
 function Toast({ toast }) {
   if (!toast) return null;
   const type = toast.type && toast.type !== 'default' ? ` is-${toast.type}` : '';
+  const extra = toast.extra?.length ? toast.extra : null;
   return (
-    <div className={`ds-toast mirror-toast${type}${toast.leaving ? ' is-leaving' : ''}`} role={toast.type === 'negative' ? 'alert' : 'status'}>
-      {toast.icon && <Icon name={toast.icon} size={16} className="ds-toast-icon" />}
-      <span>{toast.message}</span>
-      {toast.action && <button type="button" className="ds-toast-action" onClick={toast.onAction}>{toast.action}</button>}
+    <div className={`ds-toast mirror-toast${type}${extra ? ' is-wide' : ''}${toast.leaving ? ' is-leaving' : ''}`} role={toast.type === 'negative' ? 'alert' : 'status'}>
+      {toast.icon && <span className="ds-toast-lead"><Icon name={toast.icon} size={16} className="ds-toast-icon" /></span>}
+      <div className="ds-toast-content">
+        <div className="ds-toast-main">
+          <span className="ds-toast-message">{toast.message}</span>
+          {toast.action && <button type="button" className="ds-toast-action" onClick={toast.onAction}>{toast.action}</button>}
+        </div>
+        {extra && (
+          <div className="ds-toast-extra" role="group" aria-label={toast.extraLabel || 'More actions'}>
+            {extra.map((x) => <button key={x.label} type="button" className="ds-toast-action" onClick={x.onClick}>{x.label}</button>)}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -219,13 +230,13 @@ export default function DailyMirror({
     if (!toast) return undefined;
     if (toast.making && !toast.leaving) return undefined; // stays until a new look arrives or Dismiss
     if (toast.leaving) { const t = setTimeout(() => setToast(null), TOAST_OUT_MS); return () => clearTimeout(t); }
-    const t = setTimeout(() => setToast((x) => (x && x.id === toast.id ? { ...x, leaving: true } : x)), TOAST_MS);
+    const t = setTimeout(() => setToast((x) => (x && x.id === toast.id ? { ...x, leaving: true } : x)), toast.ms || TOAST_MS);
     return () => clearTimeout(t);
   }, [toast]);
-  const mark = useCallback((id, action) => {
+  const mark = useCallback((id, action, extra = {}) => {
     if (!live) return; // the preview account keeps hearts and hides on this page only
     // Before migration 007 runs the server can't keep them; they still hold until the page reloads.
-    const p = fetch('/api/looks/mark', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id, action }) })
+    const p = fetch('/api/looks/mark', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id, action, ...extra }) })
       .catch(() => null).finally(() => pending.current.delete(p));
     pending.current.add(p);
   }, [live]);
@@ -250,11 +261,21 @@ export default function DailyMirror({
       setTimeout(() => setArrivingId(null), 400);
     }, reduce ? 0 : HIDE_FADE_MS);
     mark(look.id, 'hide');
-    setToast({ id: Date.now(), icon: 'eye-off', message: 'Look hidden. You won’t see it again.', action: 'Undo', onAction: () => {
+    // Why (Figma 216:1373, optional): too warm / too cold tune the person's season filters; not my style is kept for
+    // the stylist. One tap swaps in a thank-you (216:1496). The toast stays longer, since it asks something.
+    const because = (reason) => () => {
+      mark(look.id, 'reason', { reason, filter, occasion });
+      setToast({ id: Date.now(), icon: 'check-circle', message: 'Thanks. You’ll see fewer looks like this.' });
+    };
+    setToast({ id: Date.now(), ms: HIDE_TOAST_MS, icon: 'eye-off', message: 'Look hidden. What was off?', action: 'Undo', onAction: () => {
       setToast(null);
       setHidden((h) => { const n = new Set(h); n.delete(combo); return n; });
       mark(look.id, 'unhide');
-    } });
+    }, extraLabel: 'Why you hid it', extra: [
+      { label: 'Too warm', onClick: because('too_warm') },
+      { label: 'Too cold', onClick: because('too_cold') },
+      { label: 'Not my style', onClick: because('not_my_style') },
+    ] });
   };
 
   // The server renders with its own clock; the browser corrects it to the viewer's time right after it loads.
