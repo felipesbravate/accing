@@ -533,10 +533,14 @@ async function main() {
     if (!verdicts) { console.log('(stylist unavailable: looks picked by the rules only)'); return first; }
     const vetoed = pool.filter((_, i) => verdicts[i].score < STYLIST_MIN);
     pool.forEach((l, i) => console.log(`  stylist ${verdicts[i].score}/5 ${verdicts[i].score < STYLIST_MIN ? '✗' : '✓'} ${l.items.map((x) => x.description).join(' + ')} — ${verdicts[i].reason}`));
-    if (!vetoed.length) return first;
-    const again = composeLooks(wardrobe, { ...base, count: opts.looks, avoid: new Set([...avoid, ...vetoed.map((l) => lookKey(l.items))]) });
-    again.avoided = first.avoided;
-    return again;
+    // Only looks the stylist passed are made (Felipe, 2026-11-01: "always fashion judged"). Re-composing after a veto
+    // used to pick combinations the stylist never saw (a winter parka over a red hoodie at 22 °C). The pool is already in
+    // the rules' order (fit, then variety); the stylist's 4s and 5s go before its 3s.
+    const passed = pool.map((l, i) => ({ l, i, score: verdicts[i].score })).filter((x) => x.score >= STYLIST_MIN)
+      .sort((a, b) => (Math.min(b.score, 4) - Math.min(a.score, 4)) || (a.i - b.i)).slice(0, opts.looks).map((x) => x.l);
+    const picked = Object.assign(passed, { skipped: pool.skipped, mustMissed: pool.mustMissed, avoided: pool.avoided, occasion: pool.occasion });
+    if (!picked.length) picked.noneStylish = vetoed.length;
+    return picked;
   };
   // --occasions: other occasions to try, in order, when nothing new is left for the first (the daily look).
   const tries = [opts.occasion, ...(opts.occasions || [])].filter((o, i, a) => o && a.indexOf(o) === i);
@@ -556,7 +560,8 @@ async function main() {
     return;
   }
   if (!looks.length && !opts.prepOnly) {
-    console.log('Every combination these photos allow is made already (or hidden): nothing new to make.');
+    console.log(looks.noneStylish ? `The stylist turned down all ${looks.noneStylish} new combination(s) for "${opts.occasion}": nothing new worth making.`
+      : 'Every combination these photos allow is made already (or hidden): nothing new to make.');
     await writeEmpty({ allMade: true });
     return;
   }
