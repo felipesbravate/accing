@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { comboKey, fitsSeason, pickLooks, seasonKey } from '../src/mirror/seasons.js';
+import { comboKey, fitsSeason, lookKeys, pickLooks, seasonKey } from '../src/mirror/seasons.js';
 import { composeLooks } from '../scripts/image-test-lib.mjs';
 
 const look = (...seasons) => seasons.map((season, i) => ({ description: `g${i}`, season }));
@@ -133,4 +133,23 @@ test('older looks are recognised by their wording', async () => {
   const avoid = new Set([lookDescKey([{ description: 'blue jeans' }, { description: 'white tee' }])]);
   const looks = composeLooks(wardrobe, { count: 2, occasion: 'a relaxed casual day', weather: 'mild 20°C', avoid });
   assert.ok(looks.every((l) => !l.items.some((x) => x.description === 'White Tee')));
+});
+
+test('a hidden look stays hidden when the same garments come from a duplicate photo', () => {
+  const g = (photo_id, category, description) => ({ photo_id, category, description });
+  const a = [g('p1', 'top', 'Black hoodie'), g('p1', 'bottom', 'black shorts')];
+  const b = [g('p5', 'top', 'black hoodie'), g('p5', 'bottom', 'Black shorts')]; // a second photo of the same outfit
+  assert.notEqual(comboKey(a), comboKey(b));
+  assert.deepEqual(lookKeys(a), [comboKey(a), 'black hoodie + black shorts']);
+  const rows = [{ id: 'x', job_id: 'j', look_n: 1, occasion: 'a relaxed casual day', items: b, generated_image_path: 'u/x.webp' }];
+  assert.equal(pickLooks(rows, { key: 'all', tabs: ['Casual'], hidden: new Set(lookKeys(a)) }).Casual.length, 0);
+});
+
+test('the worker passes the person\'s warmth offset, and the composer dresses for it', async () => {
+  const { pipelineArgs } = await import('../worker/jobs.mjs');
+  const { weatherProfile } = await import('../scripts/image-test-lib.mjs');
+  const job = { job_type: 'make_looks', payload: { occasion: 'an office day', weather: '22°C high' } };
+  assert.ok(pipelineArgs(job, 'p', 'x', null, null, null, null, { warmthOffset: 3 }).includes('--warmth-offset=3'));
+  assert.ok(!pipelineArgs(job, 'p', 'x').some((a) => a.startsWith('--warmth-offset')));
+  assert.equal(weatherProfile('22°C high', 3).hot, true, 'a warm-runner at 22 °C is dressed as for 25 °C');
 });

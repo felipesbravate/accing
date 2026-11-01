@@ -67,6 +67,7 @@ function args() {
     else if (k === 'must-strict') out.mustStrict = true; // with --must-photo: no looks at all if nothing from it fits
     else if (k === 'occasions') out.occasions = v.split('|').map((x) => x.trim()).filter(Boolean); // fallbacks for --occasion
     else if (k === 'no-stylist') out.stylist = false;
+    else if (k === 'warmth-offset') out.warmthOffset = Math.max(-4, Math.min(4, parseFloat(v) || 0)); // °C, users.warmth_offset
     else if (k === 'avoid') out.avoidFile = v; // JSON list of combinations not to make ("0/top + 1/bottom + 2/shoes")
     else if (k === 'looks') out.looks = Math.max(1, Math.min(8, parseInt(v, 10) || 1));
     else if (k === 'dry-run') out.dryRun = true;
@@ -524,12 +525,12 @@ async function main() {
   // One occasion: the rules pick candidates, the stylist (scripts/stylist.mjs) vetoes combinations that don't go
   // together, and the rules pick again without them.
   const composeFor = async (occasion) => {
-    const base = { seed, occasion, weather: opts.weather, mustPhoto: mustIndex };
+    const base = { seed, occasion, weather: opts.weather, mustPhoto: mustIndex, warmthOffset: opts.warmthOffset || 0 };
     let first;
     try { first = composeLooks(wardrobe, { ...base, count: opts.looks, avoid }); } catch (e) { if (opts.prepOnly) return emptyLooks(); throw e; }
     if (!opts.stylist || opts.prepOnly || !first.length) return first;
     const pool = composeLooks(wardrobe, { ...base, count: Math.max(opts.looks * 4, 8), avoid });
-    const verdicts = await judgeLooks(pool, { occasion, weather: opts.weather, model: opts.reader });
+    const verdicts = await judgeLooks(pool, { occasion, weather: opts.weather, model: opts.reader, warmthOffset: opts.warmthOffset || 0 });
     if (!verdicts) { console.log('(stylist unavailable: looks picked by the rules only)'); return first; }
     const vetoed = pool.filter((_, i) => verdicts[i].score < STYLIST_MIN);
     pool.forEach((l, i) => console.log(`  stylist ${verdicts[i].score}/5 ${verdicts[i].score < STYLIST_MIN ? '✗' : '✓'} ${l.items.map((x) => x.description).join(' + ')} — ${verdicts[i].reason}`));

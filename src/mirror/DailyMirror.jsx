@@ -154,8 +154,10 @@ export default function DailyMirror({
   const pending = useRef(new Set()); // marks still on their way, so a Favorites fetch waits for them
   const isFav = (o) => (hearts.has(o.id) ? hearts.get(o.id) : Boolean(o.favorite));
   const comboOf = (o) => o.combo || o.id;
+  const keysOf = (o) => (o.keys?.length ? o.keys : [comboOf(o)]); // by photos and by wording (seasons.js lookKeys)
+  const isHidden = (o) => keysOf(o).some((k) => hidden.has(k));
   const outfits = (live ? tab.looks : SAMPLE_OUTFITS)
-    .filter((o) => !hidden.has(comboOf(o)) && (!favoritesView || isFav(o)));
+    .filter((o) => !isHidden(o) && (!favoritesView || isFav(o)));
   const making = live && Object.values(data.tabs).some((t) => t.making);
   const refresh = useCallback(async () => {
     const res = await fetch('/api/looks', { cache: 'no-store' }).catch(() => null);
@@ -248,13 +250,14 @@ export default function DailyMirror({
   };
   const hide = (look) => {
     if (leavingId) return;
-    const combo = comboOf(look);
+    const keys = keysOf(look);
+    const same = (o) => keysOf(o).some((k) => keys.includes(k));
     // The look fades out where it stands, then leaves the ring; the next one takes its place and fades in.
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     setLeavingId(look.id);
-    const next = outfits.filter((o) => comboOf(o) !== combo);
+    const next = outfits.filter((o) => !same(o));
     setTimeout(() => {
-      setHidden((h) => new Set(h).add(combo));
+      setHidden((h) => new Set([...h, ...keys]));
       setLeavingId(null);
       const arriving = next.length ? next[wrap(index, next.length)] : null;
       setArrivingId(arriving?.id || null);
@@ -269,7 +272,7 @@ export default function DailyMirror({
     };
     setToast({ id: Date.now(), ms: HIDE_TOAST_MS, icon: 'eye-off', message: 'Look hidden. What was off?', action: 'Undo', onAction: () => {
       setToast(null);
-      setHidden((h) => { const n = new Set(h); n.delete(combo); return n; });
+      setHidden((h) => { const n = new Set(h); keys.forEach((k) => n.delete(k)); return n; });
       mark(look.id, 'unhide');
     }, extraLabel: 'Why you hid it', extra: [
       { label: 'Too warm', onClick: because('too_warm') },

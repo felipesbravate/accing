@@ -39,7 +39,7 @@ const ext = (p) => (/\.(jpe?g|png|webp)$/i.exec(p)?.[0] || '.jpg').toLowerCase()
 export const MORNING_LOOKS = 3;
 export const MORNING_OCCASIONS = ['an office day', 'a relaxed casual day', 'dinner out', 'a party'];
 
-export function pipelineArgs(job, person, jsonOut, preparedFile = null, cutoutCache = null, mustPhoto = null, avoidFile = null) {
+export function pipelineArgs(job, person, jsonOut, preparedFile = null, cutoutCache = null, mustPhoto = null, avoidFile = null, { warmthOffset = 0 } = {}) {
   const p = job.payload || {};
   const base = [`--person=${person}`, '--only=openai-2.5-flare-medium', '--hd', '--runs=1', `--json-out=${jsonOut}`, ...(cutoutCache ? [`--cutout-cache=${cutoutCache}`] : [])];
   if (job.job_type === 'prepare_base') return [...base, '--looks=1', '--prep-only', '--reprep'];
@@ -54,7 +54,9 @@ export function pipelineArgs(job, person, jsonOut, preparedFile = null, cutoutCa
   return [...base, `--looks=${looks}`, `--occasion=${occasion}`, ...(others.length ? [`--occasions=${others.join('|')}`] : []), `--weather=${clean(p.weather, 'mild')}`,
     ...(p.seed ? [`--seed=${parseInt(p.seed, 10) || 1}`] : []), ...(preparedFile ? [`--prepared=${preparedFile}`] : []),
     ...(mustPhoto ? [`--must-photo=${mustPhoto}`, ...(p.strict ? ['--must-strict'] : [])] : []),
-    ...(avoidFile ? [`--avoid=${avoidFile}`] : [])];
+    ...(avoidFile ? [`--avoid=${avoidFile}`] : []),
+    // The person's own feel for warmth (users.warmth_offset, migration 009): "too warm" / "too cold" when hiding looks.
+    ...(Number.isFinite(warmthOffset) && warmthOffset ? [`--warmth-offset=${Math.max(-4, Math.min(4, warmthOffset))}`] : [])];
 }
 
 /** Rows for public.outfits from the pipeline summary (one per look asked for, ready or not). photoIds[i] is the

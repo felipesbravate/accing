@@ -23,13 +23,25 @@ export const seasonKey = (label) => SEASON_FILTERS.find((f) => f.label === label
  *  "photos:<photo id>/<category> + …", the same however the reader words the garments. Older looks fall back to the
  *  garment descriptions ("black jeans + white tee"), which change when the reader words them differently.
  *  A look without either hides only itself. */
+export function descKey(items) {
+  return (items || []).map((x) => String(x.description || '').trim().toLowerCase()).filter(Boolean).sort().join(' + ');
+}
+
+/** Both keys of a look: by photos and by garment wording. A hide stores both (src/server/looks.js markLook) and a look
+ *  is hidden if either matches: the same garments photographed twice (two photos of the same hoodie) have different
+ *  photo keys but the same wording (Felipe, 2026-11-01: looks hidden on desktop came back on mobile). */
+export function lookKeys(items, id = '') {
+  const keys = [comboKey(items, id)], d = descKey(items);
+  if (d && !keys.includes(d)) keys.push(d);
+  return keys;
+}
+
 export function comboKey(items, id = '') {
   const list = items || [];
   if (list.length && list.every((x) => x.photo_id && x.category)) {
     return 'photos:' + list.map((x) => `${x.photo_id}/${x.category}`).sort().join(' + ');
   }
-  const key = list.map((x) => String(x.description || '').trim().toLowerCase()).filter(Boolean).sort().join(' + ');
-  return key || `look:${id}`;
+  return descKey(list) || `look:${id}`;
 }
 
 /** Does a look suit the season? Its insulation (src/mirror/warmth.js) against the typical days of that season where
@@ -48,7 +60,7 @@ export function pickLooks(rows, { key = 'today', perTab = 5, tabs = [], hidden =
   const byJob = new Map();
   for (const r of rows || []) {
     if (!r.generated_image_path?.endsWith('.webp') || !fitsSeason(r.items, key, climate, offset)) continue;
-    if (hidden.has(comboKey(r.items, r.id))) continue;              // hidden looks never come back
+    if (lookKeys(r.items, r.id).some((k) => hidden.has(k))) continue; // hidden looks never come back
     if (key === 'favorites' && !favorites.has(r.id)) continue;
     if (!byJob.has(r.job_id)) byJob.set(r.job_id, []);
     byJob.get(r.job_id).push(r);

@@ -3,7 +3,7 @@
 import { authClient } from './auth.js';
 import { dailyLimit } from '../lib/plans.js';
 import { conditionOf, OCCASION_TABS, startOfToday, tabFor, temperatureOf } from '../mirror/occasions.js';
-import { comboKey, pickLooks } from '../mirror/seasons.js';
+import { comboKey, descKey, lookKeys, pickLooks } from '../mirror/seasons.js';
 import { jobFailureText } from '../lib/job-errors.js';
 import { climateFor, rememberLocation } from './location.js';
 
@@ -20,9 +20,17 @@ const ALL_ROWS = 500;
 async function marks(sb, userId) {
   const [fav, hid] = await Promise.all([
     sb.from('favorites').select('outfit_id').eq('user_id', userId),
-    sb.from('hidden_combinations').select('combo').eq('user_id', userId),
+    sb.from('hidden_combinations').select('combo, outfit_id').eq('user_id', userId),
   ]);
-  return { favorites: new Set((fav.data || []).map((r) => r.outfit_id)), hidden: new Set((hid.data || []).map((r) => r.combo)) };
+  const hidden = new Set((hid.data || []).map((r) => r.combo));
+  // Hides from before both keys were stored (2026-11-01): add the wording key of the look each was hidden from, so a
+  // duplicate photo of the same garments stays hidden too.
+  const from = [...new Set((hid.data || []).map((r) => r.outfit_id).filter(Boolean))];
+  if (from.length) {
+    const { data: looks } = await sb.from('outfits').select('items').in('id', from.slice(0, 500));
+    for (const l of looks || []) { const d = descKey(l.items); if (d) hidden.add(d); }
+  }
+  return { favorites: new Set((fav.data || []).map((r) => r.outfit_id)), hidden };
 }
 
 /** Signed image URLs for the looks the ring will show (only those: signing is per image). */
@@ -32,7 +40,7 @@ async function signLooks(sb, rows, favorites = new Set()) {
   const urlOf = new Map((data || []).filter((x) => x.signedUrl).map((x) => [x.path, x.signedUrl]));
   return rows.filter((r) => urlOf.has(r.generated_image_path))
     .map((r) => ({ id: r.id, image: urlOf.get(r.generated_image_path), alt: (r.items || []).map((i) => i.description).join(', ') || 'A look',
-      combo: comboKey(r.items, r.id), favorite: favorites.has(r.id) }));
+      combo: comboKey(r.items, r.id), keys: lookKeys(r.items, r.id), favorite: favorites.has(r.id) }));
 }
 
 const HISTORY_ROWS = 300;
@@ -106,6 +114,7 @@ export async function markLook(userId, outfitId, action, { reason = null, filter
   const { data: look } = await sb.from('outfits').select('id, items').eq('id', outfitId).eq('user_id', userId).maybeSingle();
   if (!look) return { error: 'Unknown look' };
   const combo = comboKey(look.items, look.id);
+  const keys = lookKeys(look.items, look.id); // by photos and by wording: duplicate photos of the same garments too
   if (action === 'reason') {
     const context = { filter: typeof filter === 'string' ? filter.slice(0, 20) : null, occasion: typeof occasion === 'string' ? occasion.slice(0, 40) : null };
     const { error } = await sb.from('hidden_combinations').upsert({ user_id: userId, combo, outfit_id: look.id, reason, context }, { onConflict: 'user_id,combo' });
@@ -120,8 +129,8 @@ export async function markLook(userId, outfitId, action, { reason = null, filter
     return { ok: true, combo };
   }
   const { error } = action === 'hide'
-    ? await sb.from('hidden_combinations').upsert({ user_id: userId, combo, outfit_id: look.id }, { onConflict: 'user_id,combo', ignoreDuplicates: true })
-    : await sb.from('hidden_combinations').delete().eq('user_id', userId).eq('combo', combo);
+    ? await sb.from('hidden_combinations').upsert(keys.map((k) => ({ user_id: userId, combo: k, outfit_id: look.id })), { onConflict: 'user_id,combo', ignoreDuplicates: true })
+    : await sb.from('hidden_combinations').delete().eq('user_id', userId).in('combo', keys);
   return error ? { error: error.message } : { ok: true, combo };
 }
 

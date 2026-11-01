@@ -114,9 +114,9 @@ export function lookDescKey(items) {
   return 'desc:' + items.map((x) => String(x.description || '').trim().toLowerCase()).filter(Boolean).sort().join(' + ');
 }
 
-export function composeLooks(wardrobe, { count = 1, seed = 1, occasion = '', weather = '', mustPhoto = null, avoid = null } = {}) {
+export function composeLooks(wardrobe, { count = 1, seed = 1, occasion = '', weather = '', mustPhoto = null, avoid = null, warmthOffset = 0 } = {}) {
   const all = dedupeWardrobe(wardrobe).filter((x) => x.visibility !== 'hidden');
-  const occ = occasionProfile(occasion), wx = weatherProfile(weather);
+  const occ = occasionProfile(occasion), wx = weatherProfile(weather, warmthOffset);
   const skipped = [];
   const items = all.filter((x) => { const why = unfit(x, occ, wx); if (why) skipped.push({ description: x.description, why }); return !why; });
   const photoKeys = new Map();
@@ -207,11 +207,14 @@ export function weatherForGarments(items, weather) {
   return { weather: kept.some((x) => x.season === 'cold') ? '8°C high, 3°C low' : '27°C high, 19°C low', changed: true };
 }
 
-export function weatherProfile(text = '') {
+/** offset (°C): the person's own (users.warmth_offset, from "too warm" / "too cold" when hiding looks); someone who
+ *  finds looks too warm is dressed as if it were warmer. */
+export function weatherProfile(text = '', offset = 0) {
   const m = String(text).match(/(-?\d+(?:[.,]\d+)?)\s*°?\s*([cf])\b/i);
   let c = m ? parseFloat(m[1].replace(',', '.')) : null;
   if (c != null && m[2].toLowerCase() === 'f') c = (c - 32) * 5 / 9;
   if (c == null) c = /freez|snow|cold|chilly|winter/i.test(text) ? 5 : /hot|heat|summer|scorch/i.test(text) ? 30 : null;
+  if (c != null && Number.isFinite(offset)) c += offset;
   return { celsius: c, cold: c != null && c <= 13, hot: c != null && c >= 25, wet: /rain|shower|storm|snow|wet|drizzle/i.test(text) };
 }
 /** Why an item cannot be worn for this occasion and weather, or null. Items without tags pass (old readings). */
