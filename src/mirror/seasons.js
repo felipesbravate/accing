@@ -4,8 +4,8 @@
 // made so far for that tab that is comfortable at the typical temperature of that season where the person lives
 // (fitsSeason below).
 import { tabFor } from './occasions.js';
-import { fitsTemperature } from './warmth.js';
-import { DEFAULT_CLIMATE } from '../lib/climate.js';
+import { fitsDays } from './warmth.js';
+import { DEFAULT_CLIMATE, seasonDays } from '../lib/climate.js';
 
 export const SEASON_FILTERS = [
   { label: "Today's suggestions", key: 'today' },
@@ -32,14 +32,12 @@ export function comboKey(items, id = '') {
   return key || `look:${id}`;
 }
 
-/** Does a look suit the season? Its warmth (src/mirror/warmth.js) against the typical daytime high of that season where
- *  the person lives (`climate`, src/lib/climate.js; a temperate default until their location is known). In Barcelona:
- *  summer ~28 °C keeps a tee with shorts or jeans and leaves out jackets and long sleeves; winter ~15 °C wants long
- *  sleeves or more. "all" (and anything else) keeps every look. */
+/** Does a look suit the season? Its insulation (src/mirror/warmth.js) against the typical days of that season where
+ *  the person lives (`climate`, src/lib/climate.js; Barcelona-like until their location is known). "all" (and anything
+ *  else) keeps every look. */
 export function fitsSeason(items, key, climate = DEFAULT_CLIMATE) {
-  const season = (climate || DEFAULT_CLIMATE)[key];
-  if (!season) return true;
-  return fitsTemperature(items, season.high);
+  const days = seasonDays(climate || DEFAULT_CLIMATE, key);
+  return days ? fitsDays(items, days) : true;
 }
 
 /** Rows (newest first) → { [tab]: rows } for the filter: per tab, each job's looks together in look order, newest job

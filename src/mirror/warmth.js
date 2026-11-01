@@ -1,70 +1,111 @@
-// How warm a look is, against a temperature (Felipe, 2026-11-01: the season filters follow the typical temperature of
-// the person's city in that season). Pure, shared by the server and the browser; tested in tests/warmth.test.js.
-// Each garment gets a warmth level from what the pipeline's reader already wrote (category, description, season tag):
-//   0 nothing to it (t-shirt, shorts, sandals) · 1 light (long sleeves, jeans, windbreaker) · 2 warm (hoodie, blazer,
-//   boots) · 3 heavy (parka, wool coat). A look's warmth is the sum of what covers the body; shoes are judged apart.
+// How warm a look is, against the weather of a season where the person lives (Felipe, 2026-11-01). Pure, shared by the
+// server and the browser; tested in tests/warmth.test.js; tuned with scripts/season-labels.mjs (your own labels).
+//
+// Warmth is clothing insulation in clo, the standard unit. Each garment gets its ISO 9920 / ASHRAE 55 table value from
+// what the pipeline's reader wrote (category, description, season tag); the look's insulation is ISO 9920's
+//   Icl = 0.161 + 0.835 · Σ Iclu                       (underwear and socks included as UNDERWEAR)
+// What people actually wear outdoors at an air temperature Ta (°C) comes from the UTCI clothing model, fitted on
+// European field observations of light activity (Havenith et al. 2012, Int J Biometeorol 56:461, eq. 3; R² 0.85,
+// standard error 0.16 clo; the data are mostly from Poland, the UK, Sweden and Finland, so a Mediterranean person may
+// dress differently: that's what scripts/season-labels.mjs is for):
+//   Icl(Ta) = 1.372 − 0.01866·Ta − 0.0004849·Ta² − 0.000009333·Ta³
+// A look suits a day when its insulation is within TOLERANCE of that. A jacket comes off: a look with outerwear is
+// judged with the jacket against the morning and without it against the afternoon.
+
+/** The numbers scripts/season-labels.mjs tunes against your own labels. */
+export const CALIBRATION = {
+  tolerance: 0.2,    // clo either side of what people wear (the model's standard error is 0.16)
+  share: 0.4,        // a look belongs to a season if it suits at least this share of its days
+  morning: 0.4,      // morning temperature = low + morning × (high − low): what a jacket is for
+  daytime: 0.7,      // daytime temperature = low + daytime × (high − low): what a look without a jacket is judged at
+  minNeed: 0.35,     // nobody goes out in less than briefs, a tee, shorts, socks and shoes (≈0.35 clo)
+  offset: 0,         // °C added to the weather before the model: negative dresses warmer (someone who runs cold)
+};
+const UNDERWEAR = 0.06; // briefs 0.04 + socks 0.02 (ISO 9920)
 
 const has = (re, d) => re.test(d);
 
-/** Warmth 0–3 of one garment. */
-export function garmentWarmth(x) {
+/** One garment's insulation in clo (Iclu, ISO 9920 / ASHRAE 55 tables). Accessories add nothing. */
+export function garmentClo(x) {
   const d = String(x?.description || '').toLowerCase();
-  let w;
+  const short = has(/short[- ]sleeve|sleeveless|tank|cami/, d), long = has(/long[- ]sleeve/, d);
+  let clo;
   switch (x?.category) {
     case 'outerwear':
-      w = has(/parka|puffer|down jacket|padded|quilted|overcoat|wool coat|shearling|sherpa|duffle|peacoat|winter|fur/, d) ? 3
-        : has(/windbreaker|wind breaker|rain|shell|anorak|linen|kimono|overshirt|shacket|gilet|vest/, d) ? 1
-        : has(/\bcoat\b/, d) ? 3 : 2; // blazer, jacket (denim, leather, bomber), cardigan, trench
+      clo = has(/parka|puffer|down jacket|down coat|padded|quilted|overcoat|wool coat|shearling|sherpa|duffle|peacoat|winter/, d) ? 0.6
+        : has(/windbreaker|wind breaker|anorak|shell|rain jacket|raincoat|kimono/, d) ? 0.2
+        : has(/gilet|vest/, d) ? 0.13
+        : has(/linen|overshirt|shacket/, d) ? 0.25
+        : has(/cardigan/, d) ? (has(/chunky|cable|wool|thick/, d) ? 0.36 : 0.25)
+        : has(/blazer|suit jacket|sport coat/, d) ? (has(/wool|tweed|textured|thick/, d) ? 0.44 : 0.36)
+        : has(/trench|mac\b/, d) ? 0.4
+        : has(/\bcoat\b/, d) ? 0.6
+        : 0.35; // jacket: denim, leather, bomber, fleece
       break;
     case 'top':
-      w = has(/hood|sweatshirt|sweater|jumper|knit|cardigan|fleece|turtleneck|roll[- ]neck|pullover/, d) ? 2
-        : has(/long[- ]sleeve/, d) ? 1
-        : has(/sleeveless|tank|cami|crop|strap|t-shirt|tee\b|short[- ]sleeve|polo|jersey/, d) ? 0
-        : has(/shirt|blouse/, d) ? 1 : 0;
+      clo = has(/hood|sweatshirt/, d) ? 0.34
+        : has(/sweater|jumper|knit|pullover|turtleneck|roll[- ]neck|fleece/, d) ? (has(/chunky|cable|wool|thick|fleece/, d) ? 0.36 : 0.25)
+        : has(/flannel/, d) ? 0.34
+        : has(/sleeveless|tank|cami|crop|strap/, d) ? 0.06
+        : has(/t-shirt|tee\b|jersey/, d) ? (long ? 0.15 : 0.08)
+        : has(/shirt|blouse|henley|polo/, d) ? (short ? 0.17 : long ? 0.25 : 0.25)
+        : long ? 0.2 : 0.1;
       break;
     case 'bottom':
-      w = has(/shorts|skort|mini skirt/, d) ? 0 : has(/wool|corduroy|fleece|thermal|lined|flannel/, d) ? 2 : 1;
+      clo = has(/shorts|skort/, d) ? 0.06
+        : has(/mini skirt/, d) ? 0.1
+        : has(/skirt/, d) ? (has(/wool|thick|knit/, d) ? 0.23 : 0.14)
+        : has(/sweatpant|jogger|fleece|corduroy|wool|flannel|thermal|lined/, d) ? 0.28
+        : has(/linen|chino|lightweight/, d) ? 0.15
+        : 0.24; // jeans, trousers, cargo
       break;
     case 'dress':
-      w = has(/long[- ]sleeve|knit|wool|sweater/, d) ? 2 : has(/sleeveless|strap|slip|sundress|mini/, d) ? 0 : 1;
+      clo = has(/knit|sweater|wool/, d) ? 0.47 : long ? 0.33 : has(/sleeveless|strap|slip|sundress|mini/, d) ? 0.23 : 0.29;
       break;
     case 'shoes':
-      w = has(/sandal|flip[- ]flop|slide|espadrille|mule/, d) ? 0 : has(/snow|winter boot|shearling|lined boot/, d) ? 3 : has(/boot/, d) ? 2 : 1;
+      clo = has(/snow|winter boot|shearling|lined boot/, d) ? 0.15 : has(/boot/, d) ? 0.1 : 0.02; // sandals and shoes alike
       break;
     default:
-      return 0; // accessories
+      return 0;
   }
-  // The reader's own season tag wins where it is sure: cold-only is at least warm, warm-only is nothing to it.
-  if (x.season === 'cold') w = Math.max(w, 2);
-  if (x.season === 'warm') w = 0;
-  return w;
+  // The reader's season tag, where it's sure: a cold-only top or bottom is at least a sweatshirt or heavy trousers.
+  if (x.season === 'cold' && ['top', 'bottom'].includes(x.category)) clo = Math.max(clo, x.category === 'top' ? 0.34 : 0.28);
+  return clo;
 }
 
-/** { body, shoes }: the warmth of what covers the body (sum) and of the shoes (1 when the look has none). */
-export function lookWarmth(items) {
-  let body = 0, shoes = null;
-  for (const x of items || []) {
-    if (x.category === 'shoes') shoes = Math.max(shoes ?? 0, garmentWarmth(x));
-    else body += garmentWarmth(x);
-  }
-  return { body, shoes: shoes ?? 1 };
+/** The ensemble's insulation (Icl, clo), with or without its outerwear. */
+export function lookClo(items, { outer = true } = {}) {
+  const sum = (items || []).filter((x) => outer || x.category !== 'outerwear').reduce((n, x) => n + garmentClo(x), 0);
+  return 0.161 + 0.835 * (sum + UNDERWEAR);
 }
 
-/** The warmth a look may have at a typical daytime high of `high` °C: [min, max] for the body, max for the shoes, and
- *  whether open shoes are fine. Barcelona: summer ~28 (a tee and shorts or jeans), mid-season ~20 (up to a hoodie or a
- *  blazer), winter ~15 (long sleeves at least). */
-export function warmthRange(high) {
-  if (high >= 27) return { min: 0, max: 1, shoesMax: 1 };
-  if (high >= 23) return { min: 0, max: 2, shoesMax: 1 };
-  if (high >= 18) return { min: 0, max: 4, shoesMax: 2 };
-  if (high >= 13) return { min: 2, max: 9, shoesMax: 3, shoesMin: 1 };
-  if (high >= 8) return { min: 3, max: 9, shoesMax: 3, shoesMin: 1 };
-  return { min: 4, max: 9, shoesMax: 3, shoesMin: 1 };
+/** What Europeans wear outdoors at air temperature ta (UTCI clothing model, eq. 3), never below a minimal outfit. */
+export function neededClo(ta, cal = CALIBRATION) {
+  const t = Math.max(-25, Math.min(40, ta + (cal.offset || 0)));
+  return Math.max(cal.minNeed, 1.372 - 0.01866 * t - 0.0004849 * t * t - 0.000009333 * t ** 3);
 }
 
-/** Is this look comfortable at a typical daytime high of `high` °C? Looks with no readable garments pass. */
-export function fitsTemperature(items, high) {
-  if (!Number.isFinite(high) || !(items || []).some((x) => x.category)) return true;
-  const { body, shoes } = lookWarmth(items), r = warmthRange(high);
-  return body >= r.min && body <= r.max && shoes <= r.shoesMax && shoes >= (r.shoesMin ?? 0);
+const readable = (items) => (items || []).some((x) => ['top', 'bottom', 'dress', 'outerwear'].includes(x.category));
+
+/** Does the look suit a day with this high and low (°C)? Without a jacket: what people wear in the daytime, give or
+ *  take the tolerance. With one: the whole look suits the morning and, jacket off, it isn't too warm in the
+ *  afternoon. */
+export function fitsDay(items, { hi, lo }, cal = CALIBRATION) {
+  if (!readable(items)) return true;
+  const morning = lo + cal.morning * (hi - lo), daytime = lo + cal.daytime * (hi - lo), tol = cal.tolerance;
+  const full = lookClo(items);
+  if (!(items || []).some((x) => x.category === 'outerwear')) return Math.abs(full - neededClo(daytime, cal)) <= tol;
+  const base = lookClo(items, { outer: false });
+  return Math.abs(full - neededClo(morning, cal)) <= tol && base <= neededClo(hi, cal) + tol;
+}
+
+/** Share (0–1) of a season's typical days (climate days, src/lib/climate.js) the look suits. */
+export function shareOfDays(items, days, cal = CALIBRATION) {
+  if (!days?.length) return 1;
+  return days.filter((d) => fitsDay(items, d, cal)).length / days.length;
+}
+
+/** Does the look belong to a season with these typical days? */
+export function fitsDays(items, days, cal = CALIBRATION) {
+  return shareOfDays(items, days, cal) >= cal.share - 1e-9;
 }
