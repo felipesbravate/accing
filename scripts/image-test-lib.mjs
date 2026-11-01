@@ -107,6 +107,13 @@ export function lookKey(items) {
   return items.map((x) => `${x.photo}/${x.category}`).sort().join(' + ');
 }
 
+/** The same look by the garments' wording, "desc:<descriptions, lower case, sorted>": how looks made before photo ids
+ *  (before 2026-10-31) are recognised. Works when the reader words the garments as it did then (usually: same photo,
+ *  temperature 0), not always. */
+export function lookDescKey(items) {
+  return 'desc:' + items.map((x) => String(x.description || '').trim().toLowerCase()).filter(Boolean).sort().join(' + ');
+}
+
 export function composeLooks(wardrobe, { count = 1, seed = 1, occasion = '', weather = '', mustPhoto = null, avoid = null } = {}) {
   const all = dedupeWardrobe(wardrobe).filter((x) => x.visibility !== 'hidden');
   const occ = occasionProfile(occasion), wx = weatherProfile(weather);
@@ -138,7 +145,7 @@ export function composeLooks(wardrobe, { count = 1, seed = 1, occasion = '', wea
   // Combinations the person hid in the app ("Look hidden. You won't see it again.") are never made again.
   let avoided = 0;
   if (avoid?.size) {
-    const kept = candidates.filter((c) => !avoid.has(lookKey(c.chosen)));
+    const kept = candidates.filter((c) => !avoid.has(lookKey(c.chosen)) && !avoid.has(lookDescKey(c.chosen)));
     avoided = candidates.length - kept.length;
     candidates.splice(0, candidates.length, ...kept);
   }

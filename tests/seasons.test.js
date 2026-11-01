@@ -86,7 +86,7 @@ test('the worker turns hidden combinations into this run\'s photo numbers, and t
   const { avoidKeys, outfitRows } = await import('../worker/jobs.mjs');
   const { lookKey } = await import('../scripts/image-test-lib.mjs');
   const ids = ['p1', 'p2', 'p3'];
-  assert.deepEqual(avoidKeys(['photos:p2/bottom + p1/top', 'photos:p9/top + p1/bottom', 'black jeans + white tee'], ids), ['0/top + 1/bottom']);
+  assert.deepEqual(avoidKeys(['photos:p2/bottom + p1/top', 'photos:p9/top + p1/bottom', 'black jeans + white tee', 'look:x'], ids), ['0/top + 1/bottom', 'desc:black jeans + white tee']);
   const g = (photo, category, description) => ({ photo, category, description, visibility: 'full', formality: 2, exposure: 'low', season: 'any' });
   const wardrobe = [g(0, 'top', 'tee'), g(1, 'bottom', 'jeans'), g(2, 'top', 'shirt'), g(2, 'shoes', 'sneakers')];
   const all = composeLooks(wardrobe, { count: 5, occasion: 'a relaxed casual day', weather: 'mild 20°C' });
@@ -115,9 +115,10 @@ test('worker and app name a combination the same way; the daily look is one look
   const { photoCombo, pipelineArgs } = await import('../worker/jobs.mjs');
   const items = [{ description: 'a', category: 'top', photo_id: 'p2' }, { description: 'b', category: 'bottom', photo_id: 'p1' }];
   assert.equal(photoCombo(items), comboKey(items));
-  assert.equal(photoCombo([{ description: 'old' }]), null);
+  assert.equal(photoCombo([{ description: 'Old' }]), 'old');
+  assert.equal(photoCombo([]), null);
   const args = pipelineArgs({ job_type: 'make_looks', payload: { kind: 'morning', looks: 3, occasion: 'an office day' } }, 'p', 'x');
-  assert.ok(args.includes('--looks=1'));
+  assert.ok(args.includes('--looks=3'));
   assert.ok(args.some((a) => a.startsWith('--occasions=') && a.includes('a party') && !a.includes('an office day')));
 });
 
@@ -129,4 +130,13 @@ test('the stylist vetoes combinations before they are made', async () => {
   const vetoed = new Set([lookKey(first[0].items)]);
   const again = composeLooks(wardrobe, { count: 1, occasion: 'a relaxed casual day', weather: 'mild 20°C', avoid: vetoed });
   assert.notEqual(lookKey(again[0].items), lookKey(first[0].items));
+});
+
+test('older looks are recognised by their wording', async () => {
+  const { lookDescKey } = await import('../scripts/image-test-lib.mjs');
+  const g = (photo, category, description) => ({ photo, category, description, visibility: 'full', formality: 2, exposure: 'low', season: 'any' });
+  const wardrobe = [g(0, 'top', 'White Tee'), g(1, 'top', 'grey tee'), g(2, 'bottom', 'blue jeans')];
+  const avoid = new Set([lookDescKey([{ description: 'blue jeans' }, { description: 'white tee' }])]);
+  const looks = composeLooks(wardrobe, { count: 2, occasion: 'a relaxed casual day', weather: 'mild 20°C', avoid });
+  assert.ok(looks.every((l) => !l.items.some((x) => x.description === 'White Tee')));
 });

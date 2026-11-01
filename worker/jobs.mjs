@@ -36,6 +36,7 @@ const ext = (p) => (/\.(jpe?g|png|webp)$/i.exec(p)?.[0] || '.jpg').toLowerCase()
 
 /** Arguments for scripts/image-test.mjs. Quality settings are fixed (Felipe: medium looks, high base, HD). */
 // The app's occasion tabs (src/mirror/occasions.js), in the order the daily look tries them.
+export const MORNING_LOOKS = 3;
 export const MORNING_OCCASIONS = ['an office day', 'a relaxed casual day', 'dinner out', 'a party'];
 
 export function pipelineArgs(job, person, jsonOut, preparedFile = null, cutoutCache = null, mustPhoto = null, avoidFile = null) {
@@ -43,10 +44,10 @@ export function pipelineArgs(job, person, jsonOut, preparedFile = null, cutoutCa
   const base = [`--person=${person}`, '--only=openai-2.5-flare-medium', '--hd', '--runs=1', `--json-out=${jsonOut}`, ...(cutoutCache ? [`--cutout-cache=${cutoutCache}`] : [])];
   if (job.job_type === 'prepare_base') return [...base, '--looks=1', '--prep-only', '--reprep'];
   if (job.job_type !== 'make_looks') throw new Error(`Unknown job type ${job.job_type}`);
-  // The morning run makes one new look a day (Felipe, 2026-11-01), until every combination is made: for the day's
+  // The morning run makes 3 new looks a day (Felipe, 2026-11-01), until every combination is made: for the day's
   // occasion, else the first other occasion with a combination not made yet.
   const morning = p.kind === 'morning';
-  const looks = morning ? 1 : Math.max(1, Math.min(6, parseInt(p.looks, 10) || 3));
+  const looks = morning ? MORNING_LOOKS : Math.max(1, Math.min(6, parseInt(p.looks, 10) || 3));
   const clean = (s, d) => (typeof s === 'string' && s.trim() ? s.trim().slice(0, 80) : d);
   const occasion = clean(p.occasion, 'an ordinary day');
   const others = morning ? MORNING_OCCASIONS.filter((o) => o !== occasion) : [];
@@ -75,7 +76,9 @@ export function outfitRows(job, summary, uploaded, photoIds = []) {
  *  or null for older looks. Copied here because the worker image doesn't ship src/ (tests/seasons.test.js keeps them equal). */
 export function photoCombo(items) {
   const list = items || [];
-  return list.length && list.every((x) => x.photo_id && x.category) ? 'photos:' + list.map((x) => `${x.photo_id}/${x.category}`).sort().join(' + ') : null;
+  if (list.length && list.every((x) => x.photo_id && x.category)) return 'photos:' + list.map((x) => `${x.photo_id}/${x.category}`).sort().join(' + ');
+  const words = list.map((x) => String(x.description || '').trim().toLowerCase()).filter(Boolean).sort().join(' + ');
+  return words || null; // older looks: by wording (src/mirror/seasons.js comboKey does the same)
 }
 
 /** Hidden combinations (hidden_combinations.combo, src/mirror/seasons.js comboKey) in the pipeline's terms for this
@@ -85,7 +88,9 @@ export function avoidKeys(combos, photoIds = []) {
   const index = new Map(photoIds.map((id, i) => [id, i]));
   const out = [];
   for (const c of combos || []) {
-    if (typeof c !== 'string' || !c.startsWith('photos:')) continue;
+    if (typeof c !== 'string' || !c) continue;
+    // Older looks: their garments' wording (scripts/image-test-lib.mjs lookDescKey).
+    if (!c.startsWith('photos:')) { if (!c.startsWith('look:')) out.push('desc:' + c); continue; }
     const parts = c.slice(7).split(' + ').map((p) => { const [id, cat] = p.split('/'); return index.has(id) && cat ? `${index.get(id)}/${cat}` : null; });
     if (parts.length && parts.every(Boolean)) out.push(parts.sort().join(' + '));
   }
