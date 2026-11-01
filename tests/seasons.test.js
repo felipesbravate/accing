@@ -109,3 +109,24 @@ test('every look is shown once per garment combination, newest first; failures g
   assert.match(jobFailureText('Reading photo-07.jpg failed (gemini, 402): Your prepayment credits are depleted.'), /out of credit/);
   assert.equal(jobFailureText(null), null);
 });
+
+test('worker and app name a combination the same way; the daily look is one look across occasions', async () => {
+  const { comboKey } = await import('../src/mirror/seasons.js');
+  const { photoCombo, pipelineArgs } = await import('../worker/jobs.mjs');
+  const items = [{ description: 'a', category: 'top', photo_id: 'p2' }, { description: 'b', category: 'bottom', photo_id: 'p1' }];
+  assert.equal(photoCombo(items), comboKey(items));
+  assert.equal(photoCombo([{ description: 'old' }]), null);
+  const args = pipelineArgs({ job_type: 'make_looks', payload: { kind: 'morning', looks: 3, occasion: 'an office day' } }, 'p', 'x');
+  assert.ok(args.includes('--looks=1'));
+  assert.ok(args.some((a) => a.startsWith('--occasions=') && a.includes('a party') && !a.includes('an office day')));
+});
+
+test('the stylist vetoes combinations before they are made', async () => {
+  const { lookKey } = await import('../scripts/image-test-lib.mjs');
+  const g = (photo, category, description) => ({ photo, category, description, visibility: 'full', formality: 2, exposure: 'low', season: 'any' });
+  const wardrobe = [g(0, 'top', 'jersey'), g(1, 'top', 'tee'), g(2, 'bottom', 'jeans'), g(2, 'shoes', 'sneakers')];
+  const first = composeLooks(wardrobe, { count: 1, occasion: 'a relaxed casual day', weather: 'mild 20°C' });
+  const vetoed = new Set([lookKey(first[0].items)]);
+  const again = composeLooks(wardrobe, { count: 1, occasion: 'a relaxed casual day', weather: 'mild 20°C', avoid: vetoed });
+  assert.notEqual(lookKey(again[0].items), lookKey(first[0].items));
+});

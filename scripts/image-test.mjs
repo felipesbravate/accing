@@ -7,7 +7,8 @@ import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { appendFileSync, existsSync } from 'node:fs';
 import { extname, join, resolve } from 'node:path';
-import { CATEGORIES, blameGarment, composeLooks, mergeLayers, normaliseReading, weatherForGarments } from './image-test-lib.mjs';
+import { CATEGORIES, blameGarment, composeLooks, lookKey, mergeLayers, normaliseReading, weatherForGarments } from './image-test-lib.mjs';
+import { judgeLooks, STYLIST_MIN } from './stylist.mjs';
 import { checkFaces, checkTable, MIN_IDENTITY } from './face-check/index.mjs';
 import { confirmClaims, outfitCheck, photoCheck, poseCheck } from './face-check/look-check.mjs';
 import { createHash } from 'node:crypto';
@@ -54,7 +55,7 @@ const OPENAI_BASE = process.env.OPENAI_BASE_URL || 'https://api.openai.com';
 const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
 
 function args() {
-  const out = { runs: 3, looks: 1, sameLight: true, cleanRefs: true, person: null, bodyCard: true, blankFace: true, realFace: null, openaiSize: null, flex: false, garmentCrops: true, autoBase: true, prep: true, reprep: false, prepModel: null, proFace: false, body: null, background: '#F9F9FB', poseRef: true, facePasses: 2, faceLock: true, clean: true, anchor: null, anchorTries: 3, only: null, dryRun: false, check: true, minIdentity: MIN_IDENTITY, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
+  const out = { stylist: true, runs: 3, looks: 1, sameLight: true, cleanRefs: true, person: null, bodyCard: true, blankFace: true, realFace: null, openaiSize: null, flex: false, garmentCrops: true, autoBase: true, prep: true, reprep: false, prepModel: null, proFace: false, body: null, background: '#F9F9FB', poseRef: true, facePasses: 2, faceLock: true, clean: true, anchor: null, anchorTries: 3, only: null, dryRun: false, check: true, minIdentity: MIN_IDENTITY, seed: null, reader: 'gemini-3.1-flash-lite', size: '1K', detail: 'max',
     expression: 'copy it exactly from the front face photo, including any slight smile; no smile or seriousness that photo does not have', occasion: 'an office day', weather: 'sunny 24°C', time: 'Monday morning',
     shoes: 'plain white leather low-top sneakers with white soles and white laces',
     pose: HOUSE_POSE };
@@ -64,6 +65,8 @@ function args() {
     else if (k === 'only') out.only = v;
     else if (k === 'must-photo') out.mustPhoto = v; // an outfit photo's file name: every look wears something from it
     else if (k === 'must-strict') out.mustStrict = true; // with --must-photo: no looks at all if nothing from it fits
+    else if (k === 'occasions') out.occasions = v.split('|').map((x) => x.trim()).filter(Boolean); // fallbacks for --occasion
+    else if (k === 'no-stylist') out.stylist = false;
     else if (k === 'avoid') out.avoidFile = v; // JSON list of combinations not to make ("0/top + 1/bottom + 2/shoes")
     else if (k === 'looks') out.looks = Math.max(1, Math.min(8, parseInt(v, 10) || 1));
     else if (k === 'dry-run') out.dryRun = true;
@@ -510,19 +513,51 @@ async function main() {
   readings.forEach((r, i) => console.log(`  photo ${i + 1} = image ${faces.length + i + 1}, ${outfits[i].file}: ${r.items.map((x) => `${x.description} [${x.category}${x.visibility === 'full' ? '' : ', ' + x.visibility}]`).join('; ') || 'nothing recognised'}`));
   const seed = opts.seed ?? (Date.now() % 100000);
   // With --prep-only no look is made, so a wardrobe that can't make one yet (onboarding) must not stop the base photo.
-  const avoid = opts.avoidFile ? new Set(JSON.parse(await readFile(opts.avoidFile, 'utf8'))) : null;
+  // Combinations already made or hidden (worker: --avoid) are never made again.
+  const avoid = new Set(opts.avoidFile ? JSON.parse(await readFile(opts.avoidFile, 'utf8')) : []);
   const mustIndex = opts.mustPhoto ? outfits.findIndex((o) => o.file === opts.mustPhoto) : null;
   if (mustIndex != null && mustIndex >= 0) {
     const w = weatherForGarments(readings[mustIndex].items, opts.weather);
     if (w.changed) { console.log(`Today's weather (${opts.weather}) rules out everything in ${opts.mustPhoto}: making its looks for ${w.weather}.`); opts.weather = w.weather; }
   }
-  const looks = (() => { try { return composeLooks(wardrobe, { count: opts.looks, seed, occasion: opts.occasion, weather: opts.weather, mustPhoto: mustIndex, avoid }); } catch (e) { if (!opts.prepOnly) throw e; return Object.assign([], { skipped: [], occasion: { name: 'any', min: 1, max: 5, maxExposure: 'high' } }); } })();
-  if (looks.avoided) console.log(`Left out ${looks.avoided} combination(s) the person hid.`);
+  const emptyLooks = () => Object.assign([], { skipped: [], avoided: 0, occasion: { name: 'any', min: 1, max: 5, maxExposure: 'high' } });
+  // One occasion: the rules pick candidates, the stylist (scripts/stylist.mjs) vetoes combinations that don't go
+  // together, and the rules pick again without them.
+  const composeFor = async (occasion) => {
+    const base = { seed, occasion, weather: opts.weather, mustPhoto: mustIndex };
+    let first;
+    try { first = composeLooks(wardrobe, { ...base, count: opts.looks, avoid }); } catch (e) { if (opts.prepOnly) return emptyLooks(); throw e; }
+    if (!opts.stylist || opts.prepOnly || !first.length) return first;
+    const pool = composeLooks(wardrobe, { ...base, count: Math.max(opts.looks * 4, 8), avoid });
+    const verdicts = await judgeLooks(pool, { occasion, weather: opts.weather, model: opts.reader });
+    if (!verdicts) { console.log('(stylist unavailable: looks picked by the rules only)'); return first; }
+    const vetoed = pool.filter((_, i) => verdicts[i].score < STYLIST_MIN);
+    pool.forEach((l, i) => console.log(`  stylist ${verdicts[i].score}/5 ${verdicts[i].score < STYLIST_MIN ? '✗' : '✓'} ${l.items.map((x) => x.description).join(' + ')} — ${verdicts[i].reason}`));
+    if (!vetoed.length) return first;
+    const again = composeLooks(wardrobe, { ...base, count: opts.looks, avoid: new Set([...avoid, ...vetoed.map((l) => lookKey(l.items))]) });
+    again.avoided = first.avoided;
+    return again;
+  };
+  // --occasions: other occasions to try, in order, when nothing new is left for the first (the daily look).
+  const tries = [opts.occasion, ...(opts.occasions || [])].filter((o, i, a) => o && a.indexOf(o) === i);
+  let looks = emptyLooks();
+  for (const [i, occasion] of tries.entries()) {
+    try { looks = await composeFor(occasion); } catch (e) { if (i === tries.length - 1) throw e; console.log(`No look for "${occasion}": ${e.message}`); continue; }
+    if (looks.length || looks.mustMissed || i === tries.length - 1) { opts.occasion = occasion; break; }
+    console.log(`Every combination for "${occasion}" is made already; trying "${tries[i + 1]}".`);
+  }
+  if (looks.avoided) console.log(`Left out ${looks.avoided} combination(s) already made or hidden.`);
+  const writeEmpty = async (extra) => { if (opts.jsonOut) await writeFile(resolve(opts.jsonOut), JSON.stringify({ stage: 'looks', dir: null, spent: readCost, prep: [], skipped: looks.skipped || [], rejected: [], looks: [], occasion: opts.occasion, ...extra,
+    wardrobe: readings.map((r, i) => ({ photo: i, file: outfits[i].file, items: r.items.map((x) => ({ description: x.description, category: x.category, photo: x.photo })) })) }, null, 2)); };
   if (looks.mustMissed && opts.mustStrict) {
-    // The new garment doesn't suit this occasion (a hoodie for a party): no looks here; other occasions get theirs.
+    // The new garment doesn't suit this occasion (a hoodie for a party): no looks here.
     console.log(`Nothing from ${opts.mustPhoto} suits "${opts.occasion}" / "${opts.weather}": no looks for this occasion.`);
-    if (opts.jsonOut) await writeFile(resolve(opts.jsonOut), JSON.stringify({ stage: 'looks', dir: null, spent: readCost, prep: [], skipped: looks.skipped || [], rejected: [], looks: [], mustMissed: true,
-      wardrobe: readings.map((r, i) => ({ photo: i, file: outfits[i].file, items: r.items.map((x) => ({ description: x.description, category: x.category, photo: x.photo })) })) }, null, 2));
+    await writeEmpty({ mustMissed: true });
+    return;
+  }
+  if (!looks.length && !opts.prepOnly) {
+    console.log('Every combination these photos allow is made already (or hidden): nothing new to make.');
+    await writeEmpty({ allMade: true });
     return;
   }
   if (looks.mustMissed) console.log(`Nothing from ${opts.mustPhoto} fits "${opts.occasion}" / "${opts.weather}": the looks are made without it.`);
@@ -928,7 +963,7 @@ PHOTO
     const okPrep = prepRows.filter((r) => !r.reasons.length && r.identity != null).sort((a, b) => b.identity - a.identity);
     const item = (x) => ({ description: x.description, category: x.category, photo: x.photo, ...(x.formality ? { formality: x.formality } : {}), ...(x.exposure ? { exposure: x.exposure } : {}), ...(x.season ? { season: x.season } : {}) });
     const summary = {
-      stage, dir: out, spent: spentNow,
+      stage, dir: out, spent: spentNow, occasion: opts.occasion,
       prep: prepRows.map((r) => ({ file: r.file, identity: r.identity, ok: !r.reasons.length, reasons: r.reasons, cost: r.cost || 0, best: okPrep[0]?.file === r.file })),
       wardrobe: readings.map((r, i) => ({ photo: i, file: outfits[i].file, items: r.items.map(item) })),
       skipped: looks.skipped || [],

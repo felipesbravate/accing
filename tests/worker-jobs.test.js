@@ -73,7 +73,7 @@ test('a job can ask every look to wear one outfit photo; at most 10 photos, that
   assert.ok(pipelineArgs({ job_type: 'make_looks', payload: {} }, 'p', 'x', null, null, 'photo-01.jpg').includes('--must-photo=photo-01.jpg'));
   const { planFeatures, dailyLimit } = await import('../src/lib/plans.js');
   assert.equal(planFeatures({ plan: 'tester' }).instantNewOutfit, true);
-  assert.equal(planFeatures({ plan: 'free' }).instantNewOutfit, false);
+  assert.equal(planFeatures({ plan: 'free' }).instantNewOutfit, true);
   assert.equal(dailyLimit({ plan: 'tester' }), 50);
 });
 

@@ -11,7 +11,7 @@ import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { timingSafeEqual } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
-import { avoidKeys, baseOptions, defaultOccasion, inputsFor, outfitRows, pipelineArgs, weatherText } from './jobs.mjs';
+import { avoidKeys, baseOptions, photoCombo, defaultOccasion, inputsFor, outfitRows, pipelineArgs, weatherText } from './jobs.mjs';
 
 const ROOT = resolve(import.meta.dirname, '..');
 const env = (k) => { const v = process.env[k]; if (!v) throw new Error(`Missing secret ${k} (fly secrets set ${k}=…)`); return v; };
@@ -82,8 +82,13 @@ async function runJob(job) {
     const photoIds = files.filter((f) => f.photoId).map((f) => f.photoId);
     let avoidFile = null;
     if (job.job_type === 'make_looks') {
-      const { data: hidden } = await db.from('hidden_combinations').select('combo').eq('user_id', job.user_id);
-      const keys = avoidKeys((hidden || []).map((h) => h.combo), photoIds);
+      // Never again: combinations the person hid, and every combination already made (looks are kept and shown; a new
+      // batch should bring something new). Looks from before photo ids (2026-10-31) can't be matched and may repeat.
+      const [{ data: hidden }, { data: made }] = await Promise.all([
+        db.from('hidden_combinations').select('combo').eq('user_id', job.user_id),
+        db.from('outfits').select('items').eq('user_id', job.user_id).eq('status', 'ready').limit(2000),
+      ]);
+      const keys = [...new Set(avoidKeys([...(hidden || []).map((h) => h.combo), ...(made || []).map((o) => photoCombo(o.items))], photoIds))];
       if (keys.length) { avoidFile = join(tmp, 'avoid.json'); await writeFile(avoidFile, JSON.stringify(keys)); }
     }
     let preparedFile = null;
@@ -158,7 +163,7 @@ async function runJob(job) {
       const photo = files.filter((f) => f.photoId)[l.items.find((i) => l.retake.includes(i.description.split(',')[0]))?.photo ?? -1];
       if (photo) await db.from('wardrobe_photos').update({ retake_hint: l.retake }).eq('id', photo.photoId);
     }
-    return { result: { ready: rows.filter((r) => r.status === 'ready').length, asked: rows.length, ...(summary.mustMissed ? { notForThisOccasion: true } : {}), ...(debug ? { debug } : {}) }, cost: summary.spent };
+    return { result: { ready: rows.filter((r) => r.status === 'ready').length, asked: rows.length, ...(summary.mustMissed ? { notForThisOccasion: true } : {}), ...(summary.allMade ? { allMade: true } : {}), ...(debug ? { debug } : {}) }, cost: summary.spent };
   } finally {
     await rm(inputs, { recursive: true, force: true });
     await rm(tmp, { recursive: true, force: true });

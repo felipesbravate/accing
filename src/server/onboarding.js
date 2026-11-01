@@ -9,6 +9,7 @@ import { bodyNote } from '../lib/photo-advice.js';
 import { defaultTab, OCCASION_TABS } from '../mirror/occasions.js';
 
 const URL_SECONDS = 60 * 60;
+const NEW_OUTFIT_LOOKS = 3;
 const MAX_BYTES = 4 * 1024 * 1024; // the browser sends ≤2048 px JPEGs (~0.5–1.5 MB); Vercel refuses bodies over 4.5 MB
 export const PHOTO_KINDS = ['front', 'left', 'right', 'body', 'outfit'];
 
@@ -65,16 +66,13 @@ export async function savePhoto(userId, kind, bytes, { tab = null } = {}) {
   if (kind === 'outfit') {
     const { error } = await sb.from('wardrobe_photos').insert({ user_id: userId, path });
     if (error) return { error: error.message };
-    // Plans with instantNewOutfit (testers): looks wearing the new outfit are made right away, for every occasion. Each
-    // occasion's job keeps only the garments that suit it (a hoodie: casual, maybe office; not a party) and makes no
-    // looks where nothing fits. The season filters then place the looks by the garments' own season tags.
+    // A new outfit photo makes 3 looks wearing it right away, for the open tab (Felipe, 2026-11-01); after that the
+    // morning run adds one new combination a day, across occasions, until every combination is made. If nothing from
+    // the photo suits this tab, no look is made and the app says so.
     const { data: profile } = await sb.from('users').select('*').eq('id', userId).single();
-    if (planFeatures(profile).instantNewOutfit) {
-      const order = [tab, ...OCCASION_TABS.map((t) => t.label).filter((l) => l !== tab)].filter(Boolean); // the open tab first
-      const results = [];
-      for (const label of order) results.push(await askForLooks(userId, label, { includePath: path, looks: 2 }));
-      const queued = results.filter((r) => r.queued).length;
-      return { ok: true, advice, queued, queueError: queued ? null : results.find((r) => r.error)?.error || null };
+    if (planFeatures(profile).instantNewOutfit && tab) {
+      const r = await askForLooks(userId, tab, { includePath: path, looks: NEW_OUTFIT_LOOKS });
+      return { ok: true, advice, queued: Boolean(r.queued), queueError: r.error || null };
     }
     return { ok: true, advice };
   }
