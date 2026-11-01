@@ -14,6 +14,11 @@ test('season filters follow the garments', () => {
   assert.equal(fitsSeason(look('any', 'cold'), 'mid'), false);
   assert.equal(fitsSeason([{ description: 'old look, no tag' }], 'winter'), true, 'untagged counts as any');
   assert.equal(fitsSeason(look('cold'), 'all'), true);
+  const jacket = [{ description: 'windbreaker', category: 'outerwear', season: 'any' }, { description: 'grey tee', category: 'top', season: 'any' }];
+  assert.equal(fitsSeason(jacket, 'summer'), false, 'no jackets in summer');
+  assert.equal(fitsSeason(jacket, 'mid'), true);
+  assert.equal(fitsSeason([{ description: 'black long-sleeved crew neck t-shirt', category: 'top' }, { description: 'jeans', category: 'bottom' }], 'summer'), false, 'no long sleeves in summer');
+  assert.equal(fitsSeason([{ description: 'grey crew neck t-shirt', category: 'top' }, { description: 'black jeans', category: 'bottom' }], 'summer'), true, 'trousers are fine');
   assert.equal(seasonKey('Mid-season'), 'mid');
   assert.equal(seasonKey('nonsense'), 'today');
 });

@@ -30,11 +30,15 @@ export function comboKey(items, id = '') {
   return key || `look:${id}`;
 }
 
-/** Does a look (its garments) suit the season? summer: nothing cold-only; winter: nothing warm-only; mid-season:
- *  neither warm-only nor cold-only. */
+const LONG_SLEEVES = /long[- ]sleeve/i;
+
+/** Does a look (its garments) suit the season? summer: nothing cold-only, no jacket or coat and no long-sleeved top
+ *  (Felipe, 2026-11-01: a windbreaker look showed under Summer); winter: nothing warm-only; mid-season: neither
+ *  warm-only nor cold-only. Trousers stay in summer: office and dinner looks need them. */
 export function fitsSeason(items, key) {
-  const tags = (items || []).map((x) => x.season || 'any');
-  if (key === 'summer') return !tags.includes('cold');
+  const list = items || [];
+  const tags = list.map((x) => x.season || 'any');
+  if (key === 'summer') return !tags.includes('cold') && !list.some((x) => x.category === 'outerwear' || (x.category === 'top' && LONG_SLEEVES.test(x.description || '')));
   if (key === 'winter') return !tags.includes('warm');
   if (key === 'mid') return !tags.includes('warm') && !tags.includes('cold');
   return true;
