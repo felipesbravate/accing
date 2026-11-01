@@ -98,6 +98,9 @@ export async function poseCheck(anchor, image, { model = LOOK_MODEL, key = proce
 const OUTFIT_SCHEMA = { type: 'OBJECT', properties: { missing: { type: 'ARRAY', items: { type: 'STRING' } }, different: { type: 'ARRAY', items: { type: 'STRING' } }, extra: { type: 'ARRAY', items: { type: 'STRING' } } }, required: ['missing', 'different', 'extra'] };
 
 /** image: { bytes, mime }; items: [{ category, description, crop? }]; defaultShoes: text when the look names no shoes.
+ *  The per-garment check judges what you would notice across a room, not details: from 30 Oct evening to 31 Oct it
+ *  dropped 25 of 46 looks (3 paid tries each) over a "raw" t-shirt neckline, 4 vs 5 henley buttons, a sleeve logo
+ *  or mirrored chest text (2026-11-01).
  *  Two kinds of call, in parallel:
  *  - one call for the whole outfit, names only: what is missing and what is extra;
  *  - one call per garment that has a close-up, with only that close-up: how this garment differs.
@@ -125,7 +128,7 @@ missing: any garment from the list that is not visible, or is clearly another ty
 extra: any outerwear, top, bottom, dress or shoes the person wears that is not on the list (e.g. a jacket that should not be there). Ignore belts, jewellery, bags, underwear and small details. Empty lists if it matches.` }],
     { type: 'OBJECT', properties: { missing: { type: 'ARRAY', items: { type: 'STRING' } }, extra: { type: 'ARRAY', items: { type: 'STRING' } } }, required: ['missing', 'extra'] });
   const each = items.filter((x) => x.crop).map((x) => ask([{ text: 'Image 1, the photo:' }, part(image), { text: `Image 2, a close-up of the real ${x.category} (${named(x)}) as it was photographed:` }, part(x.crop), { text: `Compare only this ${x.category} in image 1 with the one in image 2. Image 2 may also show other garments, a bag, a strap, a hand or coloured room light around or over it: ignore all of that, and judge the garment's own colour, not the light.
-different: the visible differences of this ${x.category} only: neckline, straps or back construction, collar, sleeves, length, fit, closures (buttons, zips, drawstring), pockets, pattern, logo, colour or fabric. Only what is plainly visible in both images; ignore folds, lighting, the angle of view, and parts hidden in either image. Empty list if they match.` }],
+different: the differences of this ${x.category} that someone would notice at a normal distance, as if seeing the person across a room: another type of garment, colour, pattern (plain vs striped, checked or printed), a large graphic or print missing or added, length, sleeve length, fit or cut, collar or neckline type (crew vs V-neck vs collar), straps or back construction. Do NOT list small details: the number of buttons, small logos, badges or labels, the exact wording or direction of text, stitching, ribbing or the finish of a neckline, hem or cuff, drawstrings, zip pulls, pocket details, rolled or folded cuffs. Ignore folds, lighting, the angle of view, and parts hidden in either image. Empty list if they match at that distance.` }],
     { type: 'OBJECT', properties: { different: { type: 'ARRAY', items: { type: 'STRING' } } }, required: ['different'] })
     .then((r) => (Array.isArray(r.different) ? r.different : []).map((text) => ({ item: x, text: `${named(x)}: ${text}` }))));
   const [w, ...per] = await Promise.all([whole, ...each]);
@@ -208,7 +211,7 @@ export async function confirmClaims(image, items, claims, { model = LOOK_MODEL, 
   const part = (img) => ({ inlineData: { mimeType: img.mime, data: img.bytes.toString('base64') } });
   const prompt = `Image 1 is a photo of a person. ${refs.length ? `Images 2 to ${refs.length + 1} are close-ups of the real garments they should wear, as photographed: they may also show other garments, a bag strap, a hand or coloured room light, which do not count. ` : ''}Another reviewer made these claims about image 1:
 ${claims.map((c, i) => `${i + 1}. ${c}`).join('\n')}
-For each claim, look again at image 1 and the matching close-up and answer true only if the claim is clearly correct: the difference is plainly visible in image 1 and is a real difference of the garment itself (not light, not a covered part, not something else in the close-up). When unsure, answer false.`;
+For each claim, look again at image 1 and the matching close-up and answer true only if the claim is clearly correct: the difference is plainly visible in image 1 and is a real difference of the garment itself (not light, not a covered part, not something else in the close-up), and someone would notice it at a normal distance. Answer false for small details: the number of buttons, small logos, badges or text, stitching, the finish of a neckline, hem or cuff, drawstrings, pockets, rolled cuffs. When unsure, answer false.`;
   const res = await fetch(`${GEMINI_BASE}/v1beta/models/${model}:generateContent`, {
     method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
     body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'Image 1 (the photo):' }, part(image), ...refs.flatMap((x, i) => [{ text: `Image ${i + 2} (close-up of the ${x.category}):` }, part(x.crop)]), { text: prompt }] }],

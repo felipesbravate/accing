@@ -97,3 +97,15 @@ test('the worker turns hidden combinations into this run\'s photo numbers, and t
   const [row] = outfitRows({ id: 'j', user_id: 'u', payload: {} }, { looks: [{ n: 1, status: 'ready', items: [{ description: 'tee', category: 'top', photo: 1 }] }] }, { 1: 'u/x.webp' }, ids);
   assert.equal(row.items[0].photo_id, 'p2');
 });
+
+test('every look is shown once per garment combination, newest first; failures get a plain sentence', async () => {
+  const { pickLooks } = await import('../src/mirror/seasons.js');
+  const { jobFailureText } = await import('../src/lib/job-errors.js');
+  const it = (pid) => [{ description: 'x', category: 'top', photo_id: pid }];
+  const row = (id, job, n, pid) => ({ id, job_id: job, look_n: n, occasion: 'an office day', items: it(pid), generated_image_path: `u/${id}.webp` });
+  const rows = [row('new', 'j2', 1, 'p1'), row('other', 'j2', 2, 'p2'), row('old', 'j1', 1, 'p1')];
+  const out = pickLooks(rows, { tabs: ['Office day'], perTab: 40, unique: true });
+  assert.deepEqual(out['Office day'].map((r) => r.id), ['new', 'other']);
+  assert.match(jobFailureText('Reading photo-07.jpg failed (gemini, 402): Your prepayment credits are depleted.'), /out of credit/);
+  assert.equal(jobFailureText(null), null);
+});

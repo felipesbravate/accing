@@ -43,7 +43,7 @@ export function fitsSeason(items, key) {
 /** Rows (newest first) → { [tab]: rows } for the filter: per tab, each job's looks together in look order, newest job
  *  first, at most `perTab`. Only transparent cut-outs (.webp) are shown in the ring; hidden
  *  garment combinations (`hidden`, comboKey) are left out; the Favorites filter keeps only `favorites` (look ids). */
-export function pickLooks(rows, { key = 'today', perTab = 5, tabs = [], hidden = new Set(), favorites = new Set() } = {}) {
+export function pickLooks(rows, { key = 'today', perTab = 5, tabs = [], hidden = new Set(), favorites = new Set(), unique = false } = {}) {
   const out = Object.fromEntries(tabs.map((t) => [t, []]));
   const byJob = new Map();
   for (const r of rows || []) {
@@ -53,9 +53,12 @@ export function pickLooks(rows, { key = 'today', perTab = 5, tabs = [], hidden =
     if (!byJob.has(r.job_id)) byJob.set(r.job_id, []);
     byJob.get(r.job_id).push(r);
   }
+  // unique: one look per garment combination per tab (the newest), so a combination made on several days shows once.
+  const seen = new Set();
   for (const list of byJob.values()) {
     for (const r of list.sort((a, b) => a.look_n - b.look_n)) {
       const t = tabFor(r.occasion);
+      if (unique) { const k = `${t}|${comboKey(r.items, r.id)}`; if (seen.has(k)) continue; seen.add(k); }
       if (out[t] && out[t].length < perTab) out[t].push(r);
     }
   }

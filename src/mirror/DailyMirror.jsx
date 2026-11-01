@@ -34,7 +34,7 @@ function Toast({ toast }) {
   return (
     <div className={`ds-toast mirror-toast${toast.leaving ? ' is-leaving' : ''}`} role="status">
       <span>{toast.message}</span>
-      <button type="button" className="ds-toast-action" onClick={toast.onAction}>{toast.action}</button>
+      {toast.action && <button type="button" className="ds-toast-action" onClick={toast.onAction}>{toast.action}</button>}
     </div>
   );
 }
@@ -204,7 +204,10 @@ export default function DailyMirror({
   useEffect(() => {
     if (!awaiting || !data) return;
     const t = data.tabs[awaiting.tab];
-    if (!t?.making || t.looks.some((l) => !awaiting.known.has(l.id))) setAwaiting(null);
+    if (t?.making && !t.looks.some((l) => !awaiting.known.has(l.id))) return;
+    setAwaiting(null);
+    // Done without a new look: say why (out of credit, nothing suited the occasion…), not just the old looks again.
+    if (!t?.making && t?.failed) setToast({ id: Date.now(), message: `Couldn’t make looks with your new outfit. ${t.failed}` });
   }, [data, awaiting]);
   // Toasts leave after ~5 s; a new one replaces the last.
   useEffect(() => {
@@ -350,8 +353,8 @@ export default function DailyMirror({
               : count ? <OutfitRing key={`${occasion}|${filter}`} outfits={outfits} index={current} onChange={setIndex} onOpen={(i) => setViewing(outfits[i])} leavingId={leavingId} arrivingId={arrivingId} />
               : favoritesView && !loading && !problem ? <NoFavorites onBack={() => pickSeason(SEASONS[0])} />
               : live && tab?.loading ? <div className="mirror-empty" role="status"><p>Loading…</p></div>
-              : live && data.hasBase ? <NoLooks title={today_ ? `No ${occasion} looks yet` : `No ${season} ${occasion} looks yet`}
-                  text={problem || 'Shoot your first outfit.'} onShoot={onShoot} />
+              : live && data.hasBase ? <NoLooks title={today_ && tab.failed ? `Couldn’t make your ${occasion} looks` : today_ ? `No ${occasion} looks yet` : `No ${season} ${occasion} looks yet`}
+                  text={problem || (today_ && tab.failed) || 'Shoot your first outfit.'} onShoot={onShoot} />
               : (
               <div className="mirror-empty" role="status">
                 <p>{!live ? 'No looks left here. Reload the page to see them again.' : 'Add your photos to see yourself in your own clothes.'}</p>

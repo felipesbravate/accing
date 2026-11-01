@@ -4,10 +4,15 @@ import { authClient } from './auth.js';
 import { dailyLimit } from '../lib/plans.js';
 import { conditionOf, OCCASION_TABS, startOfToday, tabFor, temperatureOf } from '../mirror/occasions.js';
 import { comboKey, pickLooks } from '../mirror/seasons.js';
+import { jobFailureText } from '../lib/job-errors.js';
 
 const URL_SECONDS = 60 * 60;
 
-const MAX_PER_TAB = 5;       // the ring is designed for up to 5 looks; more crowd it (2026-10-30: 23 test looks in one tab)
+// Every look made so far is shown (Felipe, 2026-11-01: "the images already exist, we only display them"), newest first,
+// one per garment combination; only hidden combinations are left out. The ring keeps its spacing however many
+// (carousel.js ringPose) and the pager shows a window of 5 dots.
+const MAX_PER_TAB = 40;
+const ALL_ROWS = 500;
 
 /** The person's favourite look ids and hidden garment combinations (migration 007). Before that migration runs the
  *  tables don't exist: then nothing is favourite or hidden, and the mirror works as before. */
@@ -30,7 +35,7 @@ async function signLooks(sb, rows, favorites = new Set()) {
 }
 
 const HISTORY_ROWS = 300;
-const MAX_PER_TAB_HISTORY = 12;
+const MAX_PER_TAB_HISTORY = 40;
 
 /** Every look so far that suits the season filter (Summer, Mid-season, Winter, All, Favorites), per tab, newest first. */
 export async function seasonLooks(userId, key) {
@@ -41,7 +46,7 @@ export async function seasonLooks(userId, key) {
   if (key === 'favorites') query = query.in('id', [...mine.favorites].slice(0, HISTORY_ROWS)); // favourites of any age
   const { data: rows } = mine.favorites.size || key !== 'favorites'
     ? await query.order('created_at', { ascending: false }).limit(HISTORY_ROWS) : { data: [] };
-  const picked = pickLooks(rows, { key, perTab: MAX_PER_TAB_HISTORY, tabs: OCCASION_TABS.map((t) => t.label), ...mine });
+  const picked = pickLooks(rows, { key, perTab: MAX_PER_TAB_HISTORY, tabs: OCCASION_TABS.map((t) => t.label), unique: true, ...mine });
   const entries = await Promise.all(OCCASION_TABS.map(async (t) => [t.label, { looks: await signLooks(sb, picked[t.label], mine.favorites), making: false }]));
   return { tabs: Object.fromEntries(entries) };
 }
@@ -52,17 +57,25 @@ export async function todaysLooks(userId) {
   const since = startOfToday();
   const [{ data: rows }, { data: jobs }, { data: profile }, { count: outfitPhotos }, mine] = await Promise.all([
     sb.from('outfits').select('id, job_id, look_n, generated_image_path, items, occasion, weather, created_at')
-      .eq('user_id', userId).eq('status', 'ready').gte('created_at', since).order('created_at', { ascending: false }),
-    sb.from('generation_jobs').select('id, status, payload, created_at').eq('user_id', userId).eq('job_type', 'make_looks')
+      .eq('user_id', userId).eq('status', 'ready').order('created_at', { ascending: false }).limit(ALL_ROWS),
+    sb.from('generation_jobs').select('id, status, payload, error_message, created_at').eq('user_id', userId).eq('job_type', 'make_looks')
       .gte('created_at', since).order('created_at', { ascending: false }),
     sb.from('users').select('*').eq('id', userId).single(), // '*': works before and after migration 005
     sb.from('wardrobe_photos').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('is_active', true),
     marks(sb, userId),
   ]);
-  const picked = pickLooks(rows, { key: 'today', perTab: MAX_PER_TAB, tabs: OCCASION_TABS.map((t) => t.label), hidden: mine.hidden });
+  const picked = pickLooks(rows, { key: 'today', perTab: MAX_PER_TAB, tabs: OCCASION_TABS.map((t) => t.label), hidden: mine.hidden, unique: true });
   const tabs = Object.fromEntries(await Promise.all(OCCASION_TABS.map(async (t) => [t.label, { looks: await signLooks(sb, picked[t.label], mine.favorites), making: false }])));
   for (const j of jobs || []) if (['pending', 'processing'].includes(j.status)) tabs[tabFor(j.payload?.occasion || '')].making = true;
-  const weather = (rows || []).find((r) => r.weather)?.weather || (jobs || []).find((j) => j.payload?.weather)?.payload.weather;
+  // The newest batch per tab failed (jobs are newest first): say so instead of going quiet.
+  const latest = new Set();
+  for (const j of jobs || []) {
+    const t = tabFor(j.payload?.occasion || '');
+    if (latest.has(t)) continue;
+    latest.add(t);
+    if (j.status === 'failed') tabs[t].failed = jobFailureText(j.error_message);
+  }
+  const weather = (rows || []).find((r) => r.weather && r.created_at >= since)?.weather || (jobs || []).find((j) => j.payload?.weather)?.payload.weather;
   return { tabs, temperature: temperatureOf(weather), condition: conditionOf(weather), hasBase: Boolean(profile?.base_path), later: Boolean(profile?.onboarding_later_at), jobsToday: (jobs || []).length, outfitPhotos: outfitPhotos || 0 };
 }
 
