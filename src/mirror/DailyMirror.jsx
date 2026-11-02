@@ -26,6 +26,7 @@ import './mirror.css';
 const TOAST_MS = 5000; // Figma toast: "Shows for ~5 s"
 const HIDE_TOAST_MS = 8000; // the hide toast asks why: a little longer to read and tap
 const TOAST_OUT_MS = 250; // its exit animation (mirror.css mirror-toast-out)
+const MAX_PICK = 20; // photos per pick: each makes ~3 looks; the plan's daily limit applies too (src/lib/plans.js)
 const HIDE_FADE_MS = 350; // a hidden look fades out before it leaves the ring (mirror.css ring-leave)
 
 /** toast (Thread 140:144): an optional icon, a short message, one action and optional extra actions under it (the hide
@@ -108,13 +109,14 @@ function Account({ initial }) {
 function ShootButton({ onShoot, compact = false }) {
   // No `capture` attribute on purpose: phones then offer their own menu (iPhone: Take Photo, Photo Library, Choose
   // File; Android: camera or gallery). With `capture` they open only the camera (2026-10-30, Felipe).
-  // compact: the 40px shutter of the "No looks yet" state (Figma 206:6044).
+  // compact: the 40px shutter of the "No looks yet" state (Figma 206:6044). `multiple`: several photos from the library
+  // at once (the camera still takes one).
   return (
     <label className={compact ? 'ds-button mirror-shutter' : 'ds-button mirror-shoot'} aria-label={compact ? 'Shoot your outfit' : undefined}>
       <Icon name="camera" size={20} />
       {!compact && <span>Shoot your outfit</span>}
-      <input className="visually-hidden" type="file" accept="image/*"
-        onChange={(e) => { const file = e.target.files?.[0]; if (file) onShoot(file); e.target.value = ''; }} />
+      <input className="visually-hidden" type="file" accept="image/*" multiple
+        onChange={(e) => { const files = [...(e.target.files || [])]; e.target.value = ''; if (files.length) onShoot(files); }} />
     </label>
   );
 }
@@ -174,30 +176,48 @@ export default function DailyMirror({
   // "Shoot your outfit": the photo joins the wardrobe and is read on the next run (the morning looks, or a tester's
 // instant looks, src/lib/plans.js).
   const [note, setNote] = useState(null);
-  const onShoot = useCallback(async (file) => {
+  // One photo or many at once (the photo library allows several; 2026-11-02, Felipe). They go up one after another,
+  // each making its own looks; the toast and making screen behave as for one.
+  const onShoot = useCallback(async (picked) => {
     if (!live) return;
-    setProblem(null); setNote('Adding your outfit…');
+    const files = [...(picked?.length !== undefined ? picked : [picked])].filter(Boolean).slice(0, MAX_PICK);
+    if (!files.length) return;
+    const many = files.length > 1;
+    setProblem(null);
+    let queued = 0, added = 0, firstError = null, queueError = null;
+    const tips = [];
     try {
       const { fileToJpeg } = await import('../onboarding/resize.js');
-      const form = new FormData();
-      form.append('kind', 'outfit'); form.append('tab', occasion); form.append('photo', await fileToJpeg(file), 'outfit.jpg');
-      const res = await fetch('/api/onboarding/photo', { method: 'POST', body: form });
-      const r = await res.json().catch(() => ({}));
-      if (r.error) { setNote(null); setProblem(r.error); return; }
-      const tip = r.advice ? ` ${r.advice.title}: ${r.advice.hint}` : '';
-      // Looks on their way: the making screen or toast says so; a note only for photo advice.
-      setNote(r.queued ? (tip ? `Outfit added!${tip}` : null)
-        : r.queueError ? `Outfit added! ${r.queueError}` : `Outfit added! It’ll be in your next looks.${tip}`);
-      if (r.queued) {
-        setSeason(SEASONS[0]);
-        // Looks already on screen: they stay, and a toast says new ones are coming (Figma 210:6191) until one arrives.
-        if (data?.tabs?.[occasion]?.looks?.length) setToast({ id: Date.now(), making: true, message: 'Making your new looks. The first one takes about a minute.', action: 'Dismiss', onAction: () => setToast(null) });
-        setAwaiting({ tab: occasion, known: new Set((data?.tabs?.[occasion]?.looks || []).map((l) => l.id)) });
-        setData((d) => ({ ...d, tabs: { ...d.tabs, [occasion]: { ...d.tabs[occasion], making: true } } }));
-        refresh();
+      for (const [n, file] of files.entries()) {
+        setNote(many ? `Adding your outfits… ${n + 1} of ${files.length}` : 'Adding your outfit…');
+        try {
+          const form = new FormData();
+          form.append('kind', 'outfit'); form.append('tab', occasion); form.append('photo', await fileToJpeg(file), 'outfit.jpg');
+          const res = await fetch('/api/onboarding/photo', { method: 'POST', body: form });
+          const r = await res.json().catch(() => ({}));
+          if (r.error) { firstError = firstError || (many ? `Photo ${n + 1}: ${r.error}` : r.error); continue; }
+          added += 1;
+          if (r.queued) queued += 1;
+          if (r.queueError) queueError = r.queueError;
+          if (r.advice) tips.push(many ? `Photo ${n + 1}: ${r.advice.title}` : `${r.advice.title}: ${r.advice.hint}`);
+        } catch (e) { firstError = firstError || (many ? `Photo ${n + 1}: ${e.message || 'could not be added'}` : (e.message || 'Could not add the photo')); }
       }
-      setData((d) => ({ ...d, outfitPhotos: (d.outfitPhotos || 0) + 1 }));
-    } catch (e) { setNote(null); setProblem(e.message || 'Could not add the photo'); }
+    } catch (e) { firstError = firstError || e.message || 'Could not add the photo'; }
+    if (!added) { setNote(null); setProblem(firstError || 'Could not add the photo'); return; }
+    const done = many ? `${added} outfits added!` : 'Outfit added!';
+    const tip = tips.length ? ` ${tips.join(' · ')}` : '';
+    // Looks on their way: the making screen or toast says so; a note only for photo advice or a problem.
+    setNote(queued ? (tip || firstError ? `${done}${tip}${firstError ? ` ${firstError}` : ''}` : null)
+      : queueError ? `${done} ${queueError}` : `${done} ${many ? 'They’ll be' : 'It’ll be'} in your next looks.${tip}`);
+    if (queued) {
+      setSeason(SEASONS[0]);
+      // Looks already on screen: they stay, and a toast says new ones are coming (Figma 210:6191) until one arrives.
+      if (data?.tabs?.[occasion]?.looks?.length) setToast({ id: Date.now(), making: true, message: 'Making your new looks. The first one takes about a minute.', action: 'Dismiss', onAction: () => setToast(null) });
+      setAwaiting({ tab: occasion, known: new Set((data?.tabs?.[occasion]?.looks || []).map((l) => l.id)) });
+      setData((d) => ({ ...d, tabs: { ...d.tabs, [occasion]: { ...d.tabs[occasion], making: true } } }));
+      refresh();
+    }
+    setData((d) => ({ ...d, outfitPhotos: (d.outfitPhotos || 0) + added }));
   }, [live, occasion, refresh, data]);
   const setOccasion = (label) => {
     setOccasionState(label); setIndex(0);
