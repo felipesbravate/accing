@@ -4,6 +4,7 @@
 // the season's 5 typical days it suits (it needs CALIBRATION.share of them). Needs SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.
 import { createClient } from '@supabase/supabase-js';
 import { CALIBRATION, fitsDay, lookClo } from '../src/mirror/warmth.js';
+import { fitsSeason } from '../src/mirror/seasons.js';
 import { DEFAULT_CLIMATE, SEASONS, seasonDays } from '../src/lib/climate.js';
 import { tabFor } from '../src/mirror/occasions.js';
 
@@ -29,6 +30,6 @@ const looks = (rows || []).filter((r) => r.generated_image_path?.endsWith('.webp
 });
 console.log(`\n${looks.length} ${tab} looks (a season needs ${need} of 5 days):`);
 for (const l of looks) {
-  const per = SEASONS.map((s) => { const n = seasonDays(climate || DEFAULT_CLIMATE, s).filter((d) => fitsDay(l.items, d, cal)).length; return `${s} ${n}/5${n >= need ? ' ✓' : '  '}`; });
+  const per = SEASONS.map((s) => { const n = seasonDays(climate || DEFAULT_CLIMATE, s).filter((d) => fitsDay(l.items, d, cal)).length; return `${s} ${n}/5${fitsSeason(l.items, s, climate || DEFAULT_CLIMATE, offset) ? ' ✓' : '  '}`; });
   console.log(`  ${lookClo(l.items).toFixed(2)} clo  ${per.join('  ')}  ${(l.items || []).map((x) => `${x.description} [${x.category}${x.season && x.season !== 'any' ? `, ${x.season}` : ''}]`).join(' | ').slice(0, 160)}`);
 }

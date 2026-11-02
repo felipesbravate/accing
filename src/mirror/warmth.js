@@ -109,3 +109,14 @@ export function shareOfDays(items, days, cal = CALIBRATION) {
 export function fitsDays(items, days, cal = CALIBRATION) {
   return shareOfDays(items, days, cal) >= cal.share - 1e-9;
 }
+
+/** Bare legs: shorts, a skirt, or a short or sleeveless dress. Felipe, 2026-11-01: "shorts make sense during summer in
+ *  most regions, as well as skirts": a look with them belongs to Summer wherever summer is warm (BARE_LEGS_MIN), even
+ *  when its top is warm (a hoodie with shorts). Not with a heavy coat (0.6 clo): that's a winter piece whatever the legs. */
+export const BARE_LEGS_MIN = 18; // °C, the season's middle typical daytime high
+export function bareLegs(items) {
+  const list = items || [];
+  const legs = list.some((x) => (x.category === 'bottom' && /shorts|skort|skirt/i.test(x.description || ''))
+    || (x.category === 'dress' && /sundress|mini|sleeveless|strap|slip|short/i.test(x.description || '')));
+  return legs && !list.some((x) => x.category === 'outerwear' && garmentClo(x) >= 0.6);
+}

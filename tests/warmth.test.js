@@ -72,3 +72,13 @@ test('a personal offset: someone who finds looks too warm is shown lighter ones'
   assert.equal(fitsSeason(look, 'summer', mild), true);
   assert.equal(fitsSeason(look, 'summer', mild, 4), false, 'four "too warm"s later, long sleeves leave that summer');
 });
+
+test('shorts and skirts are Summer wherever summer is warm, whatever the top', () => {
+  const hoodieShorts = [hoodie, shorts, sneakers];
+  const hot = { summer: { days: [{ hi: 28, lo: 21 }, { hi: 29, lo: 22 }, { hi: 30, lo: 23 }, { hi: 31, lo: 23 }, { hi: 33, lo: 25 }] } };
+  assert.equal(fitsSeason(hoodieShorts, 'summer', hot), true);
+  assert.equal(fitsSeason([g('top', 'white blouse'), g('bottom', 'pleated midi skirt'), sneakers], 'summer', hot), true);
+  const arctic = { summer: { days: [{ hi: 8, lo: 2 }, { hi: 9, lo: 3 }, { hi: 10, lo: 4 }, { hi: 11, lo: 5 }, { hi: 12, lo: 6 }] } };
+  assert.equal(fitsSeason([tee, shorts, sneakers], 'summer', arctic), false, 'not where summer is cold');
+  assert.equal(fitsSeason([parka, hoodie, shorts, sneakers], 'summer', hot), false, 'not with a heavy coat');
+});

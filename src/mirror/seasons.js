@@ -4,7 +4,7 @@
 // made so far for that tab that is comfortable at the typical temperature of that season where the person lives
 // (fitsSeason below).
 import { tabFor } from './occasions.js';
-import { CALIBRATION, fitsDays } from './warmth.js';
+import { BARE_LEGS_MIN, CALIBRATION, bareLegs, fitsDays } from './warmth.js';
 import { DEFAULT_CLIMATE, seasonDays } from '../lib/climate.js';
 
 export const SEASON_FILTERS = [
@@ -49,7 +49,10 @@ export function comboKey(items, id = '') {
  *  else) keeps every look. `offset` (°C) is the person's own, from "too warm" / "too cold" when hiding looks. */
 export function fitsSeason(items, key, climate = DEFAULT_CLIMATE, offset = 0) {
   const days = seasonDays(climate || DEFAULT_CLIMATE, key);
-  return days ? fitsDays(items, days, offset ? { ...CALIBRATION, offset: CALIBRATION.offset + offset } : CALIBRATION) : true;
+  if (!days) return true;
+  // Shorts and skirts are summer clothes wherever summer is warm (warmth.js bareLegs), whatever the top.
+  if (key === 'summer' && bareLegs(items) && [...days].sort((x, y) => x.hi - y.hi)[Math.floor(days.length / 2)].hi >= BARE_LEGS_MIN) return true;
+  return fitsDays(items, days, offset ? { ...CALIBRATION, offset: CALIBRATION.offset + offset } : CALIBRATION);
 }
 
 /** Rows (newest first) → { [tab]: rows } for the filter: per tab, each job's looks together in look order, newest job
