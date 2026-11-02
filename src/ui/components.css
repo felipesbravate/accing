@@ -8,28 +8,46 @@
   color: var(--text-secondary); font-size: var(--fs-label-medium); font-weight: var(--fw-medium); line-height: normal; white-space: nowrap; }
 .ds-badge.is-small { font-size: var(--fs-label-small); }
 
-/* button — Size=Medium (40) | Large (48); State=Default | Hover | Press | Disabled; optional leading icon */
-.ds-button { display: inline-flex; align-items: center; justify-content: center; gap: 12px; height: 40px; padding: 0 var(--space-md);
+/* button (Thread 112:386) — Size=Tiny (28) | Small (40, the default) | Medium (48, .is-large); Style=Primary (default) |
+   Secondary (.is-secondary: border/secondary ring) | Tertiary (.is-tertiary); State=Default | Hover | Press | Disabled (32%).
+   Tiny: 8px sides, 4px gap, radius md, Label/Medium. Small and Medium: 16px sides and gap, radius lg, Label/Large. */
+.ds-button { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-md); height: 40px; padding: 0 var(--space-md);
   border: 0; border-radius: var(--radius-lg); background: var(--button-primary); color: var(--text-tertiary);
-  font-size: var(--fs-label-medium); font-weight: var(--fw-medium); line-height: normal; white-space: nowrap; text-decoration: none;
+  font-size: var(--fs-label-large); font-weight: var(--fw-medium); line-height: normal; white-space: nowrap; text-decoration: none;
   transition: background-color .15s; }
 .ds-button .icon { color: var(--icon-tertiary); }
-.ds-button.is-large { height: 48px; font-size: var(--fs-label-large); }
-.ds-button:hover { background: var(--button-primary-hover); }
+.ds-button.is-large { height: 48px; }
+.ds-button.is-tiny { height: 28px; gap: var(--space-xs); padding: 0 var(--space-sm); border-radius: var(--radius-md); font-size: var(--fs-label-medium); }
+.ds-button.is-secondary, .ds-button.is-tertiary { background: var(--button-secondary-tertiary); color: var(--text-primary); }
+.ds-button.is-secondary { box-shadow: inset 0 0 0 1px var(--border-secondary); }
+.ds-button.is-secondary .icon, .ds-button.is-tertiary .icon { color: var(--icon-primary); }
+@media (hover: hover) {
+  .ds-button:hover { background: var(--button-primary-hover); }
+  .ds-button.is-secondary:hover, .ds-button.is-tertiary:hover { background: var(--button-secondary-tertiary-hover); }
+}
 .ds-button:active { background: var(--button-primary-press); }
+.ds-button.is-secondary:active, .ds-button.is-tertiary:active { background: var(--button-secondary-tertiary-press); }
 .ds-button:disabled, .ds-button[aria-disabled="true"] { opacity: var(--opacity-disabled); pointer-events: none; }
 
-/* icon-button — Size=Medium (40) | Large (48); Style=Primary | Secondary | Tertiary */
+/* icon-button (Thread 56:53) — Size=Small (32, radius md, 16px icon) | Medium (40, the default, 20px icon) | Large (48,
+   .is-large, 24px icon); Style=Primary (navy, light icon) | Secondary (.is-secondary: a border/secondary ring that turns
+   border/default on hover and border/accent on press; 2px wider, as in Figma) | Tertiary (.is-tertiary); dark icon on both. */
 .ds-icon-button { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0;
-  border: 0; border-radius: var(--radius-lg); background: var(--button-primary); color: var(--icon-tertiary); transition: background-color .15s; }
+  border: 0; border-radius: var(--radius-lg); background: var(--button-primary); color: var(--icon-tertiary); transition: background-color .15s, border-color .15s; }
+.ds-icon-button.is-small { width: 32px; height: 32px; border-radius: var(--radius-md); }
 .ds-icon-button.is-large { width: 48px; height: 48px; }
-@media (hover: hover) { .ds-icon-button:hover { background: var(--button-primary-hover); } }
+.ds-icon-button.is-secondary, .ds-icon-button.is-tertiary { background: var(--button-secondary-tertiary); color: var(--icon-primary); }
+.ds-icon-button.is-secondary { border: 1px solid var(--border-secondary); box-sizing: content-box; }
+@media (hover: hover) {
+  .ds-icon-button:hover { background: var(--button-primary-hover); }
+  .ds-icon-button.is-secondary:hover, .ds-icon-button.is-tertiary:hover { background: var(--button-secondary-tertiary-hover); }
+  .ds-icon-button.is-secondary:hover { border-color: var(--border-default); }
+}
 .ds-icon-button:active { background: var(--button-primary-press); }
-.ds-icon-button.is-secondary { background: var(--button-secondary-tertiary); border: 1px solid var(--border-accent); color: var(--icon-accent); }
-.ds-icon-button.is-tertiary { background: var(--button-secondary-tertiary); color: var(--icon-accent); }
-@media (hover: hover) { .ds-icon-button.is-secondary:hover, .ds-icon-button.is-tertiary:hover { background: var(--button-secondary-tertiary-hover); } }
 .ds-icon-button.is-secondary:active, .ds-icon-button.is-tertiary:active { background: var(--button-secondary-tertiary-press); }
+.ds-icon-button.is-secondary:active { border-color: var(--border-accent); }
 .ds-icon-button:disabled { opacity: var(--opacity-disabled); pointer-events: none; }
+.ds-icon-button.is-large:disabled { opacity: var(--opacity-disabled-large); }
 
 /* avatar (Thread, 2026-11-01) — a circle, Size=40px | 48px; Variation=Default: the initial (18px medium) on blue-100 with a
    border/default ring | Image */
@@ -53,16 +71,19 @@
 .ds-menu-item:hover::after, .ds-menu-item:active::after, .ds-menu-item[aria-current="true"]::after { opacity: 1; }
 .ds-menu-item:active, .ds-menu-item[aria-current="true"] { color: var(--text-press); }
 
-/* mobile-menu + menu-item-mobile — equal-width tabs on a full-width accent rule; the active tab gets a 2px underline */
+/* mobile-menu (Thread 150:1019) + menu-item-mobile — equal-width tabs on a full-width 1px bg/accent rule. One 2px
+   icon/primary underline slides to the chosen tab (Figma Smart Animate, 160 ms ease-out); tab text eases to text/hover on
+   hover (240 ms), text/press while pressed, text/primary when active. The tabs hold --tabs (count) and --tab (active index). */
 .ds-tabs { position: relative; display: flex; height: 36px; border-bottom: 1px solid var(--bg-accent); }
 .ds-tab { position: relative; flex: 1 1 0; min-width: 0; height: 22px; padding: 0 var(--space-md); border: 0; background: transparent;
-  color: var(--text-secondary); font-size: var(--fs-label-large); font-weight: var(--fw-medium); line-height: normal; white-space: nowrap; }
-.ds-tab::after { content: ''; position: absolute; left: 0; right: 0; bottom: -14px; height: 2px; background: currentColor; opacity: 0; }
-.ds-tab:hover { color: var(--text-hover); }
-.ds-tab:hover::after, .ds-tab:active::after { opacity: 1; }
-.ds-tab:active { color: var(--text-press); }
+  color: var(--text-secondary); font-size: var(--fs-label-large); font-weight: var(--fw-medium); line-height: normal; white-space: nowrap;
+  transition: color .24s ease-out; }
+@media (hover: hover) { .ds-tab:hover { color: var(--text-hover); } }
+.ds-tab:active { color: var(--text-press); transition-duration: .16s; }
 .ds-tab[aria-selected="true"] { color: var(--text-primary); }
-.ds-tab[aria-selected="true"]::after { opacity: 1; background: var(--icon-primary); }
+.ds-tabs-indicator { position: absolute; left: 0; bottom: -1px; width: calc(100% / var(--tabs, 4)); height: 2px; background: var(--icon-primary);
+  transform: translateX(calc(100% * var(--tab, 0))); transition: transform .16s ease-out; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .ds-tabs-indicator, .ds-tab { transition: none; } }
 
 /* filter-item — State=Default | Hover | Press | Active (bold, with a 4px dot below) */
 .ds-filter-item { display: inline-flex; flex-direction: column; align-items: center; gap: var(--space-sm); height: 26px; padding: 0; border: 0;
@@ -82,10 +103,10 @@
 .ds-filter-selector select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; appearance: none; border: 0; }
 .ds-filter-selector:has(select:focus-visible) { outline: 2px solid var(--border-accent); outline-offset: 2px; }
 
-/* pager — 1 to 5 dots; the active one is 16px wide */
+/* pager (Thread 64:800) — 1 to 5 dots; the active one is 16px wide */
 .ds-pager { display: flex; align-items: center; gap: var(--space-xs); }
-.ds-pager-dot { display: block; width: 6px; height: 6px; padding: 0; border: 0; border-radius: var(--radius-full); background: var(--border-secondary); transition: width .2s; }
-.ds-pager-dot[aria-current="true"] { width: 16px; background: var(--bg-tertiary); }
+.ds-pager-dot { display: block; width: 6px; height: 6px; padding: 0; border: 0; border-radius: var(--radius-full); background: var(--border-accent); transition: width .2s, background-color .2s; }
+.ds-pager-dot[aria-current="true"] { width: 16px; background: var(--bg-accent); } /* Thread 64:800: lavender dots, the active one bg/accent */
 /* Many looks: smaller dots so one per look still fits (13–24, then 25+). */
 .ds-pager.is-dense { gap: 3px; }
 .ds-pager.is-dense .ds-pager-dot { width: 4px; height: 4px; }
@@ -97,16 +118,18 @@
    message with one action (Undo, View, Dismiss), and optionally a row of equal outlined extra actions under it
    ("extra actions": the hide reasons, Figma 216:1373). Min 44px high, 8/16 padding. */
 .ds-toast { display: inline-flex; align-items: flex-end; gap: var(--space-md); min-height: 44px; padding: var(--space-sm) var(--space-md);
-  border-radius: var(--radius-md); background: var(--bg-tertiary); color: var(--text-tertiary); filter: drop-shadow(0 8px 12px rgba(12, 12, 54, .18));
+  border-radius: var(--radius-md); background: var(--bg-selected); color: var(--text-tertiary); box-shadow: 0 8px 24px rgba(12, 12, 54, .18);
   font-size: var(--fs-body); font-weight: var(--fw-regular); line-height: normal; text-align: left; }
-.ds-toast.is-negative { background: var(--bg-negative); }
-.ds-toast.is-warning { background: var(--bg-warning); }
+/* Negative and Warning: bg/fail and bg/warning; the icon sits in the message row (8px from the row, 16px to the text). */
+.ds-toast.is-negative { background: var(--bg-fail); align-items: center; gap: var(--space-sm); }
+.ds-toast.is-warning { background: var(--bg-warning); align-items: center; gap: var(--space-sm); }
+.ds-toast.is-negative .ds-toast-lead, .ds-toast.is-warning .ds-toast-lead { align-self: center; padding-top: 0; margin-right: var(--space-sm); }
 .ds-toast-lead { flex: none; align-self: stretch; display: flex; align-items: flex-start; padding-top: 6px; }
 .ds-toast-icon { flex: none; display: block; }
 .ds-toast-content { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: var(--space-sm); }
 .ds-toast-main { display: flex; align-items: center; gap: var(--space-md); min-height: 28px; }
 .ds-toast-message { flex: 1 1 auto; min-width: 0; }
-.ds-toast-main:has(> .ds-toast-action) { min-width: 224px; } /* with an action: 288 wide at least, the action on the right (Thread 135:1403) */
+.ds-toast-main:has(> .ds-toast-action) { min-width: 224px; } /* Content 224 (Thread 135:1403) */ /* with an action: 288 wide at least, the action on the right (Thread 135:1403) */
 .ds-toast-action { flex: none; display: inline-flex; align-items: center; justify-content: center; gap: var(--space-xs); height: 28px; padding: 0 var(--space-sm);
   border: 0; border-radius: var(--radius-md); background: transparent; color: var(--text-tertiary); font: inherit; font-size: var(--fs-label-medium);
   font-weight: var(--fw-medium); line-height: normal; white-space: nowrap; cursor: pointer; }

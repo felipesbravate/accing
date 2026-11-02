@@ -380,10 +380,11 @@ export default function DailyMirror({
 
           {/* Mobile: occasions as tabs, season as a dropdown. */}
           <div className="mirror-mobile-filters">
-            <div className="ds-tabs" role="tablist" aria-label="Occasion">
+            <div className="ds-tabs" role="tablist" aria-label="Occasion" style={{ '--tabs': OCCASIONS.length, '--tab': Math.max(0, OCCASIONS.indexOf(occasion)) }}>
               {OCCASIONS.map((o) => (
                 <button key={o} type="button" role="tab" className="ds-tab" aria-selected={occasion === o} onClick={() => setOccasion(o)}>{o}</button>
               ))}
+              <span className="ds-tabs-indicator" aria-hidden="true" />
             </div>
             <label className="ds-filter-selector">
               <span>{season}</span>

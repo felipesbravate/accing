@@ -19,11 +19,15 @@
   --bg-tertiary: var(--blue-800);
   --bg-selected: var(--blue-500);
   --bg-accent: var(--lavanda-900);
+  --bg-accent-light: var(--lavanda-600);
+  --bg-fail: #b51552; /* indicator-fail */
+  --bg-warning: #cea157; /* indicator-yellow */
 
   --text-primary: var(--blue-800);
   --text-secondary: var(--blue-500); /* Figma color/text/secondary, 2026-10-31 (was blue-400) */
   --text-tertiary: var(--blue-50);
-  --text-hover: var(--blue-400); /* Figma color/text/empty: hover, placeholders, steps not reached */
+  --text-hover: var(--blue-400);
+  --text-empty: var(--blue-400); /* placeholders, steps not reached */
   --text-press: var(--blue-700);
   --text-accent: var(--lavanda-900);
 
@@ -37,17 +41,18 @@
   --border-active: var(--blue-500); /* Figma color/border/active (its Dev Mode name says --border-secondary; this is the active one) */
   --border-accent: var(--lavanda-600);
 
-  --button-primary: var(--lavanda-900);
-  --button-primary-hover: var(--lavanda-700);
-  --button-primary-press: var(--lavanda-800);
+  /* Buttons (Thread variables, 2026-11-02): navy primary; secondary and tertiary are see-through until hovered or pressed. */
+  --button-primary: var(--blue-800);
+  --button-primary-hover: var(--blue-500);
+  --button-primary-press: var(--blue-600);
   --button-secondary-tertiary: transparent;
-  --button-secondary-tertiary-hover: var(--lavanda-500);
-  --button-secondary-tertiary-press: var(--lavanda-600);
+  --button-secondary-tertiary-hover: var(--blue-300);
+  --button-secondary-tertiary-press: var(--blue-400);
 
-  --opacity-disabled: 0.24;
+  --opacity-disabled: 0.32; /* buttons and the smaller icon-buttons */
+  --opacity-disabled-large: 0.24; /* the 48px icon-button */
   --opacity-overlay: 0.88;
   --danger: #b3261e; /* not in the design system yet */
-  --bg-negative: #b51552; --bg-warning: #cea157; /* toast Negative / Warning (Thread 140:144) */
 
   /* Design Tokens: spacing */
   --space-xs: 4px; --space-sm: 8px; --space-md: 16px; --space-lg: 24px; --space-xl: 32px;
