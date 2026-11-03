@@ -8,6 +8,6 @@
 .splash.is-leaving { opacity: 0; }
 .splash-center { display: flex; flex-direction: column; align-items: center; gap: var(--space-2xl); width: min(342px, 100%); }
 .splash-symbol { display: block; }
-.splash-question { font-size: var(--fs-h2); font-weight: var(--fw-medium); line-height: normal; color: var(--text-primary); text-align: center; }
+.splash-question { margin: 0; font-size: var(--fs-h3); font-weight: var(--fw-medium); line-height: normal; color: var(--text-primary); text-align: center; }
 .splash-wordmark { position: absolute; left: 50%; bottom: calc(var(--space-2xl) + env(safe-area-inset-bottom)); transform: translateX(-50%); color: var(--brand-primary); }
 @media (prefers-reduced-motion: reduce) { .show-splash .splash { transition: none; } }

@@ -1,5 +1,5 @@
 // POST { id, action, reason?, filter?, occasion? }: heart or hide a look, undo it, or say why it was hidden
-// (action: favorite | unfavorite | hide | unhide | reason). Figma 191:1372, 216:1373.
+// (action: favorite | unfavorite | hide | unhide | reason | seen | wore | unwore). Figma 191:1372, 216:1373.
 import { NextResponse } from 'next/server';
 import { currentUser, supabaseConfigured } from '../../../../src/server/auth.js';
 import { markLook } from '../../../../src/server/looks.js';

@@ -1,5 +1,5 @@
 'use client';
-// Splash screen for the home-screen web app (Figma "Splash screen - Mobile", node 143:1366): the symbol, a greeting by
+// Splash screen for the home-screen web app (Figma "Splash screen - Mobile", node 226:2155): the symbol, a greeting by
 // first name, the wordmark at the bottom. Shown only when Accing is opened from the home screen (standalone display
 // mode), once per launch. Add ?splash to the URL to preview it in a normal browser tab.
 // splash-script.js runs in <head> (app/layout.js) and decides before the first paint, so the mirror never flashes underneath.
@@ -35,7 +35,7 @@ export default function Splash({ name = '' }) {
   return (
     <div className={`splash${leaving ? ' is-leaving' : ''}`} role="status" aria-live="polite">
       <div className="splash-center">
-        <LogoSymbol className="splash-symbol" width={155} height={120} />
+        <LogoSymbol className="splash-symbol" width={123} height={96} />
         <p className="splash-question">{splashQuestion(name)}</p>
       </div>
       <Logo className="splash-wordmark" />

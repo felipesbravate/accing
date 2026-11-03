@@ -23,8 +23,8 @@ await draw('icon-192.png', 192, 192, 192 * 0.62);
 await draw('icon-512.png', 512, 512, 512 * 0.62);
 await draw('icon-maskable-512.png', 512, 512, 512 * 0.5); // inside the 80% safe zone
 await draw('apple-touch-icon.png', 180, 180, 180 * 0.62);
-// iOS launch images (portrait iPhones, matching app/layout.js): the symbol at its splash size, 155 px wide at 1x,
-// lifted 52 px so it sits where the in-app splash draws it.
+// iOS launch images (portrait iPhones, matching app/layout.js): the symbol at its splash size, 123 px wide at 1x,
+// lifted 32 px so it sits where the in-app splash draws it.
 for (const [w, h, r] of [[375, 667, 2], [375, 812, 3], [390, 844, 3], [393, 852, 3], [414, 896, 2], [414, 896, 3], [428, 926, 3], [430, 932, 3], [402, 874, 3], [440, 956, 3]]) {
-  await draw(`launch-${w * r}x${h * r}.png`, w * r, h * r, 155 * r, 52 * r);
+  await draw(`launch-${w * r}x${h * r}.png`, w * r, h * r, 123 * r, 32 * r);
 }

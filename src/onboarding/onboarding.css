@@ -40,7 +40,7 @@
 .ob-steps span { font-size: var(--fs-body); color: var(--text-secondary); }
 
 /* Consent: what we keep */
-.ob-checks { display: flex; flex-direction: column; gap: var(--space-sm); margin: 0; padding: 0; list-style: none; }
+.ob-checks { display: flex; flex-direction: column; gap: var(--space-md); margin: 0; padding: 0; list-style: none; }
 .ob-checks li { display: flex; align-items: flex-start; gap: var(--space-md); font-size: var(--fs-body-large); line-height: normal; }
 .ob-checks .icon { color: var(--icon-accent); }
 
@@ -58,7 +58,7 @@
 .ob-footer-pair { flex-direction: row; gap: var(--space-md); }
 .ob-footer-pair > * { flex: 1 1 0; }
 .ob-wide { width: 100%; }
-.ob-time { font-size: var(--fs-label-small); font-weight: var(--fw-medium); }
+.ob-time { color: var(--text-accent); font-size: var(--fs-label-small); font-weight: var(--fw-medium); }
 .ob-text-button { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-md); height: 48px; padding: 0 var(--space-md);
   border: 0; border-radius: var(--radius-lg); background: transparent; color: var(--text-primary); font-size: var(--fs-label-large); font-weight: var(--fw-medium); cursor: pointer; }
 .ob-text-button:hover { background: var(--bg-secondary); }

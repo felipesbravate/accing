@@ -17,9 +17,10 @@ const ALL_ROWS = 500;
 /** The person's favourite look ids and hidden garment combinations (migration 007). Before that migration runs the
  *  tables don't exist: then nothing is favourite or hidden, and the mirror works as before. */
 async function marks(sb, userId) {
-  const [fav, hid] = await Promise.all([
+  const [fav, hid, wore] = await Promise.all([
     sb.from('favorites').select('outfit_id').eq('user_id', userId),
     sb.from('hidden_combinations').select('combo, outfit_id').eq('user_id', userId),
+    sb.from('look_views').select('combo').eq('user_id', userId).eq('last_worn', localDay()), // none before migration 011
   ]);
   const hidden = new Set((hid.data || []).map((r) => r.combo));
   // Hides from before both keys were stored (2026-11-01): add the wording key of the look each was hidden from, so a
@@ -29,17 +30,17 @@ async function marks(sb, userId) {
     const { data: looks } = await sb.from('outfits').select('items').in('id', from.slice(0, 500));
     for (const l of looks || []) { const d = descKey(l.items); if (d) hidden.add(d); }
   }
-  return { favorites: new Set((fav.data || []).map((r) => r.outfit_id)), hidden };
+  return { favorites: new Set((fav.data || []).map((r) => r.outfit_id)), hidden, worn: new Set((wore.data || []).map((r) => r.combo)) };
 }
 
 /** Signed image URLs for the looks the ring will show (only those: signing is per image). */
-async function signLooks(sb, rows, favorites = new Set()) {
+async function signLooks(sb, rows, favorites = new Set(), worn = new Set()) {
   if (!rows?.length) return [];
   const { data } = await sb.storage.from('outfits').createSignedUrls(rows.map((r) => r.generated_image_path), URL_SECONDS);
   const urlOf = new Map((data || []).filter((x) => x.signedUrl).map((x) => [x.path, x.signedUrl]));
   return rows.filter((r) => urlOf.has(r.generated_image_path))
     .map((r) => ({ id: r.id, image: urlOf.get(r.generated_image_path), alt: (r.items || []).map((i) => i.description).join(', ') || 'A look',
-      combo: comboKey(r.items, r.id), keys: lookKeys(r.items, r.id), favorite: favorites.has(r.id) }));
+      combo: comboKey(r.items, r.id), keys: lookKeys(r.items, r.id), favorite: favorites.has(r.id), worn: worn.has(seenKey(r.items, r.id)) }));
 }
 
 const HISTORY_ROWS = 300;
@@ -58,7 +59,7 @@ export async function seasonLooks(userId, key) {
     ? await query.order('created_at', { ascending: false }).limit(HISTORY_ROWS) : { data: [] };
   const picked = pickLooks(rows, { key, perTab: MAX_PER_TAB_HISTORY, tabs: OCCASION_TABS.map((t) => t.label), unique: true, ...mine, ...(climate ? { climate } : {}),
     offset: Number.isFinite(profile?.warmth_offset) ? profile.warmth_offset : 0 });
-  const entries = await Promise.all(OCCASION_TABS.map(async (t) => [t.label, { looks: await signLooks(sb, picked[t.label], mine.favorites), making: false }]));
+  const entries = await Promise.all(OCCASION_TABS.map(async (t) => [t.label, { looks: await signLooks(sb, picked[t.label], mine.favorites, mine.worn), making: false }]));
   return { tabs: Object.fromEntries(entries) };
 }
 
@@ -79,10 +80,10 @@ export async function todaysLooks(userId) {
   await rememberLocation(sb, userId, profile).catch(() => null);
   // Today's suggestions (src/mirror/suggest.js): at most 5 per tab, new or not seen for a while, suited to today's weather.
   const weather = (rows || []).find((r) => r.weather && r.created_at >= since)?.weather || (jobs || []).find((j) => j.payload?.weather)?.payload.weather;
-  const { data: views } = await sb.from('look_views').select('combo, last_seen').eq('user_id', userId); // none before migration 010
-  const picked = suggestLooks(rows, { tabs: OCCASION_TABS.map((t) => t.label), hidden: mine.hidden, seen: new Map((views || []).map((v) => [v.combo, v.last_seen])),
+  const views = await lookViews(sb, userId);
+  const picked = suggestLooks(rows, { tabs: OCCASION_TABS.map((t) => t.label), hidden: mine.hidden, seen: views,
     today: localDay(), since, weather, offset: Number.isFinite(profile?.warmth_offset) ? profile.warmth_offset : 0 });
-  const tabs = Object.fromEntries(await Promise.all(OCCASION_TABS.map(async (t) => [t.label, { looks: await signLooks(sb, picked[t.label], mine.favorites), making: false }])));
+  const tabs = Object.fromEntries(await Promise.all(OCCASION_TABS.map(async (t) => [t.label, { looks: await signLooks(sb, picked[t.label], mine.favorites, mine.worn), making: false }])));
   for (const j of jobs || []) if (['pending', 'processing'].includes(j.status)) tabs[tabFor(j.payload?.occasion || '')].making = true;
   // The newest batch per tab failed (jobs are newest first): say so instead of going quiet.
   const latest = new Set();
@@ -95,10 +96,19 @@ export async function todaysLooks(userId) {
   return { tabs, temperature: temperatureOf(weather), condition: conditionOf(weather), hasBase: Boolean(profile?.base_path), later: Boolean(profile?.onboarding_later_at), jobsToday: (jobs || []).length, outfitPhotos: outfitPhotos || 0 };
 }
 
+/** Look key → the last day it was seen or worn (look_views, migrations 010 and 011): a look rests after either. Before
+ *  011 there is no last_worn column, so it asks again without it; before 010 nothing has been seen. */
+async function lookViews(sb, userId) {
+  let { data, error } = await sb.from('look_views').select('combo, last_seen, last_worn').eq('user_id', userId);
+  if (error) ({ data } = await sb.from('look_views').select('combo, last_seen').eq('user_id', userId));
+  return new Map((data || []).map((v) => [v.combo, [v.last_seen, v.last_worn].filter(Boolean).sort().pop()]));
+}
+
 const REASONS = ['too_warm', 'too_cold', 'not_my_style'];
 const OFFSET_STEP = 1, OFFSET_MAX = 4; // °C per "too warm" / "too cold" (migration 009)
 
-/** Heart or hide a look, or undo either (Figma 191:1372). action: favorite | unfavorite | hide | unhide | reason.
+/** Heart or hide a look, or undo either (Figma 191:1372). action: favorite | unfavorite | hide | unhide | reason |
+ *  seen | wore | unwore.
  *  Hiding stores the look's garment combination, so every look of the same garments leaves the mirror. "reason" (Figma
  *  216:1373) adds why to that hidden combination ({ reason, filter, occasion }); too warm / too cold also move the
  *  person's warmth offset by a degree, which the season filters use. */
@@ -116,7 +126,7 @@ export async function markLook(userId, outfitId, action, { reason = null, filter
       : await sb.from('favorites').delete().eq('user_id', userId).eq('outfit_id', outfitId);
     return error ? { error: error.message } : { ok: true };
   }
-  if (!['hide', 'unhide', 'reason', 'seen'].includes(action)) return { error: 'Unknown action' };
+  if (!['hide', 'unhide', 'reason', 'seen', 'wore', 'unwore'].includes(action)) return { error: 'Unknown action' };
   if (action === 'reason' && !REASONS.includes(reason)) return { error: 'Unknown reason' };
   const { data: look } = await sb.from('outfits').select('id, items').eq('id', outfitId).eq('user_id', userId).maybeSingle();
   if (!look) return { error: 'Unknown look' };
@@ -130,6 +140,21 @@ export async function markLook(userId, outfitId, action, { reason = null, filter
     const { error } = await sb.from('look_views').upsert({ user_id: userId, combo: key, outfit_id: look.id, last_seen: today, times: (was?.times || 0) + 1 }, { onConflict: 'user_id,combo' });
     return error ? { error: error.message } : { ok: true };
   } // by photos and by wording: duplicate photos of the same garments too
+  if (action === 'wore' || action === 'unwore') {
+    // Worn today (look_views.last_worn, migration 011), from any filter. Undo on the same day takes it back.
+    const key = seenKey(look.items, look.id), today = localDay();
+    const { data: was, error: e } = await sb.from('look_views').select('last_seen, last_worn, worn_times').eq('user_id', userId).eq('combo', key).maybeSingle();
+    if (e) return { error: e.message };
+    if (action === 'wore') {
+      if (was?.last_worn === today) return { ok: true };
+      const { error } = await sb.from('look_views').upsert({ user_id: userId, combo: key, outfit_id: look.id, last_seen: was?.last_seen || today,
+        last_worn: today, worn_times: (was?.worn_times || 0) + 1 }, { onConflict: 'user_id,combo' });
+      return error ? { error: error.message } : { ok: true };
+    }
+    if (was?.last_worn !== today) return { ok: true };
+    const { error } = await sb.from('look_views').update({ last_worn: null, worn_times: Math.max(0, (was.worn_times || 1) - 1) }).eq('user_id', userId).eq('combo', key);
+    return error ? { error: error.message } : { ok: true };
+  }
   if (action === 'reason') {
     const context = { filter: typeof filter === 'string' ? filter.slice(0, 20) : null, occasion: typeof occasion === 'string' ? occasion.slice(0, 40) : null };
     const { error } = await sb.from('hidden_combinations').upsert({ user_id: userId, combo, outfit_id: look.id, reason, context }, { onConflict: 'user_id,combo' });

@@ -215,7 +215,9 @@ export default function Onboarding({ name = '', initial = null }) {
             <img src="/onboarding/consent.svg" alt="" width="118" height="120" />
             <div className="ob-intro ob-intro-large">
               <h1>Your face stays yours</h1>
-              <p>Your photos are encrypted and stored privately. Only you can see them, and they’re used only to make your looks.</p>
+              {/* Figma 159:320 says "We never share your biometric data with third parties", but the photos go to OpenAI and
+                  Google to make and check the looks, so that sentence would be untrue. Same length, true. */}
+              <p>Your photos are encrypted and stored securely. We never sell them, and they’re used only to make your looks.</p>
             </div>
           </div>
           <ul className="ob-checks">

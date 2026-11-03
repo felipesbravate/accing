@@ -57,18 +57,19 @@
   -webkit-mask-size: contain; mask-size: contain; -webkit-mask-position: center; mask-position: center;
   -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; }
 
-/* hide · pager · heart under the front look (Figma 191:1385; desktop 198:5697): 48px tertiary icon-buttons with 24px
-   icons in icon/primary; the heart fills with icon/accent once hearted. The toast floats just above the row. */
+/* hide · heart · worn under the front look, the pager 8px under them (Figma 226:2208, 226:2161; "Favorite, hide, and
+   choose" 191:1372): 48px Large Tertiary icon-buttons 4px apart, icons in icon/primary. Hearted: icon/accent on
+   bg/accent-light. Worn today: a gold medal (Figma's own colours, no token). 62px in all. */
 .mirror-look-bar { position: relative; display: flex; justify-content: center; width: 100%; }
-/* Figma 221:1792 (phone and desktop): hide / heart, 48px buttons 16px either side of a 7×14 "/" in icon/secondary; the
-   pager 8px under them. 62px in all. */
 .mirror-look-actions { display: flex; flex-direction: column; align-items: center; gap: var(--space-sm); min-height: 62px; padding: 0 var(--space-md); max-width: 100%; }
-.mirror-look-buttons { display: flex; align-items: center; gap: var(--space-md); }
-.mirror-look-sep { display: block; flex: none; width: 7px; height: auto; }
+.mirror-look-buttons { display: flex; align-items: center; gap: var(--space-xs); }
 .mirror-look-actions .ds-pager { max-width: 100%; }
 .ds-icon-button.mirror-look-action { color: var(--icon-primary); }
 .ds-icon-button.mirror-look-action[aria-pressed="true"] { color: var(--icon-accent); }
-.mirror-look-action[aria-pressed="true"] svg { fill: currentColor; }
+.mirror-look-action[aria-pressed="true"] svg { fill: var(--bg-accent-light); }
+.ds-icon-button.mirror-look-action.is-wear[aria-pressed="true"] { color: #ce8e24; }
+.mirror-look-action.is-wear[aria-pressed="true"] svg { fill: #ffda56; }
+.ds-icon-button.mirror-look-action:disabled { opacity: var(--opacity-disabled-large); cursor: default; }
 /* The toast sits right on top of the hide / heart row (Figma 191:1462, 210:6295: its bottom on the row's top). */
 .mirror-toast { position: absolute; z-index: 5; left: 50%; bottom: 100%; transform: translateX(-50%);
   width: max-content; max-width: calc(100vw - 2 * var(--space-md)); white-space: normal; /* long messages wrap on a phone */
@@ -127,18 +128,21 @@
 .mirror-waiting .ds-button { width: 100%; }
 .mirror.is-waiting .mirror-top { padding: var(--space-xs) var(--space-4xl) 0; }
 
-/* A look full screen (LookViewer.jsx): page colour behind, the look as big as the screen allows, × top right. */
+/* A look full screen (LookViewer.jsx, Figma 253:8207): top-nav with a Secondary × on the right; the look under it as
+   tall as the screen (on a phone its white sides are cropped, like the design); hide, favourite, worn and share down
+   the right side, 4px apart; the toast near the bottom. */
 .look-viewer { position: fixed; inset: 0; z-index: 100; background: var(--bg-primary); animation: look-viewer-in .2s ease-out; }
 .look-viewer-stage { position: absolute; inset: 0; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
-.look-viewer-frame { position: absolute; inset: calc(72px + env(safe-area-inset-top)) var(--space-md) calc(var(--space-lg) + env(safe-area-inset-bottom)); }
+.look-viewer-frame { position: absolute; inset: calc(64px + env(safe-area-inset-top)) 0 env(safe-area-inset-bottom); }
 .look-viewer-frame img { display: block; width: 100%; height: 100%; object-fit: contain; transform-origin: center; will-change: transform; pointer-events: none; }
-.look-viewer-close { position: absolute; z-index: 1; top: calc(var(--space-md) + env(safe-area-inset-top)); right: var(--space-md);
-  display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; padding: 0; border: 0; border-radius: var(--radius-full);
-  background: var(--bg-secondary); color: var(--icon-primary); cursor: pointer; }
-.look-viewer-close:hover { background: var(--button-secondary-tertiary-hover); }
-.look-viewer-share { right: calc(var(--space-md) + 48px + var(--space-sm)); } /* left of × */
-.look-viewer-share:disabled { opacity: var(--opacity-disabled); cursor: default; }
-.look-viewer-close:focus-visible { outline: 2px solid var(--border-accent); outline-offset: 2px; }
+@media (max-aspect-ratio: 3/5) { .look-viewer-frame img { object-fit: cover; } } /* phones: fill the height */
+.look-viewer-nav { position: absolute; z-index: 1; top: env(safe-area-inset-top); left: 0; right: 0; }
+.look-viewer-actions { position: absolute; z-index: 1; right: var(--space-md); top: calc(200px + env(safe-area-inset-top));
+  flex-direction: column; }
+.look-viewer-actions .mirror-look-action { background: color-mix(in srgb, var(--bg-primary) 70%, transparent); }
+.look-viewer-toast { position: absolute; z-index: 2; left: 0; right: 0; bottom: calc(var(--space-2xl) + env(safe-area-inset-bottom)); }
+.look-viewer-toast .mirror-toast { bottom: 0; }
+@media (min-width: 1024px) { .look-viewer-actions { top: 50%; right: var(--space-3xl); transform: translateY(-50%); } .look-viewer-nav { padding: var(--space-md) var(--space-2xl) 0; } }
 @keyframes look-viewer-in { from { opacity: 0; transform: scale(.98); } }
 @media (prefers-reduced-motion: reduce) { .look-viewer { animation: none; } }
 

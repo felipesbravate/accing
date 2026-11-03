@@ -1,14 +1,16 @@
 'use client';
-// A look full screen: tap the front look in the ring to open it; pinch (or double tap) to zoom, drag to look around,
-// × or Escape or the phone's back gesture to close. Transforms go straight to the DOM while fingers move.
+// A look full screen (Figma "Mobile - Look zoom", 253:8207): tap the front look in the ring to open it; pinch (or double
+// tap) to zoom, drag to look around, × or Escape or the phone's back gesture to close. Transforms go straight to the DOM
+// while fingers move. top-nav with × on the right; down the right side hide, favourite, worn and share.
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from '../ui/Icon.jsx';
 import { clampView, pinch, toggleZoom } from './zoom.js';
 import { prepareLookFile, shareLookFile } from './share.js';
+import { LookActions } from './LookActions.jsx';
 
 const DOUBLE_TAP_MS = 300;
 
-export default function LookViewer({ look, onClose }) {
+export default function LookViewer({ look, onClose, onHide, hiding, favorite, onFavorite, worn, onWear, toast = null }) {
   const stage = useRef(null), frame = useRef(null), img = useRef(null), closeBtn = useRef(null);
   const view = useRef({ s: 1, x: 0, y: 0 });
   const pointers = useRef(new Map());
@@ -97,10 +99,17 @@ export default function LookViewer({ look, onClose }) {
         onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
         <div className="look-viewer-frame" ref={frame}><img ref={img} src={look.image} alt={look.alt} draggable={false} /></div>
       </div>
-      {/* Placeholder until the Figma design (2026-11-03): a share button left of ×. */}
-      <button type="button" className="look-viewer-close look-viewer-share" onClick={onShare} disabled={share !== 'ready'}
-        aria-label={share === 'failed' ? 'Sharing isn’t available for this look' : 'Share this look'} title="Share"><Icon name="share" size={22} /></button>
-      <button ref={closeBtn} type="button" className="look-viewer-close" onClick={close} aria-label="Close"><Icon name="x" size={24} /></button>
+      <div className="ds-top-nav look-viewer-nav">
+        <span className="ds-top-nav-side" />
+        <div className="ds-top-nav-side is-end">
+          <button ref={closeBtn} type="button" className="ds-icon-button is-large is-secondary" onClick={close} aria-label="Close"><Icon name="x" size={24} /></button>
+        </div>
+      </div>
+      <LookActions className="look-viewer-actions" onHide={onHide} hiding={hiding} favorite={favorite} onFavorite={onFavorite} worn={worn} onWear={onWear}>
+        <button type="button" className="ds-icon-button is-large is-tertiary mirror-look-action" onClick={onShare} disabled={share !== 'ready'}
+          aria-label={share === 'failed' ? 'Sharing isn’t available for this look' : 'Share this look'} title="Share"><Icon name="share" size={24} strokeWidth={5 / 3} /></button>
+      </LookActions>
+      {toast && <div className="look-viewer-toast">{toast}</div>}
     </div>
   );
 }

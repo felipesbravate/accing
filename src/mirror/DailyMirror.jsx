@@ -3,14 +3,16 @@
 // mobile below 1024px "Daily Mirror - Mobile" (145:1617). One markup; mirror.css lays it out per breakpoint.
 // Desktop: season filter-items + occasion menu column, arrows. Mobile: occasion tabs + season dropdown, swipe,
 // and a bottom bar with "Shoot your outfit" and the avatar. The looks turn on a ring (OutfitRing.jsx).
-// Under the front look: hide · pager · heart (Figma "Favorite & hide", 191:1372). Hiding takes the look's garment
-// combination out of the mirror for good, with Undo; hearted looks come back under the "Favorites" filter.
+// Under the front look: hide · heart · worn, then the pager (Figma "Favorite, hide, and choose", 191:1372). Hiding takes
+// the look's garment combination out of the mirror for good, with Undo; hearted looks come back under the "Favorites"
+// filter; "worn" marks the look as worn today. The same three, plus share, run down the full-screen viewer (253:8207).
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Icon } from '../ui/Icon.jsx';
 import { Logo } from '../ui/Logo.jsx';
 import { wrap } from './carousel.js';
 import { dayLine, isNight, timeLine, vibeQuestion } from './greeting.js';
 import LookViewer from './LookViewer.jsx';
+import { LookActions } from './LookActions.jsx';
 import OutfitRing from './OutfitRing.jsx';
 import { defaultTab, OCCASION_TABS, weatherIcon } from './occasions.js';
 import { SAMPLE_OUTFITS } from './outfits.js';
@@ -156,6 +158,8 @@ export default function DailyMirror({
   const [arrivingId, setArrivingId] = useState(null); // the look that takes its place, fading in
   const pending = useRef(new Set()); // marks still on their way, so a Favorites fetch waits for them
   const isFav = (o) => (hearts.has(o.id) ? hearts.get(o.id) : Boolean(o.favorite));
+  const [wears, setWears] = useState(() => new Map()); // look id → worn today, for changes made on this page
+  const isWorn = (o) => (wears.has(o.id) ? wears.get(o.id) : Boolean(o.worn));
   const comboOf = (o) => o.combo || o.id;
   const keysOf = (o) => (o.keys?.length ? o.keys : [comboOf(o)]); // by photos and by wording (seasons.js lookKeys)
   const isHidden = (o) => keysOf(o).some((k) => hidden.has(k));
@@ -268,6 +272,16 @@ export default function DailyMirror({
     setHearts((m) => new Map(m).set(look.id, on));
     mark(look.id, on ? 'favorite' : 'unfavorite');
     setToast(on ? { id: Date.now(), icon: 'check-circle', message: 'Added to favourites', action: 'View', onAction: () => { setToast(null); pickSeason('Favorites'); } } : null);
+  };
+  // "I wore this" (the award button, Figma 191:1372 "Favorite, hide, and choose"): marks the look as worn today, from
+  // any filter. A worn look rests from Today's suggestions like a seen one (suggest.js). Tap again (or Undo) to take it back.
+  const toggleWorn = (look) => {
+    const on = !isWorn(look);
+    setWears((m) => new Map(m).set(look.id, on));
+    mark(look.id, on ? 'wore' : 'unwore');
+    setToast(on ? { id: Date.now(), icon: 'award', message: 'Marked as worn today', action: 'Undo', onAction: () => {
+      setToast(null); setWears((m) => new Map(m).set(look.id, false)); mark(look.id, 'unwore');
+    } } : null);
   };
   const hide = (look) => {
     if (leavingId) return;
@@ -423,19 +437,13 @@ export default function DailyMirror({
           </div>
           {(note || (problem && count > 0)) && <p className="mirror-note" role="status">{note || problem}</p>}
           {!note && count <= 1 && more > 0 && <p className="mirror-nudge">Add {more} more outfit{more > 1 ? 's' : ''} for new looks every day</p>}
-          {/* hide / heart with the pager under them (Figma 221:1792); the toast sits right on top. */}
+          {/* hide / heart / worn with the pager under them (Figma 226:2208); the toast sits right on top. */}
           <div className="mirror-look-bar">
-            <Toast key={toast?.id} toast={toast} />
+            {!viewing && <Toast key={toast?.id} toast={toast} />}
             {front && (
               <div className="mirror-look-actions">
-                <div className="mirror-look-buttons">
-                  <button type="button" className="ds-icon-button is-large is-tertiary mirror-look-action" onClick={() => hide(front)} disabled={Boolean(leavingId)}
-                    aria-label="Hide this look" title="Hide this look"><Icon name="eye-off" size={24} strokeWidth={5 / 3} /></button>
-                  <img className="mirror-look-sep" src="/brand/sep.svg" width="7" height="14" alt="" />
-                  <button type="button" className="ds-icon-button is-large is-tertiary mirror-look-action" onClick={() => toggleFavorite(front)}
-                    aria-pressed={isFav(front)} aria-label="Favorite" title={isFav(front) ? 'Remove from Favorites' : 'Save to Favorites'}>
-                    <Icon name="heart" size={24} strokeWidth={5 / 3} /></button>
-                </div>
+                <LookActions look={front} onHide={() => hide(front)} hiding={Boolean(leavingId)} favorite={isFav(front)}
+                  onFavorite={() => toggleFavorite(front)} worn={isWorn(front)} onWear={() => toggleWorn(front)} />
                 {count > 1 && (
                   <div className={'ds-pager' + density} role="group" aria-label="Choose an outfit">
                     {outfits.map((outfit, i) => (
@@ -448,7 +456,11 @@ export default function DailyMirror({
           </div>
         </section>
       </main>
-      {viewing && <LookViewer look={viewing} onClose={() => setViewing(null)} />}
+      {viewing && (
+        <LookViewer look={viewing} onClose={() => setViewing(null)} hiding={Boolean(leavingId)} favorite={isFav(viewing)} worn={isWorn(viewing)}
+          onFavorite={() => toggleFavorite(viewing)} onWear={() => toggleWorn(viewing)}
+          onHide={() => { const look = viewing; setViewing(null); if (history.state?.lookViewer) history.back(); hide(look); }} toast={<Toast key={toast?.id} toast={toast} />} />
+      )}
     </div>
   );
 }
