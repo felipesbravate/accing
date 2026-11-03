@@ -1,9 +1,10 @@
 'use client';
 // A look full screen: tap the front look in the ring to open it; pinch (or double tap) to zoom, drag to look around,
 // × or Escape or the phone's back gesture to close. Transforms go straight to the DOM while fingers move.
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Icon } from '../ui/Icon.jsx';
 import { clampView, pinch, toggleZoom } from './zoom.js';
+import { prepareLookFile, shareLookFile } from './share.js';
 
 const DOUBLE_TAP_MS = 300;
 
@@ -13,6 +14,15 @@ export default function LookViewer({ look, onClose }) {
   const pointers = useRef(new Map());
   const gesture = useRef(null);
   const lastTap = useRef({ t: 0, x: 0, y: 0 });
+  // Share (share.js): the picture on white is made as soon as the look opens, so a tap can open the share sheet at once.
+  const file = useRef(null);
+  const [share, setShare] = useState('preparing'); // preparing | ready | failed
+  useEffect(() => {
+    let gone = false;
+    prepareLookFile(look.image).then((f) => { if (!gone) { file.current = f; setShare('ready'); } }).catch(() => { if (!gone) setShare('failed'); });
+    return () => { gone = true; };
+  }, [look.image]);
+  const onShare = async () => { if (file.current) await shareLookFile(file.current); };
 
   const apply = (v, animate = false) => {
     view.current = v;
@@ -87,6 +97,9 @@ export default function LookViewer({ look, onClose }) {
         onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
         <div className="look-viewer-frame" ref={frame}><img ref={img} src={look.image} alt={look.alt} draggable={false} /></div>
       </div>
+      {/* Placeholder until the Figma design (2026-11-03): a share button left of ×. */}
+      <button type="button" className="look-viewer-close look-viewer-share" onClick={onShare} disabled={share !== 'ready'}
+        aria-label={share === 'failed' ? 'Sharing isn’t available for this look' : 'Share this look'} title="Share"><Icon name="share" size={22} /></button>
       <button ref={closeBtn} type="button" className="look-viewer-close" onClick={close} aria-label="Close"><Icon name="x" size={24} /></button>
     </div>
   );

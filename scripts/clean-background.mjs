@@ -1,4 +1,4 @@
-// Makes the background of a generated photo one flat colour (#F9F9FB, Felipe's choice 2026-10-27) and keeps only a soft
+// Makes the background of a generated photo one flat colour (#FFFFFF since 2026-11-03, when the app went white; was #F9F9FB) and keeps only a soft
 // floor shadow under the feet.
 // Image models never return pure white: every image on 2026-10-27 measured 232–244/255, with gradients and window
 // light patterns, which shows as a grey box on the app's white screen.
@@ -14,7 +14,7 @@ import { join } from 'node:path';
 export const SEG_URL = 'https://github.com/danielgatis/rembg/releases/download/v0.0.0/isnet-general-use.onnx';
 const SEG_FILE = 'isnet-general-use.onnx';
 const SEG_SIZE = 1024;
-export const BACKGROUND = '#F9F9FB';
+export const BACKGROUND = '#FFFFFF';
 export const hexToRgb = (hex) => { const m = /^#?([0-9a-f]{6})$/i.exec(hex || ''); if (!m) throw new Error(`Not a colour: ${hex} (use #RRGGBB)`); const n = parseInt(m[1], 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
 // Shadow, as darkness 0–1 (measured on the chosen image): pool ~0.09 at its centre, contact up to ~0.35.
 export const SHADOW = { pool: 0.12, poolWidth: 0.85, poolHeight: 0.042, poolBehind: 0.012,

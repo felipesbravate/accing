@@ -1,4 +1,4 @@
-// Is the background the flat colour the cleaner paints (#F9F9FB by default)? Measures the brightness (0–255) of the
+// Is the background the flat colour the cleaner paints (#FFFFFF by default)? Measures the brightness (0–255) of the
 // edges where only background should be: the left and right 8% of the image over its top 70% (above the floor) and
 // the top 5% strip. Calibration 2026-10-27: raw model output measured 232–244 (grey, uneven).
 import { BACKGROUND, hexToRgb } from '../clean-background.mjs';
