@@ -6,13 +6,12 @@ import { conditionOf, OCCASION_TABS, startOfToday, tabFor, temperatureOf } from 
 import { comboKey, descKey, lookKeys, pickLooks } from '../mirror/seasons.js';
 import { jobFailureText } from '../lib/job-errors.js';
 import { climateFor, rememberLocation } from './location.js';
+import { seenKey, suggestLooks } from '../mirror/suggest.js';
 
 const URL_SECONDS = 60 * 60;
 
-// Every look made so far is shown (Felipe, 2026-11-01: "the images already exist, we only display them"), newest first,
-// one per garment combination; only hidden combinations are left out. The ring keeps its spacing however many
-// (carousel.js ringPose) and the pager shows a window of 5 dots.
-const MAX_PER_TAB = 40;
+// Today's suggestions show at most 5 per tab (src/mirror/suggest.js, Felipe 2026-11-03); the season filters, All and
+// Favorites show every look made so far, newest first, one per garment combination, hidden ones left out.
 const ALL_ROWS = 500;
 
 /** The person's favourite look ids and hidden garment combinations (migration 007). Before that migration runs the
@@ -78,7 +77,11 @@ export async function todaysLooks(userId) {
   ]);
   // Home from the IP location the first time it's missing (morning weather, season filters); best effort.
   await rememberLocation(sb, userId, profile).catch(() => null);
-  const picked = pickLooks(rows, { key: 'today', perTab: MAX_PER_TAB, tabs: OCCASION_TABS.map((t) => t.label), hidden: mine.hidden, unique: true });
+  // Today's suggestions (src/mirror/suggest.js): at most 5 per tab, new or not seen for a while, suited to today's weather.
+  const weather = (rows || []).find((r) => r.weather && r.created_at >= since)?.weather || (jobs || []).find((j) => j.payload?.weather)?.payload.weather;
+  const { data: views } = await sb.from('look_views').select('combo, last_seen').eq('user_id', userId); // none before migration 010
+  const picked = suggestLooks(rows, { tabs: OCCASION_TABS.map((t) => t.label), hidden: mine.hidden, seen: new Map((views || []).map((v) => [v.combo, v.last_seen])),
+    today: localDay(), since, weather, offset: Number.isFinite(profile?.warmth_offset) ? profile.warmth_offset : 0 });
   const tabs = Object.fromEntries(await Promise.all(OCCASION_TABS.map(async (t) => [t.label, { looks: await signLooks(sb, picked[t.label], mine.favorites), making: false }])));
   for (const j of jobs || []) if (['pending', 'processing'].includes(j.status)) tabs[tabFor(j.payload?.occasion || '')].making = true;
   // The newest batch per tab failed (jobs are newest first): say so instead of going quiet.
@@ -89,7 +92,6 @@ export async function todaysLooks(userId) {
     latest.add(t);
     if (j.status === 'failed') tabs[t].failed = jobFailureText(j.error_message);
   }
-  const weather = (rows || []).find((r) => r.weather && r.created_at >= since)?.weather || (jobs || []).find((j) => j.payload?.weather)?.payload.weather;
   return { tabs, temperature: temperatureOf(weather), condition: conditionOf(weather), hasBase: Boolean(profile?.base_path), later: Boolean(profile?.onboarding_later_at), jobsToday: (jobs || []).length, outfitPhotos: outfitPhotos || 0 };
 }
 
@@ -100,6 +102,11 @@ const OFFSET_STEP = 1, OFFSET_MAX = 4; // °C per "too warm" / "too cold" (migra
  *  Hiding stores the look's garment combination, so every look of the same garments leaves the mirror. "reason" (Figma
  *  216:1373) adds why to that hidden combination ({ reason, filter, occasion }); too warm / too cold also move the
  *  person's warmth offset by a degree, which the season filters use. */
+/** Today's date where the app runs its days ('YYYY-MM-DD', Europe/Madrid like startOfToday). */
+export function localDay(date = new Date(), timeZone = 'Europe/Madrid') {
+  return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
+}
+
 export async function markLook(userId, outfitId, action, { reason = null, filter = null, occasion = null } = {}) {
   if (typeof outfitId !== 'string' || !/^[0-9a-f-]{36}$/i.test(outfitId)) return { error: 'Unknown look' };
   const sb = await authClient();
@@ -109,12 +116,20 @@ export async function markLook(userId, outfitId, action, { reason = null, filter
       : await sb.from('favorites').delete().eq('user_id', userId).eq('outfit_id', outfitId);
     return error ? { error: error.message } : { ok: true };
   }
-  if (!['hide', 'unhide', 'reason'].includes(action)) return { error: 'Unknown action' };
+  if (!['hide', 'unhide', 'reason', 'seen'].includes(action)) return { error: 'Unknown action' };
   if (action === 'reason' && !REASONS.includes(reason)) return { error: 'Unknown reason' };
   const { data: look } = await sb.from('outfits').select('id, items').eq('id', outfitId).eq('user_id', userId).maybeSingle();
   if (!look) return { error: 'Unknown look' };
   const combo = comboKey(look.items, look.id);
-  const keys = lookKeys(look.items, look.id); // by photos and by wording: duplicate photos of the same garments too
+  const keys = lookKeys(look.items, look.id);
+  if (action === 'seen') {
+    // The look was the front of Today's suggestions for a moment (look_views, migration 010): it rests for a while.
+    const key = seenKey(look.items, look.id), today = localDay();
+    const { data: was } = await sb.from('look_views').select('times, last_seen').eq('user_id', userId).eq('combo', key).maybeSingle();
+    if (was?.last_seen === today) return { ok: true };
+    const { error } = await sb.from('look_views').upsert({ user_id: userId, combo: key, outfit_id: look.id, last_seen: today, times: (was?.times || 0) + 1 }, { onConflict: 'user_id,combo' });
+    return error ? { error: error.message } : { ok: true };
+  } // by photos and by wording: duplicate photos of the same garments too
   if (action === 'reason') {
     const context = { filter: typeof filter === 'string' ? filter.slice(0, 20) : null, occasion: typeof occasion === 'string' ? occasion.slice(0, 40) : null };
     const { error } = await sb.from('hidden_combinations').upsert({ user_id: userId, combo, outfit_id: look.id, reason, context }, { onConflict: 'user_id,combo' });

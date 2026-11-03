@@ -26,6 +26,7 @@ import './mirror.css';
 const TOAST_MS = 5000; // Figma toast: "Shows for ~5 s"
 const HIDE_TOAST_MS = 8000; // the hide toast asks why: a little longer to read and tap
 const TOAST_OUT_MS = 250; // its exit animation (mirror.css mirror-toast-out)
+const SEEN_MS = 1500; // a look at the front of Today's suggestions this long counts as seen
 const MAX_PICK = 20; // photos per pick: each makes ~3 looks; the plan's daily limit applies too (src/lib/plans.js)
 const HIDE_FADE_MS = 350; // a hidden look fades out before it leaves the ring (mirror.css ring-leave)
 
@@ -312,6 +313,14 @@ export default function DailyMirror({
   // The making screen only when the tab has nothing to show yet (Figma 206:5722); with looks there, a toast says so (210:6191).
   const showMaking = live && today_ && data.hasBase && tab.making && !count;
   const front = count && !showMaking ? outfits[current] : null;
+  // Today's suggestions remember what was seen (a look at the front for 1.5 s), so tomorrow brings others (suggest.js).
+  const seenSent = useRef(new Set());
+  const frontId = today_ && front ? front.id : null;
+  useEffect(() => {
+    if (!frontId || seenSent.current.has(frontId)) return undefined;
+    const t = setTimeout(() => { seenSent.current.add(frontId); mark(frontId, 'seen'); }, SEEN_MS);
+    return () => clearTimeout(t);
+  }, [frontId, mark]);
   const loading = live && !today_ && tab.loading;
 
   // "Skip" in onboarding (Figma 162:545): no tabs or bottom bar, just the way back in.
