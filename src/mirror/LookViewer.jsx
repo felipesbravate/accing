@@ -11,7 +11,7 @@ import { LookActions } from './LookActions.jsx';
 const DOUBLE_TAP_MS = 300;
 
 export default function LookViewer({ look, onClose, onHide, hiding, favorite, onFavorite, worn, onWear, toast = null }) {
-  const stage = useRef(null), frame = useRef(null), img = useRef(null), closeBtn = useRef(null);
+  const stage = useRef(null), frame = useRef(null), img = useRef(null), dialog = useRef(null);
   const view = useRef({ s: 1, x: 0, y: 0 });
   const pointers = useRef(new Map());
   const gesture = useRef(null);
@@ -36,9 +36,9 @@ export default function LookViewer({ look, onClose, onHide, hiding, favorite, on
   const size = () => ({ w: frame.current?.clientWidth || 1, h: frame.current?.clientHeight || 1 });
   const local = (e) => { const r = frame.current.getBoundingClientRect(); return { x: e.clientX - r.left - r.width / 2, y: e.clientY - r.top - r.height / 2 }; };
 
-  // Open: focus ×, stop the page behind from scrolling, and let the back gesture close the viewer.
+  // Open: focus the dialog itself (not ×: Safari draws the focus ring on a button focused by script), stop the page behind from scrolling, and let the back gesture close the viewer.
   useEffect(() => {
-    closeBtn.current?.focus();
+    dialog.current?.focus({ preventScroll: true });
     const prev = document.body.style.overflow; document.body.style.overflow = 'hidden';
     history.pushState({ lookViewer: true }, '');
     const onPop = () => onClose(true);
@@ -94,7 +94,7 @@ export default function LookViewer({ look, onClose, onHide, hiding, favorite, on
   };
 
   return (
-    <div className="look-viewer" role="dialog" aria-modal="true" aria-label="Look, full screen. Pinch to zoom.">
+    <div ref={dialog} tabIndex={-1} className="look-viewer" role="dialog" aria-modal="true" aria-label="Look, full screen. Pinch to zoom.">
       <div className="look-viewer-stage" ref={stage} onPointerDown={onPointerDown} onPointerMove={onPointerMove}
         onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
         <div className="look-viewer-frame" ref={frame}><img ref={img} src={look.image} alt={look.alt} draggable={false} /></div>
@@ -102,7 +102,7 @@ export default function LookViewer({ look, onClose, onHide, hiding, favorite, on
       <div className="ds-top-nav look-viewer-nav">
         <span className="ds-top-nav-side" />
         <div className="ds-top-nav-side is-end">
-          <button ref={closeBtn} type="button" className="ds-icon-button is-large is-secondary" onClick={close} aria-label="Close"><Icon name="x" size={24} /></button>
+          <button type="button" className="ds-icon-button is-large is-secondary" onClick={close} aria-label="Close"><Icon name="x" size={24} /></button>
         </div>
       </div>
       <LookActions className="look-viewer-actions" onHide={onHide} hiding={hiding} favorite={favorite} onFavorite={onFavorite} worn={worn} onWear={onWear}>

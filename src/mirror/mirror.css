@@ -131,7 +131,7 @@
 /* A look full screen (LookViewer.jsx, Figma 253:8207): top-nav with a Secondary × on the right; the look under it as
    tall as the screen (on a phone its white sides are cropped, like the design); hide, favourite, worn and share down
    the right side, 4px apart; the toast near the bottom. */
-.look-viewer { position: fixed; inset: 0; z-index: 100; background: var(--bg-primary); animation: look-viewer-in .2s ease-out; }
+.look-viewer { position: fixed; inset: 0; z-index: 100; outline: none; background: var(--bg-primary); animation: look-viewer-in .2s ease-out; }
 .look-viewer-stage { position: absolute; inset: 0; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
 .look-viewer-frame { position: absolute; inset: calc(64px + env(safe-area-inset-top)) 0 env(safe-area-inset-bottom); }
 .look-viewer-frame img { display: block; width: 100%; height: 100%; object-fit: contain; transform-origin: center; will-change: transform; pointer-events: none; }
@@ -139,7 +139,6 @@
 .look-viewer-nav { position: absolute; z-index: 1; top: env(safe-area-inset-top); left: 0; right: 0; }
 .look-viewer-actions { position: absolute; z-index: 1; right: var(--space-md); top: calc(200px + env(safe-area-inset-top));
   flex-direction: column; }
-.look-viewer-actions .mirror-look-action { background: color-mix(in srgb, var(--bg-primary) 70%, transparent); }
 .look-viewer-toast { position: absolute; z-index: 2; left: 0; right: 0; bottom: calc(var(--space-2xl) + env(safe-area-inset-bottom)); }
 .look-viewer-toast .mirror-toast { bottom: 0; }
 @media (min-width: 1024px) { .look-viewer-actions { top: 50%; right: var(--space-3xl); transform: translateY(-50%); } .look-viewer-nav { padding: var(--space-md) var(--space-2xl) 0; } }
