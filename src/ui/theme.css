@@ -14,7 +14,7 @@
   --brand-primary: var(--blue-800);
   --brand-secondary: var(--lavanda-900);
 
-  --bg-primary: var(--blue-25);
+  --bg-primary: var(--white); /* Felipe, 2026-11-03: the app on full white (Thread bg/primary was blue-25 #f9f9fb) */
   --bg-secondary: var(--blue-75);
   --bg-tertiary: var(--blue-800);
   --bg-selected: var(--blue-500);

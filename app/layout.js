@@ -19,7 +19,7 @@ export const metadata = {
   icons: { icon: [{ url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' }], apple: '/icons/apple-touch-icon.png' },
   appleWebApp: { capable: true, title: 'Accing', statusBarStyle: 'default', startupImage: launch },
 };
-export const viewport = { width: 'device-width', initialScale: 1, viewportFit: 'cover', themeColor: '#F9F9FB' };
+export const viewport = { width: 'device-width', initialScale: 1, viewportFit: 'cover', themeColor: '#FFFFFF' };
 
 // The splash is in the layout, so it is in the very first bytes of HTML: on a home-screen launch it covers the screen
 // while the server still works on the page (auth, today's looks), instead of a blank page. The name comes from this
