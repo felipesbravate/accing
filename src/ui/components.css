@@ -119,9 +119,9 @@
 .ds-divider { display: block; width: 100%; height: 0; margin: 0; border: 0; border-top: 1px solid var(--border-default); }
 .ds-divider.is-secondary { border-top-color: var(--border-secondary); }
 
-/* top-nav (Thread 178:1363) — 64px bar, 8px side padding: one 48px Secondary icon-button on the left (back), up to two
-   on the right, 8px apart. Either side may be empty (Look zoom has only × on the right). */
-.ds-top-nav { display: flex; align-items: center; justify-content: space-between; height: 64px; padding: 0 var(--space-sm); }
+/* top-nav (Thread 178:1363, 2026-11-03) — 64px bar, 16px side padding: Left action (a 48px Secondary icon-button), then
+   Right action and Second right action at the far right, 8px apart. Each is optional (Look zoom has only × on the right). */
+.ds-top-nav { display: flex; align-items: center; justify-content: space-between; height: 64px; padding: 0 var(--space-md); }
 .ds-top-nav-side { display: flex; align-items: center; gap: var(--space-sm); min-width: 48px; }
 .ds-top-nav-side.is-end { justify-content: flex-end; }
 

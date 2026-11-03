@@ -34,7 +34,7 @@
 .login-field input:focus { border-color: var(--border-active); outline: 0; }
 .login-field input:focus-visible { box-shadow: 0 0 0 2px var(--border-accent); }
 
-.login-msg { margin: 0; padding: var(--space-sm) var(--space-md); border-radius: var(--radius-md); background: #fdecea; color: var(--danger); font-size: var(--fs-body); }
+.login-msg { margin: 0; padding: var(--space-sm) var(--space-md); border-radius: var(--radius-md); background: var(--fail-danger-light); color: var(--text-fail-danger); font-size: var(--fs-body); }
 .login-msg.is-ok { background: var(--bg-secondary); color: var(--text-primary); }
 
 .login-link { display: block; width: 100%; padding: var(--space-sm); border: 0; background: transparent; color: var(--text-secondary);
