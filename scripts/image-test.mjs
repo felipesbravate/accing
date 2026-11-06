@@ -847,6 +847,10 @@ async function main() {
       .replace('{{POSE_IMAGE_LINE}}', poseRef ? ` Image ${imgs.length} is a faceless mannequin showing the pose.` : '')
       .replace('{{POSE_IMAGE_RULE}}', poseRef ? ` Copy the stance of the mannequin in image ${imgs.length} (only its pose: not its body, size or shape).` : '');
     if (blanked) prompt = prompt.replace('- The face: rebuild it from the face photos', '- The face: in image 1 it is covered by a plain grey oval on purpose. Paint the real face there, from the face photos');
+    // Prescription glasses are part of how she looks (Felipe, 2026-11-06): the ones in image 1 go back on the rebuilt face
+    // (the grey oval covers them). Sunglasses are not described, so they are not kept.
+    const glasses = String(before.glasses || '').trim();
+    if (glasses) prompt += `\n- The glasses: in image 1 the person wears ${glasses}. Put exactly these glasses on the face, worn naturally.`;
     const label = (k) => (k === 0 ? (blanked ? 'the photo to prepare (face covered on purpose)' : 'the photo to prepare') : k <= faces.length ? faces[k - 1].label : 'pose reference: a faceless mannequin; copy only its pose');
     // Every try is made and the passing one closest to her face photos is kept: this photo is the face of every look.
     // The tries run in parallel (2026-10-30: one after another took ~160 s, the longest wait in onboarding).
@@ -867,19 +871,23 @@ async function main() {
       // reporting the real Adidas logo as "added" and rejected all 3 tries, the best at identity 0.752 (2026-10-28).
       // Tattoos and piercings too: the base photo is the real person (2026-10-28: Ricardo's real arm tattoos rejected all 3 tries).
       const clothesMark = /logo|print|text|wordmark|graphic|stripe|shirt|t-shirt|skirt|trousers|shoe|sneaker|earring|stud|tattoo|ink|piercing/i;
-      // Glasses follow the face photos: the face is painted from them (the body photo's face is covered), so glasses worn
-      // only in the body photo can't come back (2026-11-06: Claudia, all 6 tries rejected for "glasses" at identity 0.74–0.88).
-      const lookReasons = (look.reasons || []).filter((x) => !(x.startsWith('added:') && clothesMark.test(x)) && !x.startsWith('glasses:'));
+      const lookReasons = (look.reasons || []).filter((x) => !(x.startsWith('added:') && clothesMark.test(x)));
       const added = (look.look?.added || []).filter((x) => !clothesMark.test(x));
       const left = [...after.blocking, ...after.fixes.filter((f) => f !== 'room or objects in the background'), ...lookReasons.filter((x) => !x.startsWith('added:')), ...(added.length ? [`added: ${added.join(', ')}`] : [])];
       if (id == null || id < minId) left.unshift(`identity ${id == null ? 'no face' : id.toFixed(3)} < ${minId.toFixed(3)}`);
       console.log(`  prepared base ${attempt}: identity ${id == null ? '–' : id.toFixed(3)} (original photo ${origId == null ? '–' : origId.toFixed(3)})${left.length ? ' — rejected: ' + left.join('; ') : ' — ok'}`);
-      return { row: { ...r, file, reasons: left, identity: id }, img: { ...img, id }, ok: !left.length };
+      // Only the glasses wrong: kept as a fallback, so glasses never fail the whole run (2026-11-06: Claudia, all 6 tries
+      // were rejected for glasses alone, at identity 0.74–0.88).
+      const glassesOnly = left.length > 0 && left.every((x) => x.startsWith('glasses:'));
+      return { row: { ...r, file, reasons: left, identity: id }, img: { ...img, id }, ok: !left.length, glassesOnly };
     }));
+    let fallback = null;
     for (const t of tries.filter(Boolean)) {
       prepRows.push(t.row);
       if (t.ok && (!best || t.img.id > best.id)) best = t.img;
+      if (t.glassesOnly && (!fallback || t.img.id > fallback.id)) fallback = t.img;
     }
+    if (!best && fallback) { console.log(`No try got the glasses right; keeping ${fallback.file}, right in everything else.`); best = fallback; }
     // The reasons go into the message, so a failed job in Supabase (generation_jobs.error_message) says why. People never
     // see this text: the app shows its own (src/lib/photo-advice.js PREP_FAILED).
     if (!best) {

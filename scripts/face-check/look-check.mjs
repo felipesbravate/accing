@@ -153,6 +153,7 @@ const PHOTO_PROMPT = `Describe this photo of a person, strictly and literally:
 - hands_in_pockets: either hand is in a pocket, even partly
 - mirror_selfie: the photo is taken in a mirror, or a mirror frame, phone or room reflection is visible
 - plain_background: the background is a plain wall or studio backdrop with no furniture or objects
+- glasses: the clear prescription glasses the person wears, described so an artist can paint the same pair (frame colour, shape and thickness, e.g. "thin black rectangular metal frames"); an empty string if they wear none or only sunglasses
 - ghosts: any grey or white smudge, halo, blur or faint shape in the background right next to the person (often beside the hair or shoulders) that is not part of them
 Give a short note on anything else that would make this a poor photo for a virtual fitting room.`;
 const PHOTO_SCHEMA = {
@@ -160,9 +161,9 @@ const PHOTO_SCHEMA = {
   properties: {
     one_person: { type: 'BOOLEAN' }, full_body: { type: 'BOOLEAN' }, face_visible: { type: 'BOOLEAN' }, sharp: { type: 'BOOLEAN' }, sitting: { type: 'BOOLEAN' },
     holding: { type: 'ARRAY', items: { type: 'STRING' } }, looking_at_camera: { type: 'BOOLEAN' }, arms_relaxed: { type: 'BOOLEAN' },
-    hands_in_pockets: { type: 'BOOLEAN' }, mirror_selfie: { type: 'BOOLEAN' }, plain_background: { type: 'BOOLEAN' }, ghosts: { type: 'BOOLEAN' }, note: { type: 'STRING' },
+    hands_in_pockets: { type: 'BOOLEAN' }, mirror_selfie: { type: 'BOOLEAN' }, plain_background: { type: 'BOOLEAN' }, ghosts: { type: 'BOOLEAN' }, glasses: { type: 'STRING' }, note: { type: 'STRING' },
   },
-  required: ['one_person', 'full_body', 'face_visible', 'sharp', 'sitting', 'holding', 'looking_at_camera', 'arms_relaxed', 'hands_in_pockets', 'mirror_selfie', 'plain_background', 'ghosts', 'note'],
+  required: ['one_person', 'full_body', 'face_visible', 'sharp', 'sitting', 'holding', 'looking_at_camera', 'arms_relaxed', 'hands_in_pockets', 'mirror_selfie', 'plain_background', 'ghosts', 'glasses', 'note'],
 };
 
 /** What a base photo needs. blocking: cannot be fixed by an edit (ask for another photo); fixes: what the edit must change. */
