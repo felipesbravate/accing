@@ -1,5 +1,6 @@
 // Pure helpers for the worker: what to download, which command to run, what to write back. No network here, so they
 // are unit-tested (tests/worker-jobs.test.js).
+import { scopeOf } from '../src/lib/hide-scope.js';
 
 /** A storage path is the user's own only if it sits in their folder: users can edit their profile row, and the worker
  *  (service role, no RLS) must never fetch another person's photos because a path was changed to point at them. */
@@ -94,12 +95,15 @@ export function photoCombo(items) {
 
 /** Hidden combinations (hidden_combinations.combo, src/mirror/seasons.js comboKey) in the pipeline's terms for this
  *  run: "<photo index>/<category> + …" (scripts/image-test-lib.mjs lookKey). Combinations with a photo not in this
- *  run, or stored before photo ids existed (garment descriptions), are left out. */
-export function avoidKeys(combos, photoIds = []) {
+ *  run, or stored before photo ids existed (garment descriptions), are left out. `tab`: the occasion tab of this job. */
+export function avoidKeys(combos, photoIds = [], tab = null) {
   const index = new Map(photoIds.map((id, i) => [id, i]));
   const out = [];
-  for (const c of combos || []) {
-    if (typeof c !== 'string' || !c) continue;
+  for (const stored of combos || []) {
+    if (typeof stored !== 'string' || !stored) continue;
+    // Hidden for one occasion only ("Not for work", src/lib/hide-scope.js): avoided only when making looks for it.
+    const { tab: only, key: c } = scopeOf(stored);
+    if (only && only !== tab) continue;
     // Older looks: their garments' wording (scripts/image-test-lib.mjs lookDescKey).
     if (!c.startsWith('photos:')) { if (!c.startsWith('look:')) out.push('desc:' + c); continue; }
     const parts = c.slice(7).split(' + ').map((p) => { const [id, cat] = p.split('/'); return index.has(id) && cat ? `${index.get(id)}/${cat}` : null; });

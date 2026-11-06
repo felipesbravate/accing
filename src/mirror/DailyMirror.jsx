@@ -20,6 +20,7 @@ import { LookActions } from './LookActions.jsx';
 import OutfitRing from './OutfitRing.jsx';
 import { RingSkeleton } from './Skeleton.jsx';
 import { ALL_OUTFITS, defaultTab, MENU_TABS, mergeTabs, weatherIcon } from './occasions.js';
+import { hiddenIn, NOT_FOR, scopedKey } from '../lib/hide-scope.js';
 import { SAMPLE_OUTFITS } from './outfits.js';
 import { SEASON_FILTERS, seasonKey } from './seasons.js';
 
@@ -152,12 +153,20 @@ export default function DailyMirror({
   const live = Boolean(data);
   const favoritesView = filter === 'favorites';
   const seasonTabs = !today_ && past?.key === filter ? past.tabs : null;
-  const tabsNow = live ? (today_ ? data.tabs : seasonTabs) : null;
-  const tab = !live ? null : !tabsNow ? { looks: [], making: false, loading: true } : all ? mergeTabs(tabsNow) : tabsNow[occasion] || { looks: [], making: false };
 
   // Hearts and hides change on screen at once; the server is told in the background (POST /api/looks/mark).
   const [hearts, setHearts] = useState(() => new Map()); // look id → hearted, for changes made on this page
-  const [hidden, setHidden] = useState(() => new Set()); // garment combinations hidden on this page
+  // Garment combinations hidden on this page: a look's keys (hidden everywhere), or "tab:<tab>|<key>" (hidden for that
+  // occasion only, "Not for work"; src/lib/hide-scope.js).
+  const [hidden, setHidden] = useState(() => new Set());
+  const comboOf = (o) => o.combo || o.id;
+  const keysOf = (o) => (o.keys?.length ? o.keys : [comboOf(o)]); // by photos and by wording (seasons.js lookKeys)
+  // Each tab without what was hidden in it, before All outfits merges them (a look hidden "not for work" still shows
+  // there through its Casual copy). Every look knows its tab, for the toast's "Not for …".
+  const tabsNow = live ? (today_ ? data.tabs : seasonTabs) : null;
+  const shownTabs = tabsNow && Object.fromEntries(Object.entries(tabsNow).map(([t, v]) => [t, { ...v,
+    looks: (v.looks || []).filter((o) => !hiddenIn(keysOf(o), t, hidden)).map((o) => (o.tab === t ? o : { ...o, tab: t })) }]));
+  const tab = !live ? null : !shownTabs ? { looks: [], making: false, loading: true } : all ? mergeTabs(shownTabs) : shownTabs[occasion] || { looks: [], making: false };
   const [toast, setToast] = useState(null);
   const [installHelp, setInstallHelp] = useState(false), [tipOffer, setTipOffer] = useState(null);
   // After a new outfit photo starts looks for this tab: the making screen (no looks yet) or toast until the first new one arrives.
@@ -168,14 +177,13 @@ export default function DailyMirror({
   const [leavingId, setLeavingId] = useState(null);   // the look fading out after "hide"
   const [arrivingId, setArrivingId] = useState(null); // the look that takes its place, fading in
   const pending = useRef(new Set()); // marks still on their way, so a Favorites fetch waits for them
+  const queue = useRef(Promise.resolve());
   const isFav = (o) => (hearts.has(o.id) ? hearts.get(o.id) : Boolean(o.favorite));
   const [wears, setWears] = useState(() => new Map()); // look id → worn today, for changes made on this page
   const isWorn = (o) => (wears.has(o.id) ? wears.get(o.id) : Boolean(o.worn));
-  const comboOf = (o) => o.combo || o.id;
-  const keysOf = (o) => (o.keys?.length ? o.keys : [comboOf(o)]); // by photos and by wording (seasons.js lookKeys)
-  const isHidden = (o) => keysOf(o).some((k) => hidden.has(k));
-  const outfits = (live ? tab.looks : SAMPLE_OUTFITS)
-    .filter((o) => !isHidden(o) && (!favoritesView || isFav(o)));
+  const lookTab = (o) => o.tab || askTab;
+  const outfits = (live ? tab.looks : SAMPLE_OUTFITS.filter((o) => !hiddenIn(keysOf(o), askTab, hidden)))
+    .filter((o) => !favoritesView || isFav(o));
   const making = live && Object.values(data.tabs).some((t) => t.making);
   const refresh = useCallback(async () => {
     const res = await fetch('/api/looks', { cache: 'no-store' }).catch(() => null);
@@ -275,8 +283,9 @@ export default function DailyMirror({
   const mark = useCallback((id, action, extra = {}) => {
     if (!live) return; // the preview account keeps hearts and hides on this page only
     // Before migration 007 runs the server can't keep them; they still hold until the page reloads.
-    const p = fetch('/api/looks/mark', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id, action, ...extra }) })
-      .catch(() => null).finally(() => pending.current.delete(p));
+    // One after another: a reason ("Not for work") must reach the server after the hide it narrows.
+    const send = () => fetch('/api/looks/mark', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id, action, ...extra }) }).catch(() => null);
+    const p = (queue.current = queue.current.then(send)).finally(() => pending.current.delete(p));
     pending.current.add(p);
   }, [live]);
   const toggleFavorite = (look) => {
@@ -305,8 +314,9 @@ export default function DailyMirror({
     const at = wrap(index, outfits.length);
     const next = outfits.filter((o) => !same(o));
     const after = outfits.slice(at + 1).concat(outfits.slice(0, at)).find((o) => !same(o)) || null; // the one on its right
+    let narrowed = false; // "Not for …" tapped before the animation ended: hide it for that occasion only
     const done = () => {
-      setHidden((h) => new Set([...h, ...keys]));
+      if (!narrowed) setHidden((h) => new Set([...h, ...keys]));
       setLeavingId(null);
       if (!after) return;
       const i = next.indexOf(after);
@@ -325,20 +335,28 @@ export default function DailyMirror({
       }, HIDE_FADE_MS);
     }
     mark(look.id, 'hide');
-    // Why (Figma 216:1373, optional): too warm / too cold tune the person's season filters; not my style is kept for
-    // the stylist. One tap swaps in a thank-you (216:1496). The toast stays longer, since it asks something.
-    const because = (reason) => () => {
-      mark(look.id, 'reason', { reason, filter, occasion: askTab });
+    // Why (Figma 191:1465, optional, Felipe 2026-11-06): "Not for work" (or a casual day, dinner, party: the look's own
+    // occasion) narrows the hide to that tab, so the same garments come back in the others; "Not my style" keeps it
+    // hidden everywhere. One tap swaps in a thank-you. The toast stays longer, since it asks something.
+    const its = lookTab(look);
+    const scoped = keys.map((k) => scopedKey(its, k));
+    const notFor = () => {
+      narrowed = true;
+      setHidden((h) => { const n = new Set(h); keys.forEach((k) => n.delete(k)); scoped.forEach((k) => n.add(k)); return n; });
+      mark(look.id, 'reason', { reason: 'not_for_occasion', filter, occasion: its });
+      setToast({ id: Date.now(), icon: 'check-circle', message: `Thanks. It stays in your other outfits.` });
+    };
+    const notMyStyle = () => {
+      mark(look.id, 'reason', { reason: 'not_my_style', filter, occasion: its });
       setToast({ id: Date.now(), icon: 'check-circle', message: 'Thanks. You’ll see fewer looks like this.' });
     };
-    setToast({ id: Date.now(), ms: HIDE_TOAST_MS, icon: 'eye-off', message: 'Look hidden. What was off?', action: 'Undo', onAction: () => {
+    setToast({ id: Date.now(), ms: HIDE_TOAST_MS, message: 'Outfit hidden. Why wasn’t it a match?', action: 'Undo', onAction: () => {
       setToast(null);
-      setHidden((h) => { const n = new Set(h); keys.forEach((k) => n.delete(k)); return n; });
+      setHidden((h) => { const n = new Set(h); [...keys, ...scoped].forEach((k) => n.delete(k)); return n; });
       mark(look.id, 'unhide');
     }, extraLabel: 'Why you hid it', extra: [
-      { label: 'Too warm', onClick: because('too_warm') },
-      { label: 'Too cold', onClick: because('too_cold') },
-      { label: 'Not my style', onClick: because('not_my_style') },
+      { label: NOT_FOR[its] || `Not for ${its.toLowerCase()}`, onClick: notFor },
+      { label: 'Not my style', onClick: notMyStyle },
     ] });
   };
 

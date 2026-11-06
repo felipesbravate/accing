@@ -4,6 +4,7 @@ import { authClient } from './auth.js';
 import { dailyLimit } from '../lib/plans.js';
 import { conditionOf, OCCASION_TABS, startOfToday, tabFor, temperatureOf } from '../mirror/occasions.js';
 import { comboKey, descKey, lookKeys, pickLooks } from '../mirror/seasons.js';
+import { scopeOf, scopedKey } from '../lib/hide-scope.js';
 import { jobFailureText } from '../lib/job-errors.js';
 import { climateFor, rememberLocation } from './location.js';
 import { seenKey, suggestLooks } from '../mirror/suggest.js';
@@ -25,10 +26,16 @@ async function marks(sb, userId) {
   const hidden = new Set((hid.data || []).map((r) => r.combo));
   // Hides from before both keys were stored (2026-11-01): add the wording key of the look each was hidden from, so a
   // duplicate photo of the same garments stays hidden too.
-  const from = [...new Set((hid.data || []).map((r) => r.outfit_id).filter(Boolean))];
+  // A hide for one occasion only (src/lib/hide-scope.js) adds the wording key for that occasion only.
+  const tabsOf = new Map();
+  for (const r of hid.data || []) if (r.outfit_id) tabsOf.set(r.outfit_id, [...(tabsOf.get(r.outfit_id) || []), scopeOf(r.combo).tab]);
+  const from = [...tabsOf.keys()];
   if (from.length) {
-    const { data: looks } = await sb.from('outfits').select('items').in('id', from.slice(0, 500));
-    for (const l of looks || []) { const d = descKey(l.items); if (d) hidden.add(d); }
+    const { data: looks } = await sb.from('outfits').select('id, items').in('id', from.slice(0, 500));
+    for (const l of looks || []) {
+      const d = descKey(l.items);
+      if (d) for (const t of new Set(tabsOf.get(l.id))) hidden.add(t ? scopedKey(t, d) : d);
+    }
   }
   return { favorites: new Set((fav.data || []).map((r) => r.outfit_id)), hidden, worn: new Set((wore.data || []).map((r) => r.combo)) };
 }
@@ -104,14 +111,17 @@ async function lookViews(sb, userId) {
   return new Map((data || []).map((v) => [v.combo, [v.last_seen, v.last_worn].filter(Boolean).sort().pop()]));
 }
 
-const REASONS = ['too_warm', 'too_cold', 'not_my_style'];
+// "Not for work" (or a casual day, dinner, party) and "Not my style" since 2026-11-06 (Figma 191:1465); too warm / too
+// cold were asked before and are still accepted from pages open since then.
+const REASONS = ['not_for_occasion', 'not_my_style', 'too_warm', 'too_cold'];
 const OFFSET_STEP = 1, OFFSET_MAX = 4; // °C per "too warm" / "too cold" (migration 009)
 
 /** Heart or hide a look, or undo either (Figma 191:1372). action: favorite | unfavorite | hide | unhide | reason |
  *  seen | wore | unwore.
- *  Hiding stores the look's garment combination, so every look of the same garments leaves the mirror. "reason" (Figma
- *  216:1373) adds why to that hidden combination ({ reason, filter, occasion }); too warm / too cold also move the
- *  person's warmth offset by a degree, which the season filters use. */
+ *  Hiding stores the look's garment combination, so every look of the same garments leaves the mirror, in every tab.
+ *  "reason" (Figma 191:1465) says why: "not_my_style" keeps it hidden everywhere; "not_for_occasion" ({ occasion: tab
+ *  label }) narrows the hide to that tab only (src/lib/hide-scope.js), so the same garments still show in the others.
+ *  Older reasons too warm / too cold move the person's warmth offset by a degree. "unhide" clears every scope. */
 /** Today's date where the app runs its days ('YYYY-MM-DD', Europe/Madrid like startOfToday). */
 export function localDay(date = new Date(), timeZone = 'Europe/Madrid') {
   return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
@@ -155,6 +165,15 @@ export async function markLook(userId, outfitId, action, { reason = null, filter
     const { error } = await sb.from('look_views').update({ last_worn: null, worn_times: Math.max(0, (was.worn_times || 1) - 1) }).eq('user_id', userId).eq('combo', key);
     return error ? { error: error.message } : { ok: true };
   }
+  if (action === 'reason' && reason === 'not_for_occasion') {
+    if (!OCCASION_TABS.some((t) => t.label === occasion)) return { error: 'Unknown occasion' };
+    const context = { filter: typeof filter === 'string' ? filter.slice(0, 20) : null, occasion };
+    const { error: e1 } = await sb.from('hidden_combinations').delete().eq('user_id', userId).in('combo', keys);
+    if (e1) return { error: e1.message };
+    const { error } = await sb.from('hidden_combinations').upsert(keys.map((k) => ({ user_id: userId, combo: scopedKey(occasion, k), outfit_id: look.id, reason, context })),
+      { onConflict: 'user_id,combo' });
+    return error ? { error: error.message } : { ok: true, combo };
+  }
   if (action === 'reason') {
     const context = { filter: typeof filter === 'string' ? filter.slice(0, 20) : null, occasion: typeof occasion === 'string' ? occasion.slice(0, 40) : null };
     const { error } = await sb.from('hidden_combinations').upsert({ user_id: userId, combo, outfit_id: look.id, reason, context }, { onConflict: 'user_id,combo' });
@@ -170,7 +189,8 @@ export async function markLook(userId, outfitId, action, { reason = null, filter
   }
   const { error } = action === 'hide'
     ? await sb.from('hidden_combinations').upsert(keys.map((k) => ({ user_id: userId, combo: k, outfit_id: look.id })), { onConflict: 'user_id,combo', ignoreDuplicates: true })
-    : await sb.from('hidden_combinations').delete().eq('user_id', userId).in('combo', keys);
+    : await sb.from('hidden_combinations').delete().eq('user_id', userId)
+      .in('combo', [...keys, ...OCCASION_TABS.flatMap((t) => keys.map((k) => scopedKey(t.label, k)))]); // every scope
   return error ? { error: error.message } : { ok: true, combo };
 }
 

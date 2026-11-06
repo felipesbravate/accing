@@ -16,7 +16,7 @@ export const MENU_TABS = [{ label: ALL_OUTFITS }, ...OCCASION_TABS];
  *  occasion doesn't fill the start, and a garment combination met twice is kept once. Making / loading if any tab is;
  *  failed only if nothing is there and a tab failed. */
 export function mergeTabs(tabs = {}) {
-  const lists = OCCASION_TABS.map((t) => tabs[t.label]).filter(Boolean);
+  const lists = OCCASION_TABS.map((t) => tabs[t.label] && { ...tabs[t.label], label: t.label }).filter(Boolean);
   const looks = [], seen = new Set();
   for (let i = 0; lists.some((t) => i < (t.looks?.length || 0)); i += 1) {
     for (const t of lists) {
@@ -24,7 +24,7 @@ export function mergeTabs(tabs = {}) {
       if (!l) continue;
       const k = l.combo || l.id;
       if (seen.has(k) || seen.has(l.id)) continue;
-      seen.add(k); seen.add(l.id); looks.push(l);
+      seen.add(k); seen.add(l.id); looks.push(l.tab ? l : { ...l, tab: t.label });
     }
   }
   const making = lists.some((t) => t.making), loading = lists.some((t) => t.loading);
@@ -32,14 +32,8 @@ export function mergeTabs(tabs = {}) {
   return { looks, making, loading, ...(failed ? { failed } : {}) };
 }
 
-/** The tab a job's occasion text belongs to (morning jobs say "a relaxed weekend day" at weekends). */
-export function tabFor(occasion) {
-  const t = String(occasion || '').toLowerCase();
-  if (/office|work/.test(t)) return 'Office day';
-  if (/dinner/.test(t)) return 'Dinner';
-  if (/party/.test(t)) return 'Party';
-  return 'Casual';
-}
+// The tab an occasion text belongs to lives in src/lib (the worker needs it too).
+export { tabFor } from '../lib/hide-scope.js';
 
 /** Today's default tab: office on weekdays, casual at weekends (the worker's morning default, in the same time zone). */
 export function defaultTab(date = new Date(), timeZone = 'Europe/Madrid') {

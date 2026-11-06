@@ -4,6 +4,7 @@
 // made so far for that tab that is comfortable at the typical temperature of that season where the person lives
 // (fitsSeason below).
 import { tabFor } from './occasions.js';
+import { hiddenIn } from '../lib/hide-scope.js';
 import { BARE_LEGS_MIN, CALIBRATION, bareLegs, fitsDays } from './warmth.js';
 import { DEFAULT_CLIMATE, seasonDays } from '../lib/climate.js';
 
@@ -63,7 +64,7 @@ export function pickLooks(rows, { key = 'today', perTab = 5, tabs = [], hidden =
   const byJob = new Map();
   for (const r of rows || []) {
     if (!r.generated_image_path?.endsWith('.webp') || !fitsSeason(r.items, key, climate, offset)) continue;
-    if (lookKeys(r.items, r.id).some((k) => hidden.has(k))) continue; // hidden looks never come back
+    if (hiddenIn(lookKeys(r.items, r.id), tabFor(r.occasion), hidden)) continue; // hidden looks never come back (in their tab, or anywhere)
     if (key === 'favorites' && !favorites.has(r.id)) continue;
     if (!byJob.has(r.job_id)) byJob.set(r.job_id, []);
     byJob.get(r.job_id).push(r);

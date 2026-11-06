@@ -11,6 +11,7 @@ import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { timingSafeEqual } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
+import { tabFor } from '../src/lib/hide-scope.js';
 import { avoidKeys, baseOptions, photoCombo, defaultOccasion, inputsFor, outfitRows, pipelineArgs, weatherText } from './jobs.mjs';
 
 const ROOT = resolve(import.meta.dirname, '..');
@@ -96,7 +97,7 @@ async function runJob(job) {
         db.from('hidden_combinations').select('combo').eq('user_id', job.user_id),
         db.from('outfits').select('items').eq('user_id', job.user_id).eq('status', 'ready').limit(2000),
       ]);
-      const keys = [...new Set(avoidKeys([...(hidden || []).map((h) => h.combo), ...(made || []).map((o) => photoCombo(o.items))], photoIds))];
+      const keys = [...new Set(avoidKeys([...(hidden || []).map((h) => h.combo), ...(made || []).map((o) => photoCombo(o.items))], photoIds, tabFor(job.payload?.occasion)))];
       if (keys.length) { avoidFile = join(tmp, 'avoid.json'); await writeFile(avoidFile, JSON.stringify(keys)); }
     }
     // Garments removed from the Wardrobe (users.removed_garments, migration 012), in this run's photo numbers.

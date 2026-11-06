@@ -5,6 +5,7 @@ import { authClient } from './auth.js';
 import { localDay } from './looks.js';
 import { suggestLooks } from '../mirror/suggest.js';
 import { lookKeys } from '../mirror/seasons.js';
+import { hiddenIn } from '../lib/hide-scope.js';
 import { OCCASION_TABS, tabFor } from '../mirror/occasions.js';
 import { WARDROBE_CATEGORIES, changedAgo, cropFor, garmentKey, wardrobeCounts, wardrobeFrom } from '../lib/wardrobe.js';
 import { cleanEmail, validPassword } from '../lib/login-form.js';
@@ -47,7 +48,7 @@ export async function profile(userId, email) {
   const sb = await authClient();
   const [u, looks, hidden, { count: favorites }] = await Promise.all([me(sb, userId), readyLooks(sb, userId), hiddenKeys(sb, userId),
     sb.from('favorites').select('outfit_id', { count: 'exact', head: true }).eq('user_id', userId)]);
-  const visible = looks.filter((r) => !lookKeys(r.items, r.id).some((k) => hidden.has(k)));
+  const visible = looks.filter((r) => !hiddenIn(lookKeys(r.items, r.id), tabFor(r.occasion), hidden));
   const counts = Object.fromEntries(OCCASION_TABS.map((t) => [t.label, 0]));
   for (const r of visible) { const t = tabFor(r.occasion); if (t in counts) counts[t] += 1; }
   const tiles = wardrobeCounts(wardrobeFrom(looks, u.removed_garments));

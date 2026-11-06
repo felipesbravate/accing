@@ -12,6 +12,7 @@
 import { CALIBRATION, fitsDay } from './warmth.js';
 import { lookKeys } from './seasons.js';
 import { tabFor } from './occasions.js';
+import { hiddenIn } from '../lib/hide-scope.js';
 
 export const SUGGESTIONS = 5;
 export const REST_DAYS = 7;
@@ -37,8 +38,8 @@ export function suggestLooks(rows, { tabs = [], hidden = new Set(), seen = new M
   for (const r of rows || []) {
     if (!r.generated_image_path?.endsWith('.webp')) continue;
     const keys = lookKeys(r.items, r.id);
-    if (keys.some((k) => hidden.has(k))) continue;
     const t = tabFor(r.occasion);
+    if (hiddenIn(keys, t, hidden)) continue; // hidden everywhere, or for this occasion (src/lib/hide-scope.js)
     if (!byTab[t]) continue;
     const combo = `${t}|${keys[keys.length - 1]}`; // one look per garment combination per tab (the newest)
     if (combos.has(combo)) continue;
