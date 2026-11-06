@@ -6,6 +6,7 @@ import { NextResponse } from 'next/server';
 import { currentUser, supabaseConfigured } from '../../../src/server/auth.js';
 import { sameOrigin } from '../../../src/lib/security.js';
 import * as account from '../../../src/server/account.js';
+import { FACE_UPDATE } from '../../../src/lib/features.js';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,7 +24,7 @@ export async function GET(request) {
   if (view === 'profile') return reply(await account.profile(u.id, u.email));
   if (view === 'wardrobe') return reply(await account.wardrobe(u.id, q.get('tile')));
   if (view === 'hidden') return reply({ looks: await account.hiddenLooks(u.id) });
-  if (view === 'faces') return reply(await account.facePhotos(u.id));
+  if (view === 'faces') return reply(FACE_UPDATE ? await account.facePhotos(u.id) : null);
   return reply(null);
 }
 
@@ -37,10 +38,11 @@ export async function POST(request) {
     const bytes = file && typeof file.arrayBuffer === 'function' ? new Uint8Array(await file.arrayBuffer()) : null;
     const kind = String(form?.get('kind') || '');
     if (kind === 'avatar') return reply(await account.saveAvatar(u.id, bytes));
-    if (kind === 'face') return reply(await account.saveNewFace(u.id, String(form.get('angle') || ''), bytes));
+    if (kind === 'face') return reply(FACE_UPDATE ? await account.saveNewFace(u.id, String(form.get('angle') || ''), bytes) : null);
     return reply({ error: 'Unknown upload' });
   }
   const b = await request.json().catch(() => ({}));
+  if (!FACE_UPDATE && String(b.action || '').startsWith('faces-')) return reply(null); // local only for now
   switch (b.action) {
     case 'remove-garment': return reply(await account.removeGarment(u.id, String(b.key || '')));
     case 'password': return reply(await account.changePassword(u.id, u.email, b));

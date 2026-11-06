@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 import { Icon } from '../ui/Icon.jsx';
 import { InfoBox, Modal, TextField, Tile, TopNav } from '../ui/kit.jsx';
 import { PASSWORD_RULE } from '../lib/login-form.js';
+import { FACE_UPDATE } from '../lib/features.js';
 import { fileToJpeg } from '../onboarding/resize.js';
 import '../ui/components.css';
 import './account.css';
@@ -153,7 +154,7 @@ export function Settings({ data }) {
       <section className="acc-group">
         <h2>Your style</h2>
         <div className="acc-entries">
-          <Entry href="/settings/face" icon="camera" title="Update face photos" text="Change the photos used to generate your outfit previews." />
+          {FACE_UPDATE && <Entry href="/settings/face" icon="camera" title="Update face photos" text="Change the photos used to generate your outfit previews." />}
           <Entry href="/settings/hidden" icon="eye-off" title="Hidden looks" text="View and manage looks you’ve hidden." />
         </div>
       </section>
