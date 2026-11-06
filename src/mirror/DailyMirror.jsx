@@ -7,7 +7,9 @@
 // the look's garment combination out of the mirror for good, with Undo; hearted looks come back under the "Favorites"
 // filter; "worn" marks the look as worn today. The same three, plus share, run down the full-screen viewer (253:8207).
 import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { Icon } from '../ui/Icon.jsx';
+import { useSlideIn } from '../ui/slide.js';
 import { Logo } from '../ui/Logo.jsx';
 import { wrap } from './carousel.js';
 import { dayLine, isNight, timeLine, vibeQuestion } from './greeting.js';
@@ -30,7 +32,8 @@ const HIDE_TOAST_MS = 8000; // the hide toast asks why: a little longer to read 
 const TOAST_OUT_MS = 250; // its exit animation (mirror.css mirror-toast-out)
 const SEEN_MS = 1500; // a look at the front of Today's suggestions this long counts as seen
 const MAX_PICK = 20; // photos per pick: each makes ~3 looks; the plan's daily limit applies too (src/lib/plans.js)
-const HIDE_FADE_MS = 350; // a hidden look fades out before it leaves the ring (mirror.css ring-leave)
+const HIDE_FADE_MS = 350; // a hidden look fades out, with the hide button (mirror.css is-leaving)…
+const HIDE_ROLL_MS = 550; // …then the look on its right rolls into its place
 
 /** toast (Thread 140:144): an optional icon, a short message, one action and optional extra actions under it (the hide
  *  reasons, Figma 216:1373); type default | negative | warning. Sits just above hide · heart. */
@@ -100,9 +103,9 @@ function NoFavorites({ onBack }) {
 /** avatar (Figma "avatar": Image, else Default with the initial): opens the Profile (268:11591), where Log out is. */
 function Account({ initial, avatar }) {
   return (
-    <a className="ds-avatar mirror-avatar" href="/profile" aria-label="Profile">
+    <Link className="ds-avatar mirror-avatar" href="/profile" aria-label="Profile">
       {avatar ? <img src={avatar} alt="" /> : <span aria-hidden="true">{initial}</span>}
-    </a>
+    </Link>
   );
 }
 
@@ -151,6 +154,9 @@ export default function DailyMirror({
   const [toast, setToast] = useState(null);
   // After a new outfit photo starts looks for this tab: the making screen (no looks yet) or toast until the first new one arrives.
   const [awaiting, setAwaiting] = useState(null); // { tab, known: Set of look ids already there }
+  const rootRef = useRef(null);
+  useSlideIn(rootRef, { onlyBack: true }); // back from Profile: the mirror comes in from the left
+  const [rolling, setRolling] = useState(false);      // the next look rolling into a hidden one's place
   const [leavingId, setLeavingId] = useState(null);   // the look fading out after "hide"
   const [arrivingId, setArrivingId] = useState(null); // the look that takes its place, fading in
   const pending = useRef(new Set()); // marks still on their way, so a Favorites fetch waits for them
@@ -284,17 +290,31 @@ export default function DailyMirror({
     if (leavingId) return;
     const keys = keysOf(look);
     const same = (o) => keysOf(o).some((k) => keys.includes(k));
-    // The look fades out where it stands, then leaves the ring; the next one takes its place and fades in.
+    // Felipe, 2026-11-06: the look fades out together with the hide button; once both are gone, the look waiting on
+    // the right rolls into the empty place (the hidden one, invisible, turns away to the left), then leaves the list.
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    setLeavingId(look.id);
+    const at = wrap(index, outfits.length);
     const next = outfits.filter((o) => !same(o));
-    setTimeout(() => {
+    const after = outfits.slice(at + 1).concat(outfits.slice(0, at)).find((o) => !same(o)) || null; // the one on its right
+    const done = () => {
       setHidden((h) => new Set([...h, ...keys]));
       setLeavingId(null);
-      const arriving = next.length ? next[wrap(index, next.length)] : null;
-      setArrivingId(arriving?.id || null);
-      setTimeout(() => setArrivingId(null), 400);
-    }, reduce ? 0 : HIDE_FADE_MS);
+      if (!after) return;
+      const i = next.indexOf(after);
+      setIndex(i);
+      // The look that was two places left now steps in on the left, where the hidden one turned away: fade it in.
+      const left = next.length > 2 ? next[wrap(i - 1, next.length)] : null;
+      if (left) { setArrivingId(left.id); setTimeout(() => setArrivingId(null), 400); }
+    };
+    setLeavingId(look.id);
+    if (reduce || !after) setTimeout(done, reduce ? 0 : HIDE_FADE_MS);
+    else {
+      setTimeout(() => {
+        setRolling(true);
+        setIndex(outfits.indexOf(after)); // the ring turns it to the front
+        setTimeout(() => { setRolling(false); done(); }, HIDE_ROLL_MS);
+      }, HIDE_FADE_MS);
+    }
     mark(look.id, 'hide');
     // Why (Figma 216:1373, optional): too warm / too cold tune the person's season filters; not my style is kept for
     // the stylist. One tap swaps in a thank-you (216:1496). The toast stays longer, since it asks something.
@@ -362,7 +382,7 @@ export default function DailyMirror({
 
   const more = live ? Math.max(0, 3 - (data.outfitPhotos || 0)) : 0;
   return (
-    <div className={`mirror${(note || (problem && count > 0) || (!note && count <= 1 && more > 0)) ? ' has-note' : ''}`}>
+    <div ref={rootRef} className={`mirror${(note || (problem && count > 0) || (!note && count <= 1 && more > 0)) ? ' has-note' : ''}`}>
       <header className="mirror-header">
         <Logo className="mirror-logo" />
         <div className="mirror-actions">
@@ -420,7 +440,7 @@ export default function DailyMirror({
           <div className="mirror-carousel">
             {count > 1 && !showMaking && <button type="button" className="ds-round-button mirror-arrow" onClick={() => go(-1)} aria-label="Previous outfit"><Icon name="arrow-left" size={20} /></button>}
             {showMaking ? <MakingLooks />
-              : count ? <OutfitRing key={`${occasion}|${filter}`} outfits={outfits} index={current} onChange={setIndex} onOpen={(i) => setViewing(outfits[i])} leavingId={leavingId} arrivingId={arrivingId} />
+              : count ? <OutfitRing key={`${occasion}|${filter}`} outfits={outfits} index={current} onChange={setIndex} onOpen={(i) => setViewing(outfits[i])} leavingId={leavingId} arrivingId={arrivingId} turnMs={rolling ? HIDE_ROLL_MS : undefined} />
               : favoritesView && !loading && !problem ? <NoFavorites onBack={() => pickSeason(SEASONS[0])} />
               : live && tab?.loading ? <div className="mirror-empty" role="status"><p>Loading…</p></div>
               : live && data.hasBase ? <NoLooks title={today_ && tab.failed ? `Couldn’t make your ${occasion} looks` : today_ ? `No ${occasion} looks yet` : `No ${season} ${occasion} looks yet`}

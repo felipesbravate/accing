@@ -69,3 +69,17 @@ test('ringPose keeps the same spacing with many looks (season filters show up to
   assert.equal(ringPose(1, 12, ring).x, ringPose(1, 5, ring).x);
   assert.equal(ringPose(-1, 12, ring).x, ringPose(-1, 5, ring).x);
 });
+
+import { dragTarget, slotPixels } from '../src/mirror/carousel.js';
+test('slotPixels: the front look follows the finger 1:1', () => {
+  assert.ok(Math.abs(slotPixels(100) - 125.66) < 0.01);
+});
+test('dragTarget: rounds, flicks carry on, short quick swipes still move one, at most 2', () => {
+  const s = 100;
+  assert.equal(dragTarget({ pos: 0.3, from: 0, dx: -30, v: 0, slotPx: s }), 1);       // 30 px swipe: one look
+  assert.equal(dragTarget({ pos: 0.1, from: 0, dx: -10, v: 0, slotPx: s }), 0);       // a nudge: back
+  assert.equal(dragTarget({ pos: 0.6, from: 0, dx: -60, v: 0, slotPx: s }), 1);
+  assert.equal(dragTarget({ pos: 0.2, from: 0, dx: -20, v: -1.2, slotPx: s }), 1);    // quick flick
+  assert.equal(dragTarget({ pos: -0.2, from: 0, dx: 20, v: 0.8, slotPx: s }), -1);    // flick right: previous
+  assert.equal(dragTarget({ pos: 3.4, from: 0, dx: -340, v: -3, slotPx: s }), 2);     // capped
+});

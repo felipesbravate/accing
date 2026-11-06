@@ -6,10 +6,11 @@
 // waiting screen (177:2200, the spinner 220:634) → Welcome to Accing (177:2947) → the mirror. "Skip" on the welcome
 // screen leads to the empty mirror (162:545). The worker starts preparing the base photo as soon as the full-body photo
 // is in, so it runs while they fill steps 3 and 4.
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Icon } from '../ui/Icon.jsx';
 import { Checkbox, InfoBox, Spinner, Tag, TextField } from '../ui/kit.jsx';
+import { replaySlide } from '../ui/slide.js';
 import { FACE_ANGLES, resumeStep } from '../lib/photo-advice.js';
 import { STYLES } from '../lib/styles.js';
 import { useCamera, Viewfinder } from './Camera.jsx';
@@ -142,6 +143,12 @@ export default function Onboarding({ name = '', initial = null }) {
   useEffect(() => { if (!waiting) return undefined; refresh(); const t = setInterval(refresh, POLL_MS); return () => clearInterval(t); }, [waiting, refresh]);
   useEffect(() => () => { if (still) URL.revokeObjectURL(still); }, [still]);
 
+  // Each step slides in from the right; the back arrow brings the step before in from the left (src/ui/slide.js).
+  const dir = useRef(null);
+  useLayoutEffect(() => {
+    if (dir.current) replaySlide(document.querySelector('.ob-screen'), dir.current);
+    dir.current = 'forward';
+  }, [step, angle]);
   const go = (next) => { setProblem(null); setAdvice(null); setStill(null); setBusy(null); setGood(false); setStep(next); };
 
   const nextAngle = () => {
@@ -173,6 +180,7 @@ export default function Onboarding({ name = '', initial = null }) {
   };
 
   const back = () => {
+    if (!(still && (step === 'face' || step === 'body'))) dir.current = 'back'; // a retake stays on the same step
     if (step === 'consent') go('welcome');
     else if (step === 'face') { if (still) retakePhoto(); else if (angle > 0) setAngle(angle - 1); else go('consent'); }
     else if (step === 'body') { if (still) retakePhoto(); else { setAngle(FACE_ANGLES.length - 1); go('face'); } }

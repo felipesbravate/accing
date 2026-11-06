@@ -4,6 +4,8 @@
 // email (287:3642) and Verify (287:3723, with the emailed link), Delete account (287:3811), and Reset password (no frame: the Update password
 // layout without the current password). Face photos live in Faces.jsx.
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { slideBack, useSlideIn } from '../ui/slide.js';
 import { useRouter } from 'next/navigation';
 import { Icon } from '../ui/Icon.jsx';
 import { InfoBox, Modal, TextField, Tile, TopNav } from '../ui/kit.jsx';
@@ -28,9 +30,11 @@ export async function apiUpload(fields, blob) {
 /** A screen with the top-nav (back + title) and a scrolling body. */
 export function Screen({ title, back = '/', right = null, children, footer = null, className = '' }) {
   const router = useRouter();
-  const onBack = () => (window.history.length > 1 ? router.back() : router.push(back));
+  const el = useRef(null);
+  useSlideIn(el);
+  const onBack = () => slideBack(el.current, () => (window.history.length > 1 ? router.back() : router.push(back)));
   return (
-    <div className={('acc-screen ' + className).trim()}>
+    <div ref={el} className={('acc-screen ' + className).trim()}>
       <TopNav title={title} onBack={onBack} right={right} className="acc-nav" />
       <main className="acc-body">{children}</main>
       {footer && <div className="acc-footer">{footer}</div>}
@@ -67,7 +71,7 @@ export function Profile({ data }) {
   };
   const initial = (data.name || data.email || '?').charAt(0).toUpperCase();
   return (
-    <Screen title="Profile" right={<a className="ds-icon-button is-large is-secondary" href="/settings" aria-label="Settings"><Icon name="settings" size={24} /></a>}>
+    <Screen title="Profile" right={<Link className="ds-icon-button is-large is-secondary" href="/settings" aria-label="Settings"><Icon name="settings" size={24} /></Link>}>
       <section className="acc-profile">
         <div className="acc-photo">
           <span className="ds-avatar acc-avatar" aria-busy={busy}>{avatar ? <img src={avatar} alt="" /> : initial}</span>
@@ -141,11 +145,11 @@ export function Wardrobe({ data }) {
 // ── Settings ──
 function Entry({ href, icon, title, text, danger = false }) {
   return (
-    <a className={'acc-entry' + (danger ? ' is-danger' : '')} href={href}>
+    <Link className={'acc-entry' + (danger ? ' is-danger' : '')} href={href}>
       <span className="acc-entry-icon"><Icon name={icon} size={20} strokeWidth={5 / 3} /></span>
       <span className="acc-entry-text"><span className="acc-entry-title">{title}</span>{text && <span className="acc-entry-sub">{text}</span>}</span>
       <Icon name="chevron-right" size={16} className="acc-entry-chevron" />
-    </a>
+    </Link>
   );
 }
 export function Settings({ data }) {

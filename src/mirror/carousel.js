@@ -51,6 +51,29 @@ export function ringPose(offset, length, { radius, backScale, lift, minSlots = 5
   };
 }
 
+/** Ease for landing after a drag: already moving, slows down (no slow start after the finger lets go). */
+export function easeOutCubic(t) {
+  return 1 - Math.pow(1 - t, 3);
+}
+
+/** Pixels of finger movement per look so the front look follows the finger 1:1: the slope of x = sin(2π·offset /
+ *  slots)·radius at the front is radius·2π/slots. */
+export function slotPixels(radius, slots = 5) {
+  return (radius * 2 * Math.PI) / slots;
+}
+
+/** Where a drag lands, in looks: the ring position `pos` when the finger lifts, where it started (`from`), the finger's
+ *  travel `dx` (px) and speed `v` (px/ms, + to the right). A flick goes on to the next look in its direction (never
+ *  further: precise, 2026-11-06); a slow release lands on the nearest look, and a short swipe still moves one. One
+ *  swipe moves at most `max` looks. */
+export function dragTarget({ pos, from, dx, v, minPx = 30, flick = 0.3, max = 2 }) {
+  const start = Math.round(from);
+  let to = Math.round(pos);
+  if (Math.abs(v) > flick) to = v < 0 ? Math.floor(pos) + 1 : Math.ceil(pos) - 1;
+  else if (to === start && Math.abs(dx) >= minPx) to = start + (dx < 0 ? 1 : -1);
+  return Math.max(start - max, Math.min(start + max, to));
+}
+
 /** Ease for one turn of the ring: slow start, slow landing. */
 export function easeInOutCubic(t) {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;

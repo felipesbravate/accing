@@ -2,6 +2,7 @@
 // Thread Design System pieces as React (styles in components.css): top-nav, Modal, text-field, Info-box, tag, label,
 // checkbox, tile, spinner. Each follows its Figma component; see the comments in components.css.
 import { useEffect, useId, useRef, useState } from 'react';
+import Link from 'next/link';
 import { Icon } from './Icon.jsx';
 
 /** top-nav (178:1363): back on the left (a Secondary 48px icon-button), an optional title, an optional right action. */
@@ -108,7 +109,7 @@ export function Checkbox({ checked, onChange, children, ...input }) {
 /** tile (183:1491): icon, label, sub-label. A link when href is given, else a button. */
 export function Tile({ icon, label, sub, href, onClick }) {
   const inner = (<>{icon && <Icon name={icon} size={24} />}<span className="ds-tile-text"><span className="ds-tile-label">{label}</span>{sub && <span className="ds-tile-sub">{sub}</span>}</span></>);
-  return href ? <a className="ds-tile" href={href}>{inner}</a> : <button type="button" className="ds-tile" onClick={onClick}>{inner}</button>;
+  return href ? <Link className="ds-tile" href={href}>{inner}</Link> : <button type="button" className="ds-tile" onClick={onClick}>{inner}</button>;
 }
 
 /** spinner (220:634): the Accing symbol turning. */

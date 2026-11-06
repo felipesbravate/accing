@@ -264,6 +264,17 @@
 @keyframes ds-spin { to { transform: rotate(-360deg); } }
 @media (prefers-reduced-motion: reduce) { .ds-spinner { animation-duration: 9.6s; } }
 
+/* Page slides (src/ui/slide.js): in from the right going forward; after a back arrow, out to the right and the screen
+   before in from the left. */
+html, body { overflow-x: clip; }
+.slide-in-forward { animation: slide-in-forward .3s cubic-bezier(.2, .8, .2, 1) both; }
+.slide-in-back { animation: slide-in-back .3s cubic-bezier(.2, .8, .2, 1) both; }
+.slide-out-back { animation: slide-out-back .2s cubic-bezier(.4, 0, 1, 1) both; pointer-events: none; }
+@keyframes slide-in-forward { from { transform: translateX(100%); } }
+@keyframes slide-in-back { from { transform: translateX(-100%); } }
+@keyframes slide-out-back { to { transform: translateX(100%); } }
+@media (prefers-reduced-motion: reduce) { .slide-in-forward, .slide-in-back, .slide-out-back { animation: none; } }
+
 /* Toggle (vertical, 20×32) */
 .ds-toggle { display: inline-flex; align-items: center; justify-content: flex-end; gap: var(--space-sm); padding: 0; border: 0; background: transparent; }
 .ds-toggle-label { color: var(--text-secondary); font-size: var(--fs-label-small); font-weight: var(--fw-medium); line-height: normal; }

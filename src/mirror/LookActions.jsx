@@ -6,7 +6,7 @@ import { Icon } from '../ui/Icon.jsx';
 export function LookActions({ onHide, hiding = false, favorite, onFavorite, worn, onWear, children, className = '' }) {
   return (
     <div className={('mirror-look-buttons ' + className).trim()}>
-      <button type="button" className="ds-icon-button is-large is-tertiary mirror-look-action" onClick={onHide} disabled={hiding}
+      <button type="button" className={'ds-icon-button is-large is-tertiary mirror-look-action is-hide' + (hiding ? ' is-hiding' : '')} onClick={onHide} disabled={hiding}
         aria-label="Hide this look" title="Hide this look"><Icon name="eye-off" size={24} strokeWidth={5 / 3} /></button>
       <button type="button" className="ds-icon-button is-large is-tertiary mirror-look-action" onClick={onFavorite}
         aria-pressed={favorite} aria-label="Favorite" title={favorite ? 'Remove from Favorites' : 'Save to Favorites'}>

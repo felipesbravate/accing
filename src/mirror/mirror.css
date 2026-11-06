@@ -73,11 +73,14 @@
 @keyframes mirror-toast-in { from { opacity: 0; transform: translate(-50%, calc(100% + var(--space-sm))); } }
 .mirror-toast.is-leaving { animation: mirror-toast-out .25s ease-in both; }
 @keyframes mirror-toast-out { to { opacity: 0; transform: translate(-50%, calc(100% + var(--space-sm))); } }
-/* Hide: the look fades out (and settles a little) before leaving the ring; the one taking its place fades in. */
-.ring-item.is-leaving img, .ring-item.is-leaving .ring-veil { transition: opacity .35s ease-out, transform .35s ease-out; opacity: 0; transform: scale(.97); transform-origin: 50% 100%; }
+/* Hide (2026-11-06): the look fades out with the hide button; then the one on its right rolls into the empty place
+   (DailyMirror.jsx hide) and the look further left fades in on the left. The button comes back with the new look. */
+.ring-item.is-leaving img, .ring-item.is-leaving .ring-veil { transition: opacity .35s ease-out; opacity: 0; }
+.mirror-look-action.is-hide { transition: opacity .35s ease-out; }
+.mirror-look-buttons .mirror-look-action.is-hiding { opacity: 0; }
 .ring-item.is-arriving img { animation: ring-arrive .4s ease-out both; }
 @keyframes ring-arrive { from { opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { .mirror-toast, .mirror-toast.is-leaving, .ring-item.is-arriving img { animation: none; } .ring-item.is-leaving img { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .mirror-toast, .mirror-toast.is-leaving, .ring-item.is-arriving img { animation: none; } .ring-item.is-leaving img, .mirror-look-action.is-hide { transition: none; } }
 
 /* A note line under the looks (outfit added, add more outfits) takes its height from the looks, not the page. */
 .mirror.has-note .ring { --look-h: clamp(300px, 100dvh - 323px, 600px); }
@@ -172,7 +175,8 @@
   .mirror-body { flex: 1; justify-content: center; margin-top: 0; padding: 0; overflow: hidden; }
   .mirror-carousel { position: relative; width: 100%; height: auto; overflow: hidden; }
   .mirror-carousel::before, .mirror-carousel::after { content: ''; position: absolute; top: 0; bottom: 0; z-index: 1; width: 78px; pointer-events: none; }
-  .ring { --look-h: clamp(180px, 100svh - env(safe-area-inset-top) - 345px, 440px); --ring-radius: 0.4387; --ring-back-scale: 0.4263; --ring-lift: 0.2868; flex: 1 1 100%; }
+  .ring { --look-h: clamp(180px, 100svh - env(safe-area-inset-top) - 345px, 440px); --ring-radius: 0.4387; --ring-back-scale: 0.4263; --ring-lift: 0.2868; flex: 1 1 100%;
+    touch-action: none; } /* the phone page doesn't scroll: every touch on the ring is the ring's (a diagonal swipe used to become a scroll and cancel) */
   .mirror-carousel::before { left: 0; background: linear-gradient(to left, transparent, color-mix(in srgb, var(--bg-primary) 80%, transparent)); }
   .mirror-carousel::after { right: 0; background: linear-gradient(to right, transparent, color-mix(in srgb, var(--bg-primary) 80%, transparent)); }
   .mirror-arrow { display: none; }
