@@ -1,6 +1,6 @@
 'use client';
 // Thread Design System pieces as React (styles in components.css): top-nav, Modal, text-field, Info-box, tag, label,
-// checkbox, tile, spinner, mobile-menu, pager. Each follows its Figma component; see the comments in components.css.
+// checkbox, tile, spinner, mobile-menu, pager, toast. Each follows its Figma component; see the comments in components.css.
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Icon } from './Icon.jsx';
@@ -190,6 +190,33 @@ export function Pager({ count, current, onPick, label = 'Choose a page', itemLab
       {pagerDots(count, current, fit).map((d) => (
         <button key={d.page} type="button" className={'ds-pager-dot' + (d.faded ? ' is-faded' : '')} aria-current={d.current} aria-label={itemLabel(d.page)} onClick={() => onPick(d.page)} />
       ))}
+    </div>
+  );
+}
+
+const ONE_LINE = 40; // characters of a 14px message that fit beside an action in a 358px toast
+const TOAST_ICON = { default: 'check', negative: 'alert-triangle', warning: 'alert-circle' };
+/** toast (Thread 140:144): { type: default | negative | warning, message, icon (null: none; default by type), action +
+ *  onAction (Negative and Warning: on the right), extra: [{ label, onClick }] (Default: a row of buttons under it). */
+export function ToastView({ toast }) {
+  const type = toast.type || 'default';
+  const icon = toast.icon === null ? null : toast.icon || TOAST_ICON[type];
+  const extra = toast.extra?.length ? toast.extra : null;
+  return (
+    <div className={'ds-toast' + (type !== 'default' ? ` is-${type}` : '')} role={type === 'negative' ? 'alert' : 'status'}>
+      {icon && <span className="ds-toast-lead"><Icon name={icon} size={16} className="ds-toast-icon" /></span>}
+      <div className="ds-toast-content">
+        {/* A message longer than one line takes the full width and its action goes under it (Figma 429:5170). */}
+        <div className={'ds-toast-main' + (String(toast.message || '').length > ONE_LINE ? ' is-stacked' : '')}>
+          <span className="ds-toast-message">{toast.message}</span>
+          {toast.action && <button type="button" className="ds-toast-action" onClick={toast.onAction}>{toast.action}</button>}
+        </div>
+        {extra && (
+          <div className="ds-toast-extra" role="group" aria-label={toast.extraLabel || 'More actions'}>
+            {extra.map((x) => <button key={x.label} type="button" className="ds-toast-action" onClick={x.onClick}>{x.label}</button>)}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

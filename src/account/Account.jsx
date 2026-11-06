@@ -10,7 +10,7 @@ import { useRouter } from 'next/navigation';
 import { Icon } from '../ui/Icon.jsx';
 import { Logo } from '../ui/Logo.jsx';
 import { PhotoViewer } from '../ui/PhotoViewer.jsx';
-import { InfoBox, Modal, TextField, Tile, TopNav } from '../ui/kit.jsx';
+import { InfoBox, Modal, TextField, Tile, ToastView, TopNav } from '../ui/kit.jsx';
 import { PASSWORD_RULE } from '../lib/login-form.js';
 import { FACE_UPDATE } from '../lib/features.js';
 import { fileToJpeg } from '../onboarding/resize.js';
@@ -236,12 +236,7 @@ export function HiddenLooks({ looks: initial }) {
         </Modal>
       {toast && (
         <div className="acc-toast">
-          <div className="ds-toast" role="status">
-            <div className="ds-toast-content"><div className="ds-toast-main">
-              <span className="ds-toast-message">Look restored to your gallery.</span>
-              <button type="button" className="ds-toast-action" onClick={undo}>Undo</button>
-            </div></div>
-          </div>
+          <ToastView toast={{ message: 'Look restored to your gallery.', extra: [{ label: 'Undo', onClick: undo }] }} />
         </div>
       )}
     </Screen>

@@ -69,6 +69,7 @@
   --button-danger-hover: var(--fail-danger-light);
   --button-danger-press: var(--fail-danger-dark);
   --text-fail-danger: var(--fail-danger);
+  --bg-fail-danger-light: #fcf0f5; /* Thread color/bg/fail-danger-light (the Negative toast), 2026-11-06 */
   --border-danger: var(--fail-danger);
 
   --opacity-disabled: 0.32; /* buttons and the smaller icon-buttons */

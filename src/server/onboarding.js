@@ -4,7 +4,7 @@
 import { authClient } from './auth.js';
 import { askForLooks, wakeWorker } from './looks.js';
 import { planFeatures } from '../lib/plans.js';
-import { checkPhoto } from './photo-check.js';
+import { checkPhoto, outfitProblem } from './photo-check.js';
 import { PREP_FAILED, bodyNote } from '../lib/photo-advice.js';
 import { STYLES } from '../lib/styles.js';
 import { defaultTab, OCCASION_TABS } from '../mirror/occasions.js';
@@ -56,7 +56,7 @@ export async function savePhoto(userId, kind, bytes, { tab = null } = {}) {
   const path = ['front', 'left', 'right'].includes(kind) ? `${userId}/faces/${kind}.jpg` : `${userId}/photos/${kind}-${stamp}.jpg`;
   const [up, advice] = await Promise.all([
     sb.storage.from('wardrobe').upload(path, bytes, { contentType: 'image/jpeg', upsert: true, cacheControl: '0' }),
-    checkPhoto(kind, bytes),
+    kind === 'outfit' ? outfitProblem(bytes) : checkPhoto(kind, bytes),
   ]);
   if (up.error) return { error: `Could not save the photo: ${up.error.message}` };
 
@@ -66,6 +66,11 @@ export async function savePhoto(userId, kind, bytes, { tab = null } = {}) {
     return { ok: true, advice };
   }
   if (kind === 'outfit') {
+    // More than one person: left out of the wardrobe and deleted (the mirror's warning toast says so, Figma 429:5170).
+    if (advice === 'more_than_one_person') {
+      await sb.storage.from('wardrobe').remove([path]).catch(() => {});
+      return { ok: true, leftOut: advice };
+    }
     const { error } = await sb.from('wardrobe_photos').insert({ user_id: userId, path });
     if (error) return { error: error.message };
     // A new outfit photo makes 3 looks wearing it right away, for the open tab (Felipe, 2026-11-01); after that the
@@ -74,9 +79,9 @@ export async function savePhoto(userId, kind, bytes, { tab = null } = {}) {
     const { data: profile } = await sb.from('users').select('*').eq('id', userId).single();
     if (planFeatures(profile).instantNewOutfit && tab) {
       const r = await askForLooks(userId, tab, { includePath: path, looks: NEW_OUTFIT_LOOKS });
-      return { ok: true, advice, queued: Boolean(r.queued), queueError: r.error || null };
+      return { ok: true, queued: Boolean(r.queued), queueError: r.error || null };
     }
-    return { ok: true, advice };
+    return { ok: true };
   }
   // body: replaces the previous onboarding full-body photo (and its prepared versions) and prepares the new one.
   const { data: u } = await sb.from('users').select('base_source_path, base_path').eq('id', userId).single();

@@ -59,3 +59,16 @@ export async function checkPhoto(kind, bytes) {
     return null;
   }
 }
+
+/** An outfit photo (from the mirror) is used for its clothes only, so the one thing that matters is that it shows one
+ *  person: with two, the reader could put someone else's clothes in the wardrobe (Felipe, 2026-11-06). Returns
+ *  'more_than_one_person' (leave it out) or null (use it). A covered face, a cut-off foot or sitting don't change the
+ *  looks, so they aren't mentioned. If the check fails the photo is used. */
+export async function outfitProblem(bytes) {
+  try {
+    const r = await ask(bytes, BODY_PROMPT, BODY_SCHEMA);
+    return r?.one_person === false ? 'more_than_one_person' : null;
+  } catch {
+    return null;
+  }
+}

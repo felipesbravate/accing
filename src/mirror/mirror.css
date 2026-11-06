@@ -86,9 +86,8 @@
 .ds-icon-button.mirror-look-action:disabled { opacity: var(--opacity-disabled-large); cursor: default; }
 /* The toast sits right on top of the hide / heart row (Figma 191:1462, 210:6295: its bottom on the row's top). */
 .mirror-toast { position: absolute; z-index: 5; left: 50%; bottom: 100%; transform: translateX(-50%);
-  width: max-content; max-width: calc(100vw - 2 * var(--space-md)); white-space: normal; /* long messages wrap on a phone */
+  width: min(358px, calc(100vw - 2 * var(--space-md))); white-space: normal; /* 358 wide, 16 from the edges (Thread 140:144) */
   animation: mirror-toast-in .35s cubic-bezier(.2, .8, .2, 1) both; }
-.mirror-toast.is-wide { width: min(342px, calc(100vw - 2 * var(--space-lg))); } /* with extra actions (Figma 216:1373) */
 /* The toast rises out of the top of the hide · pager · heart row and fades in; it sinks back and fades on its way out. */
 @keyframes mirror-toast-in { from { opacity: 0; transform: translate(-50%, calc(100% + var(--space-sm))); } }
 .mirror-toast.is-leaving { animation: mirror-toast-out .25s ease-in both; }
