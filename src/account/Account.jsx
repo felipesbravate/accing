@@ -126,7 +126,7 @@ export function Wardrobe({ data }) {
         <ul className="acc-grid">
           {items.map((g) => (
             <li key={g.key} className="acc-card">
-              <div className="acc-card-img">{g.image ? <img src={g.image} alt={g.description} style={{ objectPosition: g.position }} loading="lazy" /> : <Icon name={c.icon} size={32} />}</div>
+              <div className={'acc-card-img' + (g.isLook ? ' is-look' : '')}>{g.image ? <img src={g.image} alt={g.description} style={{ objectPosition: g.position, '--origin': g.position }} loading="lazy" /> : <Icon name={c.icon} size={32} />}</div>
               <button type="button" className="ds-button is-tiny is-secondary acc-card-action" onClick={() => setAsking(g)}>Remove</button>
             </li>
           ))}

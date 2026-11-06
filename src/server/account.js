@@ -68,10 +68,17 @@ export async function wardrobe(userId, tile) {
     sb.from('wardrobe_photos').select('id, path').eq('user_id', userId)]);
   const pathOf = new Map((photos || []).map((p) => [p.id, p.path]));
   const items = wardrobeFrom(looks, u.removed_garments).filter((g) => g.tile === tile);
-  const urls = await signed(sb, 'wardrobe', items.map((g) => pathOf.get(g.photo_id)));
+  // The garment's own outfit photo when known; else (looks from before photo ids, or a photo since deleted) a look
+  // made with it, on white.
+  const [photoUrls, lookUrls] = await Promise.all([signed(sb, 'wardrobe', items.map((g) => pathOf.get(g.photo_id))),
+    signed(sb, 'outfits', items.filter((g) => !pathOf.get(g.photo_id)).map((g) => g.lookPath))]);
   return {
     category: cat,
-    items: items.map((g) => ({ key: g.key, description: g.description, looks: g.looks.length, image: urls.get(pathOf.get(g.photo_id)) || null, position: cropFor(g.category) })),
+    items: items.map((g) => {
+      const photo = photoUrls.get(pathOf.get(g.photo_id));
+      return { key: g.key, description: g.description, looks: g.looks.length, image: photo || lookUrls.get(g.lookPath) || null,
+        isLook: !photo, position: cropFor(g.category) };
+    }),
   };
 }
 
@@ -82,7 +89,8 @@ export async function removeGarment(userId, key) {
   const [u, looks] = await Promise.all([me(sb, userId), readyLooks(sb, userId)]);
   const g = wardrobeFrom(looks, u.removed_garments).find((x) => x.key === key);
   if (!g) return { error: 'That item is already gone' };
-  const removed = [...(Array.isArray(u.removed_garments) ? u.removed_garments : []), { photo_id: g.photo_id, category: g.category, description: g.description }];
+  // Every reading of it (its wordings and photos), so none of them comes back.
+  const removed = [...(Array.isArray(u.removed_garments) ? u.removed_garments : []), ...g.readings];
   const { error } = await sb.from('users').update({ removed_garments: removed }).eq('id', userId);
   if (error) return { error: /removed_garments/.test(error.message) ? 'Run migration 012 first' : error.message };
   const gone = looks.filter((l) => g.looks.includes(l.id));

@@ -45,14 +45,40 @@ export function wardrobeCategory(x) {
 }
 
 const norm = (d) => String(d || '').trim().toLowerCase().replace(/\s+/g, ' ');
-/** A garment's key: its photo and kind and wording ("<photo_id>|top|black graphic t-shirt"), or without a photo id
- *  (looks from before 2026-10-31) its kind and wording. */
+/** One reading of a garment: its photo and kind and wording ("<photo_id>|top|black graphic t-shirt"), or without a
+ *  photo id (looks from before 2026-10-31) its kind and wording. */
 export function garmentKey(x) {
   return `${x?.photo_id || '-'}|${x?.category || ''}|${norm(x?.description)}`;
 }
 
-/** Looks ({ id, items, created_at }) → garments: [{ key, category, description, photo_id, tile, looks: [outfit ids] }],
- *  newest first, removed ones ([{ photo_id, category, description }]) left out. */
+// Same garment, worded differently? (The reader words a garment a little differently in each look, and the same
+// outfit is often photographed twice.) Same idea as scripts/image-test-lib.mjs sameGarment: compare meaning, not text.
+// Hues only: "light" and "dark" are shades (a "light grey" tee and a "plain grey" one are the same tee); a light and a
+// dark version of a hue are not.
+const HUES = new Set(['black', 'white', 'grey', 'blue', 'navy', 'red', 'green', 'mint', 'olive', 'khaki', 'beige', 'brown', 'tan', 'camel',
+  'cream', 'ivory', 'yellow', 'orange', 'pink', 'purple', 'burgundy', 'charcoal', 'maroon', 'peach', 'lilac', 'lavender', 'teal', 'denim']);
+const FILLER = new Set(['a', 'an', 'the', 'with', 'and', 'of', 'in', 'style', 'plain', 'classic', 'basic', 'regular', 'fit', 'colour', 'color',
+  'short', 'sleeved', 'sleeve', 'long', 'cotton', 'casual', 'pair', 'mens', 'men', 'womens', 'women']);
+const words = (d) => new Set(String(d || '').toLowerCase().replace(/t-shirt|tee\b/g, 'tshirt').replace(/gray/g, 'grey')
+  .replace(/[^a-z0-9]+/g, ' ').trim().split(' ').filter((w) => w && !FILLER.has(w)));
+const shade = (w) => (w.has('light') && !w.has('dark') ? 'light' : w.has('dark') && !w.has('light') ? 'dark' : '');
+/** 0–1: words in common; 0 when both name hues and they differ, or one is light and the other dark. */
+export function garmentSimilarity(a, b) {
+  const wa = words(a), wb = words(b);
+  const ca = [...wa].filter((w) => HUES.has(w)).sort().join(), cb = [...wb].filter((w) => HUES.has(w)).sort().join();
+  if (ca && cb && ca !== cb) return 0;
+  const sa = shade(wa), sb = shade(wb);
+  if (sa && sb && sa !== sb) return 0;
+  const shared = [...wa].filter((w) => wb.has(w)).length;
+  return shared / Math.max(1, new Set([...wa, ...wb]).size);
+}
+const SAME = 0.6; // "black t-shirt" vs "black t-shirt with graphic print" (0.5) stay two garments
+
+/** Looks ({ id, items, created_at, image_path }) → garments, one per real garment: [{ key, keys, category,
+ *  description, photo_id, tile, looks: [outfit ids], lookPath }], most-used first. Readings are the same garment when
+ *  they are in the same tile and either come from the same photo (and never appear together in one look) or are
+ *  worded alike (60% of their words, same colours). Removed readings ([{ photo_id, category, description }]) are left
+ *  out. `lookPath`: a look made with it, for a picture when no photo is known. */
 export function wardrobeFrom(looks, removed = []) {
   const gone = new Set((removed || []).map(garmentKey));
   const byKey = new Map();
@@ -62,12 +88,36 @@ export function wardrobeFrom(looks, removed = []) {
       if (!tile) continue;
       const key = garmentKey(x);
       if (gone.has(key)) continue;
-      const g = byKey.get(key) || { key, category: x.category, description: x.description, photo_id: x.photo_id || null, tile, looks: [] };
+      const g = byKey.get(key) || { key, category: x.category, description: x.description, photo_id: x.photo_id || null, tile, looks: [], lookPath: null };
       g.looks.push(l.id);
+      if (!g.lookPath && l.generated_image_path) g.lookPath = l.generated_image_path;
       byKey.set(key, g);
     }
   }
-  return [...byKey.values()];
+  const raw = [...byKey.values()];
+  // Union-find over the readings.
+  const parent = raw.map((_, i) => i);
+  const find = (i) => (parent[i] === i ? i : (parent[i] = find(parent[i])));
+  const together = (a, b) => a.looks.some((id) => b.looks.includes(id));
+  for (let i = 0; i < raw.length; i += 1) {
+    for (let j = i + 1; j < raw.length; j += 1) {
+      const a = raw[i], b = raw[j];
+      if (a.tile !== b.tile || together(a, b)) continue;
+      const samePhoto = a.photo_id && a.photo_id === b.photo_id;
+      if (samePhoto || garmentSimilarity(a.description, b.description) >= SAME) parent[find(i)] = find(j);
+    }
+  }
+  const groups = new Map();
+  raw.forEach((g, i) => { const r = find(i); groups.set(r, [...(groups.get(r) || []), g]); });
+  return [...groups.values()].map((members) => {
+    members.sort((a, b) => b.looks.length - a.looks.length);
+    const top = members[0];
+    const withPhoto = members.find((m) => m.photo_id) || null;
+    const keys = members.map((m) => m.key).sort();
+    return { key: keys[0], keys, category: top.category, description: top.description, tile: top.tile, photo_id: withPhoto?.photo_id || null,
+      looks: [...new Set(members.flatMap((m) => m.looks))], lookPath: members.find((m) => m.lookPath)?.lookPath || null,
+      readings: members.map((m) => ({ photo_id: m.photo_id, category: m.category, description: m.description })) };
+  }).sort((a, b) => b.looks.length - a.looks.length);
 }
 
 /** { [tile key]: count } for the Profile tiles. */

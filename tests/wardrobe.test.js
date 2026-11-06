@@ -38,3 +38,32 @@ test('style identities: 9 tags from the doc, described for the stylist', () => {
   assert.match(describeStyles(['Classic & Timeless', 'nope']), /^Classic & Timeless \(clean silhouettes/);
   assert.equal(describeStyles([]), '');
 });
+
+test('wardrobeFrom groups one garment read many ways (Felipe, 2026-11-06: "a lot of repetition")', () => {
+  const looks = [
+    { id: 'a', generated_image_path: 'u/a.webp', items: [{ photo_id: 'p1', category: 'bottom', description: 'black athletic shorts' }, { photo_id: 'p1', category: 'top', description: 'grey crew neck t-shirt' }] },
+    { id: 'b', generated_image_path: 'u/b.webp', items: [{ photo_id: 'p1', category: 'bottom', description: 'black running shorts with drawstring' }] }, // same photo, other words
+    { id: 'c', generated_image_path: 'u/c.webp', items: [{ photo_id: 'p2', category: 'top', description: 'grey short-sleeved crew neck t-shirt' }] }, // same tee, another photo
+    { id: 'd', generated_image_path: 'u/d.webp', items: [{ category: 'shoes', description: 'white leather sneakers' }] },                          // old look: no photo id
+    { id: 'e', generated_image_path: 'u/e.webp', items: [{ photo_id: 'p3', category: 'shoes', description: 'white leather low-top sneakers' }] },
+    { id: 'f', generated_image_path: 'u/f.webp', items: [{ photo_id: 'p3', category: 'top', description: 'black t-shirt' }, { photo_id: 'p3', category: 'top', description: 'white long-sleeve shirt' }] },
+  ];
+  const g = wardrobeFrom(looks);
+  const shorts = g.filter((x) => x.tile === 'shorts');
+  assert.equal(shorts.length, 1);
+  assert.deepEqual(shorts[0].looks.sort(), ['a', 'b']);
+  assert.equal(g.filter((x) => x.tile === 't-shirts' && /grey/.test(x.description)).length, 1);
+  const sneakers = g.filter((x) => x.tile === 'sneakers');
+  assert.equal(sneakers.length, 1);
+  assert.equal(sneakers[0].photo_id, 'p3'); // the old reading gets the photo of its twin
+  assert.equal(sneakers[0].readings.length, 2);
+  // two tops worn together in one look stay two garments, even from one photo
+  assert.ok(g.some((x) => x.description === 'black t-shirt') && g.some((x) => x.description === 'white long-sleeve shirt'));
+});
+test('garmentSimilarity: shades are not hues, but light ≠ dark', async () => {
+  const { garmentSimilarity } = await import('../src/lib/wardrobe.js');
+  assert.ok(garmentSimilarity('light grey short-sleeved crew neck cotton t-shirt', 'plain grey crew neck short-sleeved cotton t-shirt') >= 0.6);
+  assert.equal(garmentSimilarity('light blue denim jeans', 'dark blue denim jeans'), 0);
+  assert.equal(garmentSimilarity('light green and dark blue color-blocked zip-up windbreaker', 'light green and dark blue color-blocked zip-up windbreaker'), 1);
+  assert.equal(garmentSimilarity('black hoodie', 'red hoodie'), 0);
+});

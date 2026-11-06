@@ -51,6 +51,9 @@
   box-shadow: inset 0 0 0 1px var(--border-default); }
 .acc-card-img { display: flex; align-items: center; justify-content: center; aspect-ratio: 147 / 140; overflow: hidden; border-radius: var(--radius-md); background: var(--bg-info); color: var(--icon-secondary); }
 .acc-card-img img { width: 100%; height: 100%; object-fit: cover; }
+/* A look on white instead of the outfit photo: zoomed onto the garment's part of the body. */
+.acc-card-img.is-look { background: var(--bg-primary); }
+.acc-card-img.is-look img { object-fit: cover; transform: scale(1.6); transform-origin: var(--origin, center); }
 .acc-card.is-look { padding: 0 var(--space-md) var(--space-sm); }
 .acc-card.is-look .acc-card-img { aspect-ratio: 112 / 168; background: transparent; border-radius: 0; }
 .acc-card.is-look .acc-card-img img { object-fit: contain; }
