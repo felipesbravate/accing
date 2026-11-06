@@ -15,6 +15,10 @@ const THREAD = {
  "winter-coat": "<path d=\"M12 6.71302V21.0005M7.5 14.213H16.5M7.5 5.21302C7.5 1.21252 16.5 1.21252 16.5 5.21302L18.75 5.96302L21.75 17.213L18 17.963L16.5 11.213V21.0005H7.5V11.213L6 17.963L2.25 17.213L5.25 5.96302L7.5 5.21302Z\"/>",
  "sneakers": "<path d=\"M9.45 11.9999L10.95 10.4999M12 13.9499L13.5 12.4499M2.25 9.74989L4.2 10.7999C5.2 11.3999 6.88882 11.4999 7.48882 10.4999C7.48882 10.4999 8.4 8.39989 9 8.24989C9.6 8.09989 14.25 12.7499 14.25 12.7499C15.5906 13.7075 17.6218 13.7492 19.2 14.0999C20.9 14.4999 21.75 15.5499 21.75 17.2499V19.4999H2.25V9.74989Z\"/><path d=\"M2.25 16.8H21.75\"/>",
  "dress-shoes": "<path d=\"M12 12.75L9 9.75L7.95 10.5C5.95 11.8 4.05 11.8 2.25 10.5V19.5H7.5V17.25L9.75 19.2H21.75C21.75 15.3258 19.8 14.4 16.5 13.95C14.5183 13.6798 13 13.55 12 12.75ZM12 12.75L10.8 15\"/>",
+ // The medal of "worn today" (Thread outfit-actions 246:498, from Felipe's award_filled.svg, 2026-11-06): Feather's award
+ // with the ribbon drawn first and the circle over it, so when filled the circle covers the ribbon's top.
+ // Its glow is the file's own filter (a #FFBB00 shadow, stdDeviation 12, on each shape), switched on by CSS when worn.
+ "award": "<defs><filter id=\"award-glow\" filterUnits=\"userSpaceOnUse\" x=\"-30\" y=\"-30\" width=\"84\" height=\"84\" color-interpolation-filters=\"sRGB\"><feGaussianBlur in=\"SourceAlpha\" stdDeviation=\"12\"/><feComposite in2=\"SourceAlpha\" operator=\"out\"/><feColorMatrix type=\"matrix\" values=\"0 0 0 0 1 0 0 0 0 0.733333 0 0 0 0 0 0 0 0 1 0\" result=\"glow\"/><feBlend mode=\"normal\" in=\"SourceGraphic\" in2=\"glow\"/></filter></defs><path d=\"M8.21 13.89L7 23L12 20L17 23L15.79 13.88\"/><path d=\"M12 15C15.866 15 19 11.866 19 8C19 4.134 15.866 1 12 1C8.134 1 5 4.134 5 8C5 11.866 8.134 15 12 15Z\"/>",
  "high-heels": "<path d=\"M2.25 10.5V4.5C5.25 9 7.5 12 11.25 12L14.25 9L22.95 19.2H15.75C10.3686 19.2 11.25 18 2.25 10.5ZM2.25 10.5V19.5\"/>"
 };
 
