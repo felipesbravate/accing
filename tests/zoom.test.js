@@ -23,3 +23,10 @@ test('double tap zooms in on the tapped point and back out', () => {
   assert.deepEqual([v.x, v.y], [20 - 20 * 2.5, 10 - 10 * 2.5]);
   assert.deepEqual(toggleZoom(v, { x: 0, y: 0 }), { s: 1, x: 0, y: 0 });
 });
+
+test('the wardrobe viewer opens on the garment\'s part of the photo', async () => {
+  const { focusOf } = await import('../src/mirror/zoom.js');
+  assert.equal(focusOf('center 72%'), 0.72);
+  assert.equal(focusOf('center 100%'), 1);
+  assert.equal(focusOf('center'), null);
+});

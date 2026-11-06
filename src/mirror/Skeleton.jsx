@@ -1,5 +1,5 @@
 // Skeletons (2026-11-06): what shows while looks load, shaped like what will be there, so the screen doesn't jump.
-// RingSkeleton: three standing silhouettes in place of the ring (a filter's looks loading). MirrorSkeleton: the whole
+// RingSkeleton: three vertical blocks in place of the ring (a filter's looks loading). MirrorSkeleton: the whole
 // mirror (header, date, menu, ring, buttons) while the app's first data arrives (app/(home)/loading.jsx).
 // No hooks: it renders on the server. Not class "mirror": the splash waits for the real mirror (Splash.jsx READY).
 import { Logo } from '../ui/Logo.jsx';

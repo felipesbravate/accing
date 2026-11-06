@@ -28,3 +28,9 @@ export function toggleZoom(v, at) {
   const px = (at.x - v.x) / v.s, py = (at.y - v.y) / v.s;
   return { s: DOUBLE_TAP_SCALE, x: at.x - px * DOUBLE_TAP_SCALE, y: at.y - py * DOUBLE_TAP_SCALE };
 }
+
+/** "center 72%" → 0.72 (how far down the photo the garment is), or null. */
+export function focusOf(position) {
+  const m = /(\d+(?:\.\d+)?)%\s*$/.exec(String(position || ''));
+  return m ? Math.min(1, Math.max(0, +m[1] / 100)) : null;
+}

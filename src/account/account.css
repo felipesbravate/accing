@@ -37,10 +37,10 @@
   background: var(--lavanda-250); font-size: var(--fs-label-large); font-weight: var(--fw-medium); }
 .acc-stat-label { display: inline-flex; align-items: center; gap: 2px; color: var(--text-secondary); font-size: var(--fs-label-small); font-weight: var(--fw-medium); white-space: nowrap; }
 .acc-stat-heart { color: var(--icon-accent); fill: var(--bg-accent-light); }
-/* "Wardrobe" as the one tab of the mobile-menu (Outfits isn't designed yet). */
-.acc-section-tab { position: relative; margin: 0 calc(-1 * var(--space-lg)); padding: 0 var(--space-lg) var(--space-sm); border-bottom: 1px solid var(--border-secondary);
-  font-size: var(--fs-label-large); font-weight: var(--fw-medium); text-align: center; }
-.acc-section-tab::after { content: ''; position: absolute; left: 0; bottom: -1px; width: 50%; height: 2px; background: var(--icon-primary); }
+/* "Wardrobe" (268:11591, 2026-11-06): a section title, 18 medium text/primary, centred over a full-width 1px
+   border/secondary line, 11px above it; no tab bar now that it is the only section. */
+.acc-screen .acc-section-tab { margin: 0 calc(-1 * var(--space-lg)); padding: 0 var(--space-lg) 11px; border-bottom: 1px solid var(--border-secondary);
+  color: var(--text-primary); font-size: var(--fs-h3); font-weight: var(--fw-medium); line-height: 24px; text-align: center; }
 .acc-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-sm); }
 .acc-logout .ds-button { width: 100%; }
 
@@ -54,6 +54,8 @@
   box-shadow: inset 0 0 0 1px var(--border-default); }
 .acc-card-img { display: flex; align-items: center; justify-content: center; aspect-ratio: 147 / 140; overflow: hidden; border-radius: var(--radius-md); background: var(--bg-info); color: var(--icon-secondary); }
 .acc-card-img img { width: 100%; height: 100%; object-fit: cover; }
+.acc-card-img.is-button { width: 100%; padding: 0; border: 0; font: inherit; cursor: zoom-in; }
+.acc-card-img.is-button:focus-visible { outline: 2px solid var(--border-accent); outline-offset: 2px; }
 /* A look on white instead of the outfit photo: zoomed onto the garment's part of the body. */
 .acc-card-img.is-look { background: var(--bg-primary); }
 .acc-card-img.is-look img { object-fit: cover; transform: scale(1.6); transform-origin: var(--origin, center); }

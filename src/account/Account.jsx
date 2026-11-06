@@ -9,6 +9,7 @@ import { slideBack, useSlideIn } from '../ui/slide.js';
 import { useRouter } from 'next/navigation';
 import { Icon } from '../ui/Icon.jsx';
 import { Logo } from '../ui/Logo.jsx';
+import { PhotoViewer } from '../ui/PhotoViewer.jsx';
 import { InfoBox, Modal, TextField, Tile, TopNav } from '../ui/kit.jsx';
 import { PASSWORD_RULE } from '../lib/login-form.js';
 import { FACE_UPDATE } from '../lib/features.js';
@@ -115,6 +116,7 @@ export function Wardrobe({ data }) {
   const [items, setItems] = useState(data.items);
   const [asking, setAsking] = useState(null), [busy, setBusy] = useState(false), [problem, setProblem] = useState(null);
   const c = data.category;
+  const [open, setOpen] = useState(null); // the garment shown full screen
   const remove = async () => {
     setBusy(true); setProblem(null);
     const r = await api({ action: 'remove-garment', key: asking.key });
@@ -133,7 +135,12 @@ export function Wardrobe({ data }) {
         <ul className="acc-grid">
           {items.map((g) => (
             <li key={g.key} className="acc-card">
-              <div className={'acc-card-img' + (g.isLook ? ' is-look' : '')}>{g.image ? <img src={g.image} alt={g.description} style={{ objectPosition: g.position, '--origin': g.position }} loading="lazy" /> : <Icon name={c.icon} size={32} />}</div>
+              {g.image ? (
+                // Tap to see the whole photo, zoomed onto the garment (PhotoViewer).
+                <button type="button" className={'acc-card-img is-button' + (g.isLook ? ' is-look' : '')} onClick={() => setOpen(g)} aria-label={`See ${g.description} bigger`}>
+                  <img src={g.image} alt={g.description} style={{ objectPosition: g.position, '--origin': g.position }} loading="lazy" />
+                </button>
+              ) : <div className="acc-card-img"><Icon name={c.icon} size={32} /></div>}
               <button type="button" className="ds-button is-tiny is-secondary acc-card-action" onClick={() => setAsking(g)}>Remove</button>
             </li>
           ))}
@@ -143,6 +150,7 @@ export function Wardrobe({ data }) {
           <button type="button" className="ds-button is-large is-tertiary" onClick={() => setAsking(null)} disabled={busy}>Cancel</button>
           <button type="button" className="ds-button is-large" onClick={remove} disabled={busy}>{busy ? 'Removing…' : 'Remove'}</button>
         </Modal>
+      {open && <PhotoViewer src={open.image} alt={open.description} caption={open.description} focus={open.isLook ? null : open.position} onClose={() => setOpen(null)} />}
     </Screen>
   );
 }
