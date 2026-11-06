@@ -30,8 +30,9 @@
 .acc-photo-edit { position: absolute; right: 0; bottom: 0; background: var(--button-primary); color: var(--icon-tertiary); }
 .acc-who h1 { font-size: var(--fs-h2); font-weight: var(--fw-medium); line-height: normal; }
 .acc-who p { color: var(--text-accent); font-size: var(--fs-body); overflow-wrap: anywhere; }
-.acc-stats { display: flex; justify-content: center; gap: var(--space-sm); margin: 0; padding: 0; list-style: none; }
-.acc-stats li { display: flex; flex-direction: column; align-items: center; gap: var(--space-xs); width: 56px; }
+.acc-stats { display: flex; justify-content: center; gap: var(--space-xs); margin: 0; padding: 0; list-style: none; }
+/* Six counts since "All outfits" (2026-11-06): each as wide as its label, at least the 48px circle. */
+.acc-stats li { display: flex; flex-direction: column; align-items: center; gap: var(--space-xs); min-width: 52px; }
 .acc-stat-count { display: flex; align-items: center; justify-content: center; width: 48px; height: 48px; border-radius: var(--radius-full);
   background: var(--lavanda-250); font-size: var(--fs-label-large); font-weight: var(--fw-medium); }
 .acc-stat-label { display: inline-flex; align-items: center; gap: 2px; color: var(--text-secondary); font-size: var(--fs-label-small); font-weight: var(--fw-medium); white-space: nowrap; }
