@@ -10,6 +10,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Icon } from '../ui/Icon.jsx';
 import { useSlideIn } from '../ui/slide.js';
+import { Modal } from '../ui/kit.jsx';
+import { installTip } from './install-tip.js';
 import { Logo } from '../ui/Logo.jsx';
 import { wrap } from './carousel.js';
 import { dayLine, isNight, timeLine, vibeQuestion } from './greeting.js';
@@ -152,6 +154,7 @@ export default function DailyMirror({
   const [hearts, setHearts] = useState(() => new Map()); // look id → hearted, for changes made on this page
   const [hidden, setHidden] = useState(() => new Set()); // garment combinations hidden on this page
   const [toast, setToast] = useState(null);
+  const [installHelp, setInstallHelp] = useState(false);
   // After a new outfit photo starts looks for this tab: the making screen (no looks yet) or toast until the first new one arrives.
   const [awaiting, setAwaiting] = useState(null); // { tab, known: Set of look ids already there }
   const rootRef = useRef(null);
@@ -338,6 +341,21 @@ export default function DailyMirror({
   const count = outfits.length;
   const current = wrap(index, count);
   const go = (delta) => setIndex((i) => wrap(i + delta, count));
+  // "Add to Home Screen" (install-tip.js): once looks are on screen, a few seconds in, when nothing else is said.
+  const tipChecked = useRef(false);
+  useEffect(() => {
+    if (tipChecked.current || !count || toast || viewing) return undefined;
+    const t = setTimeout(() => {
+      tipChecked.current = true;
+      const tip = installTip();
+      if (!tip) return;
+      tip.markShown();
+      setToast({ id: Date.now(), ms: 12000, icon: 'smartphone', message: 'Add Accing to your Home Screen to open it like an app.',
+        action: tip.platform === 'android' ? 'Install' : 'How',
+        onAction: async () => { setToast(null); if (tip.platform === 'android') { if (await tip.install()) tip.done(); } else setInstallHelp(true); } });
+    }, 4000);
+    return () => clearTimeout(t);
+  }, [count, toast, viewing]);
   // The looks above and below the one open full screen: the ones on its left and right in the ring.
   const neighbour = (d) => {
     const i = viewing ? outfits.findIndex((o) => o.id === viewing.id) : -1;
@@ -478,6 +496,10 @@ export default function DailyMirror({
           </div>
         </section>
       </main>
+      <Modal open={installHelp} title="Add Accing to your Home Screen" onClose={() => setInstallHelp(false)}
+        description="In Safari, open the Share menu (on iOS 26, tap ••• first), choose Add to Home Screen, then tap Add. Accing then opens full screen, like an app.">
+        <button type="button" className="ds-button is-large" onClick={() => setInstallHelp(false)}>Got it</button>
+      </Modal>
       {viewing && (
         <LookViewer look={viewing} prev={neighbour(-1)} next={neighbour(1)} onStep={(d) => { const i = wrap(outfits.findIndex((o) => o.id === viewing.id) + d, outfits.length); setViewing(outfits[i]); setIndex(i); }}
           pager={count > 1 ? (
