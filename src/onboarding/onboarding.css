@@ -90,8 +90,6 @@
 .ob-angles .icon { color: var(--icon-accent); opacity: .6; }
 .ob-angles span.is-done { color: var(--text-primary); }
 .ob-angles span.is-done .icon { opacity: 1; }
-.ob-info { display: flex; align-items: flex-start; gap: var(--space-sm); color: var(--text-secondary); font-size: var(--fs-label-small); font-weight: var(--fw-medium); line-height: normal; }
-.ob-info .icon { color: var(--icon-secondary); }
 
 .ob-capture { display: flex; align-items: center; justify-content: space-between; height: 96px; padding: 10px 32px; }
 .ob-shutter { display: inline-flex; align-items: center; justify-content: center; width: 64px; height: 64px; padding: 0; border: 0;

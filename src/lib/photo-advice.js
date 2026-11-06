@@ -15,7 +15,7 @@ export function faceAdvice(angle, r) {
   if (r.one_face === false) return { title: 'More than one face', hint: 'Make sure only you are in the photo.' };
   if (r.face_visible === false) return { title: 'Your face is partly covered', hint: 'Move hair, hands or glasses away from your face.' };
   if (r.sharp === false) return { title: 'The photo is blurry', hint: 'Hold the phone still and take it again.' };
-  if (r.well_lit === false) return { title: 'Your face is too dark', hint: 'Face a window or a lamp so the light falls on your face.' };
+  if (r.well_lit === false) return { title: 'Your face is too dark', hint: 'Face a window or a lamp so the light falls on your face.', type: 'warning' };
   if (r.face_small) return { title: 'Come a little closer', hint: 'Your face should fill the oval.' };
   if (angle === 'front' && r.turn === 'turned') return { title: 'Your face is turned', hint: 'Look straight into the camera, nose to the centre of the oval.' };
   if (angle !== 'front' && r.turn === 'straight') return { title: 'Turn your head a little more', hint: 'Turn your face about 45º, as if looking past your shoulder.' };
@@ -24,14 +24,16 @@ export function faceAdvice(angle, r) {
   return null;
 }
 
-/** reading: { one_person, full_body, face_visible, sharp, sitting } (the full-body photo check). */
+/** reading: { one_person, full_body, face_visible, sharp, well_lit, sitting } (the full-body photo check). A dark photo
+ *  (Figma 402:4489) is told apart from a blurry one, so the fix is clear. */
 export function bodyAdvice(r) {
   if (!r) return null;
   if (r.one_person === false) return { title: 'More than one person', hint: 'Make sure only you are in the photo.' };
   if (r.full_body === false) return { title: 'Your whole body isn’t in the photo', hint: 'Step back until your head and both feet are in the frame.' };
   if (r.sitting) return { title: 'Stand up for this one', hint: 'Stand straight with your arms relaxed at your sides.' };
   if (r.face_visible === false) return { title: 'Your face is covered', hint: 'Keep the phone away from your face, or use the timer.' };
-  if (r.sharp === false) return { title: 'The photo is blurry or dark', hint: 'Stand in daylight and hold the phone still.' };
+  if (r.well_lit === false) return { title: 'The photo is too dark', hint: 'Retake it in brighter lighting or upload a brighter photo.', type: 'warning' };
+  if (r.sharp === false) return { title: 'The photo is blurry', hint: 'Hold the phone still, or use the timer.' };
   return null;
 }
 

@@ -27,12 +27,13 @@ const BODY_PROMPT = `This is a full-body photo someone took of themselves in the
 - one_person: exactly one person (a reflection of the same person in a mirror counts once)
 - full_body: the whole body from the top of the head to the soles of both feet is in the frame
 - face_visible: the face is visible, not covered by a phone, hand or hair
-- sharp: the person is in focus and lit well enough to see the face and clothes
+- sharp: the person is in focus (not blurred by movement or focus)
+- well_lit: the photo is bright enough to see the face and the colours and details of the clothes (not dim, not in shadow)
 - sitting: the person sits, kneels or lies instead of standing`;
 const BODY_SCHEMA = {
   type: 'OBJECT',
-  properties: { one_person: { type: 'BOOLEAN' }, full_body: { type: 'BOOLEAN' }, face_visible: { type: 'BOOLEAN' }, sharp: { type: 'BOOLEAN' }, sitting: { type: 'BOOLEAN' } },
-  required: ['one_person', 'full_body', 'face_visible', 'sharp', 'sitting'],
+  properties: { one_person: { type: 'BOOLEAN' }, full_body: { type: 'BOOLEAN' }, face_visible: { type: 'BOOLEAN' }, sharp: { type: 'BOOLEAN' }, well_lit: { type: 'BOOLEAN' }, sitting: { type: 'BOOLEAN' } },
+  required: ['one_person', 'full_body', 'face_visible', 'sharp', 'well_lit', 'sitting'],
 };
 
 async function ask(bytes, prompt, schema) {

@@ -24,6 +24,9 @@ test('full body: missing feet or two people ask for a retake; a mirror selfie do
   assert.match(bodyAdvice({ ...ok, full_body: false }).hint, /both feet/);
   assert.match(bodyAdvice({ ...ok, one_person: false }).title, /More than one/);
   assert.equal(bodyAdvice({ ...ok, mirror_selfie: true }), null);
+  assert.equal(bodyAdvice({ ...ok, well_lit: false }).title, 'The photo is too dark');
+  assert.equal(bodyAdvice({ ...ok, sharp: false, well_lit: false }).title, 'The photo is too dark');
+  assert.equal(bodyAdvice({ ...ok, sharp: false }).title, 'The photo is blurry');
 });
 
 test('onboarding resumes where the person left', () => {

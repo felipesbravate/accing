@@ -72,7 +72,7 @@ export default function LoginApp({ step = 'email', email = '', name = null, unsu
         {step === 'reset-sent' && (
           <div className="login-intro" role="status">
             <h1 className="login-title">Check your email</h1>
-            <p>Click the link in the email to reset your password.</p>
+            <p className="is-large">Click the link in the email to reset your password.</p>
             <a className="login-link" href="/login">Back to sign in</a>
           </div>
         )}

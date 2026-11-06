@@ -63,7 +63,8 @@ function Intro({ title, text }) {
 }
 
 /** On the photo, at the bottom of the viewfinder: a retake hint, "Looks great!", or the sunglasses reminder (Info-box). */
-export function Notice({ advice, icon = 'alert-circle', type = 'default' }) {
+export function Notice({ advice, icon = 'alert-circle', type: asked = 'default' }) {
+  const type = advice.type || asked; // light problems are warnings (Figma 402:4489, 186:3495)
   return (
     <div className="ob-notice" role={type === 'default' && icon === 'alert-circle' ? 'alert' : 'status'}>
       <InfoBox type={type} icon={icon} title={advice.title}>{advice.hint}</InfoBox>
@@ -274,12 +275,13 @@ export default function Onboarding({ name = '', initial = null }) {
         <div className="ob-body ob-body-capture">
           {step === 'face'
             ? <Intro title={a.title} text={a.text} />
-            : <Intro title="Add your first outfit" text="Wear an outfit you like and keep your whole body in the frame, including your feet." />}
+            : <>
+                <Intro title="Add your first outfit" text="Wear an outfit you like or upload a photo." />
+                <InfoBox icon="alert-circle">Show your full body, including feet, in bright lighting. A mirror selfie or timer are fine.</InfoBox>
+              </>}
           <div className="ob-capture-area">
             <Viewfinder camera={camera} guide={step === 'face' ? 'face' : 'body'} angle={a.key} still={still} busy={busy} notice={notice} />
-            {step === 'face'
-              ? <Angles done={{ ...(state.faces || {}), ...(great ? { [a.key]: true } : {}) }} current={angle} />
-              : <p className="ob-info"><Icon name="info" size={16} />Take your photo against a plain wall in daylight. A mirror selfie or a photo taken with a timer is fine.</p>}
+            {step === 'face' && <Angles done={{ ...(state.faces || {}), ...(great ? { [a.key]: true } : {}) }} current={angle} />}
           </div>
           {problem && <p className="ob-problem" role="alert">{problem}</p>}
         </div>
