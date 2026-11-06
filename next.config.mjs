@@ -5,6 +5,8 @@ export default {
   poweredByHeader: false,
   devIndicators: false,
   reactStrictMode: true,
+  // Pages visited in the last 30 s come back from the browser's memory (Settings → Hidden looks → back is instant).
+  experimental: { staleTimes: { dynamic: 30 } },
   async headers() {
     return [{ source: '/:path*', headers: [
       { key: 'X-Content-Type-Options', value: 'nosniff' },

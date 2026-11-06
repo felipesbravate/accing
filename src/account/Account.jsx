@@ -71,7 +71,7 @@ export function Profile({ data }) {
   };
   const initial = (data.name || data.email || '?').charAt(0).toUpperCase();
   return (
-    <Screen title="Profile" right={<Link className="ds-icon-button is-large is-secondary" href="/settings" aria-label="Settings"><Icon name="settings" size={24} /></Link>}>
+    <Screen title="Profile" right={<Link className="ds-icon-button is-large is-secondary" href="/settings" prefetch aria-label="Settings"><Icon name="settings" size={24} /></Link>}>
       <section className="acc-profile">
         <div className="acc-photo">
           <span className="ds-avatar acc-avatar" aria-busy={busy}>{avatar ? <img src={avatar} alt="" /> : initial}</span>
@@ -145,7 +145,7 @@ export function Wardrobe({ data }) {
 // ── Settings ──
 function Entry({ href, icon, title, text, danger = false }) {
   return (
-    <Link className={'acc-entry' + (danger ? ' is-danger' : '')} href={href}>
+    <Link className={'acc-entry' + (danger ? ' is-danger' : '')} href={href} prefetch>
       <span className="acc-entry-icon"><Icon name={icon} size={20} strokeWidth={5 / 3} /></span>
       <span className="acc-entry-text"><span className="acc-entry-title">{title}</span>{text && <span className="acc-entry-sub">{text}</span>}</span>
       <Icon name="chevron-right" size={16} className="acc-entry-chevron" />

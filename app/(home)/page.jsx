@@ -1,9 +1,9 @@
 // The Daily Mirror. Signed-out visitors never get here (middleware.js), and the session is verified again below.
 import { redirect } from 'next/navigation';
-import DailyMirror from '../src/mirror/DailyMirror.jsx';
-import { currentUser, supabaseConfigured } from '../src/server/auth.js';
-import { todaysLooks } from '../src/server/looks.js';
-import { avatarUrl } from '../src/server/account.js';
+import DailyMirror from '../../src/mirror/DailyMirror.jsx';
+import { currentUser, supabaseConfigured } from '../../src/server/auth.js';
+import { todaysLooks } from '../../src/server/looks.js';
+import { avatarUrl } from '../../src/server/account.js';
 
 export const dynamic = 'force-dynamic';
 

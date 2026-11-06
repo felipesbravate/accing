@@ -103,7 +103,7 @@ function NoFavorites({ onBack }) {
 /** avatar (Figma "avatar": Image, else Default with the initial): opens the Profile (268:11591), where Log out is. */
 function Account({ initial, avatar }) {
   return (
-    <Link className="ds-avatar mirror-avatar" href="/profile" aria-label="Profile">
+    <Link className="ds-avatar mirror-avatar" href="/profile" prefetch aria-label="Profile">
       {avatar ? <img src={avatar} alt="" /> : <span aria-hidden="true">{initial}</span>}
     </Link>
   );
