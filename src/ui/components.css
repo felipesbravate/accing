@@ -167,10 +167,14 @@
    icon-buttons, then the centred title (24 medium) and text (14) 8px apart, then the actions 40px under them, in a row
    16px apart, 16px from the bottom edge. */
 .ds-modal { position: fixed; inset: 0; z-index: 200; display: flex; flex-direction: column; justify-content: flex-end; align-items: center;
-  padding: 0 var(--space-sm) calc(var(--space-sm) + env(safe-area-inset-bottom)); background: var(--bg-modal); animation: ds-modal-fade .2s ease-out; }
+  padding: 0 var(--space-sm) var(--space-sm); background: var(--bg-modal); animation: ds-modal-fade .24s ease-out both; }
+/* 8px from the bottom of the screen, as in the frame (2026-11-06: the home-indicator inset used to lift it ~40px). */
 .ds-modal-panel { display: flex; flex-direction: column; width: 100%; max-width: 480px; padding-bottom: var(--space-md); border-radius: var(--radius-2xl);
   background: var(--bg-glass); box-shadow: inset 0 0 0 1px var(--border-light), 0 0 16px rgba(22, 21, 15, .08);
-  -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); animation: ds-modal-up .24s cubic-bezier(.2, .8, .2, 1); outline: none; }
+  -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); animation: ds-modal-up .32s cubic-bezier(.2, .8, .2, 1) both; outline: none; }
+/* Slides up from below the screen on open, back down on close. */
+.ds-modal.is-closing { animation: ds-modal-fade-out .22s ease-in both; pointer-events: none; }
+.ds-modal.is-closing .ds-modal-panel { animation: ds-modal-down .22s cubic-bezier(.4, 0, 1, 1) both; }
 .ds-modal-top { display: flex; align-items: center; justify-content: space-between; height: 72px; padding: 0 var(--space-md); }
 .ds-modal-info { display: flex; flex-direction: column; gap: var(--space-2xl); padding: 0 var(--space-lg); }
 .ds-modal-text { display: flex; flex-direction: column; gap: var(--space-sm); text-align: center; }
@@ -179,8 +183,11 @@
 .ds-modal-actions { display: flex; gap: var(--space-md); }
 .ds-modal-actions > * { flex: 1 1 0; min-width: 0; }
 @keyframes ds-modal-fade { from { background: transparent; } }
-@keyframes ds-modal-up { from { transform: translateY(24px); opacity: 0; } }
+@keyframes ds-modal-fade-out { to { background: transparent; } }
+@keyframes ds-modal-up { from { transform: translateY(calc(100% + var(--space-sm))); } }
+@keyframes ds-modal-down { to { transform: translateY(calc(100% + var(--space-sm))); } }
 @media (min-width: 1024px) { .ds-modal { justify-content: center; } }
+@media (prefers-reduced-motion: reduce) { .ds-modal, .ds-modal-panel, .ds-modal.is-closing, .ds-modal.is-closing .ds-modal-panel { animation-duration: .01s; } }
 
 /* text-field (Thread 122:683) — Size=Medium; State=Empty | Filled | Focus | Disabled. A 14px medium label 8px above a
    48px box (radius 16, 16px sides, 8px gaps): optional 20px icons either side, the value (16 medium; placeholder

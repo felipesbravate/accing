@@ -132,12 +132,10 @@ export function Wardrobe({ data }) {
           ))}
         </ul>
       ) : <p className="acc-empty">Nothing here yet. Garments appear once a look has been made with them.</p>}
-      {asking && (
-        <Modal title={`Remove this ${c.one}?`} description="This permanently removes the item and all its looks, including favorites." onClose={() => !busy && setAsking(null)}>
+      <Modal open={Boolean(asking)} title={`Remove this ${c.one}?`} description="This permanently removes the item and all its looks, including favorites." onClose={() => !busy && setAsking(null)}>
           <button type="button" className="ds-button is-large is-tertiary" onClick={() => setAsking(null)} disabled={busy}>Cancel</button>
           <button type="button" className="ds-button is-large" onClick={remove} disabled={busy}>{busy ? 'Removing…' : 'Remove'}</button>
         </Modal>
-      )}
     </Screen>
   );
 }
@@ -217,12 +215,10 @@ export function HiddenLooks({ looks: initial }) {
           ))}
         </ul>
       ) : <p className="acc-empty">No hidden looks. Looks you hide from the mirror show up here.</p>}
-      {asking && (
-        <Modal title="Unhide this look?" description="This will restore the look to your outfit gallery and daily suggestions." onClose={() => setAsking(null)}>
+      <Modal open={Boolean(asking)} title="Unhide this look?" description="This will restore the look to your outfit gallery and daily suggestions." onClose={() => setAsking(null)}>
           <button type="button" className="ds-button is-large is-tertiary" onClick={() => setAsking(null)}>Cancel</button>
           <button type="button" className="ds-button is-large" onClick={unhide}>Unhide</button>
         </Modal>
-      )}
       {toast && (
         <div className="acc-toast">
           <div className="ds-toast" role="status">
@@ -269,11 +265,9 @@ export function Password({ reset = false }) {
         <InfoBox title="Password requirements">{PASSWORD_RULE}</InfoBox>
         {err && !err.field && <Problem text={err.error} />}
       </form>
-      {done && (
-        <Modal title="Password updated" description="Use your new password the next time you sign in." onClose={() => router.push(reset ? '/' : '/settings')}>
+      <Modal open={Boolean(done)} title="Password updated" description="Use your new password the next time you sign in." onClose={() => router.push(reset ? '/' : '/settings')}>
           <button type="button" className="ds-button is-large" onClick={() => router.push(reset ? '/' : '/settings')}>Done</button>
         </Modal>
-      )}
     </Screen>
   );
 }

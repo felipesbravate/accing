@@ -129,11 +129,9 @@ export default function Faces({ initial }) {
           </div>
         )}
         {problem && <p className="acc-problem" role="alert">{problem}</p>}
-        {saved && (
-          <Modal title="New photos saved" description="Your outfits will now be shown using your new photos." onClose={() => router.push('/settings')}>
+        <Modal open={Boolean(saved)} title="New photos saved" description="Your outfits will now be shown using your new photos." onClose={() => router.push('/settings')}>
             <button type="button" className="ds-button is-large" onClick={() => router.push('/settings')}>Done</button>
           </Modal>
-        )}
       </Screen>
     );
   }
@@ -162,12 +160,10 @@ export default function Faces({ initial }) {
         <p className="acc-face-note">For outfit previews, not your profile photo.</p>
       </div>
       {problem && <p className="acc-problem" role="alert">{problem}</p>}
-      {asking && (
-        <Modal title="Discard new photos?" description="Your new face photos won’t be saved. Your current photos will stay unchanged." onClose={() => setAsking(false)}>
+      <Modal open={Boolean(asking)} title="Discard new photos?" description="Your new face photos won’t be saved. Your current photos will stay unchanged." onClose={() => setAsking(false)}>
           <button type="button" className="ds-button is-large is-tertiary" onClick={() => setAsking(false)}>Go back</button>
           <button type="button" className="ds-button is-large" onClick={discard}>Discard photos</button>
         </Modal>
-      )}
     </Screen>
   );
 }

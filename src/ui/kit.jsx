@@ -19,22 +19,40 @@ export function TopNav({ title, onBack, backLabel = 'Back', right = null, classN
 }
 
 /** Modal (224:1421) with modal-top-nav (213:439): close on the right (and Escape, and a tap on the page behind),
- *  centred title and text, actions in a row. Focus moves to the panel while it's open and back afterwards. */
-export function Modal({ title, description, children, onClose, closeLabel = 'Close' }) {
+ *  centred title and text, actions in a row. Slides up from the bottom when `open` turns true and back down when it
+ *  turns false (it stays on screen, as it last was, until it's down). Focus moves to the panel while it's open. */
+const MODAL_OUT_MS = 220;
+export function Modal(props) {
+  const { open = true } = props;
+  const [shown, setShown] = useState(open);
+  const last = useRef(props);
+  if (open) last.current = props;
+  useEffect(() => {
+    if (open) { setShown(true); return undefined; }
+    const t = setTimeout(() => setShown(false), MODAL_OUT_MS);
+    return () => clearTimeout(t);
+  }, [open]);
+  if (!open && !shown) return null;
+  return <ModalView {...last.current} closing={!open} />;
+}
+
+function ModalView({ title, description, children, onClose, closeLabel = 'Close', closing = false }) {
   const panel = useRef(null), titleId = useId(), textId = useId();
+  const close = useRef(onClose);
+  close.current = onClose;
   useEffect(() => {
     const before = document.activeElement;
     panel.current?.focus({ preventScroll: true });
-    const key = (e) => { if (e.key === 'Escape') onClose?.(); };
+    const key = (e) => { if (e.key === 'Escape') close.current?.(); };
     window.addEventListener('keydown', key);
     return () => { window.removeEventListener('keydown', key); before?.focus?.({ preventScroll: true }); };
-  }, [onClose]);
+  }, []);
   return (
-    <div className="ds-modal" onClick={(e) => { if (e.target === e.currentTarget) onClose?.(); }}>
+    <div className={'ds-modal' + (closing ? ' is-closing' : '')} onClick={(e) => { if (e.target === e.currentTarget && !closing) onClose?.(); }}>
       <div ref={panel} tabIndex={-1} className="ds-modal-panel" role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={description ? textId : undefined}>
         <div className="ds-modal-top">
           <span />
-          {onClose && <button type="button" className="ds-icon-button is-secondary" onClick={onClose} aria-label={closeLabel}><Icon name="x" size={20} /></button>}
+          {onClose && <button type="button" className="ds-icon-button is-secondary" onClick={onClose} aria-label={closeLabel} disabled={closing}><Icon name="x" size={20} /></button>}
         </div>
         <div className="ds-modal-info">
           <div className="ds-modal-text">
