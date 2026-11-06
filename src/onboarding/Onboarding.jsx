@@ -380,7 +380,7 @@ export default function Onboarding({ name = '', initial = null }) {
         <div className="ob-footer ob-footer-roomy">
           <button type="button" className="ds-button is-large ob-wide"
             onClick={async () => { setStep('finishing'); if (await run({ action: 'pick', path: sel.path })) { setStep('done'); setTimeout(() => router.replace('/'), 2200); } else setStep('pick'); }}>This is me</button>
-          <button type="button" className="ob-text-button ob-wide" onClick={() => go('body')}>None of these look like me</button>
+          <button type="button" className="ob-text-button ob-wide" onClick={() => { setAngle(0); go('face'); }}>None, retake the photos</button>
         </div>
       </div>
     );

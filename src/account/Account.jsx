@@ -8,12 +8,14 @@ import Link from 'next/link';
 import { slideBack, useSlideIn } from '../ui/slide.js';
 import { useRouter } from 'next/navigation';
 import { Icon } from '../ui/Icon.jsx';
+import { Logo } from '../ui/Logo.jsx';
 import { InfoBox, Modal, TextField, Tile, TopNav } from '../ui/kit.jsx';
 import { PASSWORD_RULE } from '../lib/login-form.js';
 import { FACE_UPDATE } from '../lib/features.js';
 import { fileToJpeg } from '../onboarding/resize.js';
 import '../ui/components.css';
 import './account.css';
+import '../login/login.css';
 
 export async function api(body) {
   const res = await fetch('/api/account', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).catch(() => null);
@@ -103,6 +105,11 @@ export function Profile({ data }) {
   );
 }
 
+// Empty Wardrobe tile / no hidden looks (Figma 401:2929, 401:2995).
+function Empty({ title, text }) {
+  return <div className="acc-empty"><h2>{title}</h2><p>{text}</p></div>;
+}
+
 // ── Wardrobe ──
 export function Wardrobe({ data }) {
   const [items, setItems] = useState(data.items);
@@ -131,7 +138,7 @@ export function Wardrobe({ data }) {
             </li>
           ))}
         </ul>
-      ) : <p className="acc-empty">Nothing here yet. Garments appear once a look has been made with them.</p>}
+      ) : <Empty title="Nothing here yet" text="Garments appear once a look has been made with them." />}
       <Modal open={Boolean(asking)} title={`Remove this ${c.one}?`} description="This permanently removes the item and all its looks, including favorites." onClose={() => !busy && setAsking(null)}>
           <button type="button" className="ds-button is-large is-tertiary" onClick={() => setAsking(null)} disabled={busy}>Cancel</button>
           <button type="button" className="ds-button is-large" onClick={remove} disabled={busy}>{busy ? 'Removing…' : 'Remove'}</button>
@@ -214,7 +221,7 @@ export function HiddenLooks({ looks: initial }) {
             </li>
           ))}
         </ul>
-      ) : <p className="acc-empty">No hidden looks. Looks you hide from the mirror show up here.</p>}
+      ) : <Empty title="No hidden looks" text="Looks you hide from the mirror show up here." />}
       <Modal open={Boolean(asking)} title="Unhide this look?" description="This will restore the look to your outfit gallery and daily suggestions." onClose={() => setAsking(null)}>
           <button type="button" className="ds-button is-large is-tertiary" onClick={() => setAsking(null)}>Cancel</button>
           <button type="button" className="ds-button is-large" onClick={unhide}>Unhide</button>
@@ -246,37 +253,60 @@ export function Password({ reset = false }) {
     if (r.error) setErr(r); else setDone(true);
   };
   const ready = (reset || f.current) && f.next && f.confirm;
+  const leave = () => router.push(reset ? '/' : '/settings');
+  const fields = (
+    <>
+      <div className="acc-fields">
+        {!reset && <TextField label="Current password" type="password" autoComplete="current-password" placeholder="Enter your current password" value={f.current} onChange={set('current')}
+          invalid={err?.field === 'current'} support={err?.field === 'current' ? err.error : null} />}
+        <TextField label="New password" type="password" autoComplete="new-password" placeholder="Enter your new password" value={f.next} onChange={set('next')}
+          invalid={err?.field === 'next'} support={err?.field === 'next' ? err.error : null} />
+        <TextField label="Confirm new password" type="password" autoComplete="new-password" placeholder="Re-enter your new password" value={f.confirm} onChange={set('confirm')}
+          invalid={err?.field === 'confirm'} support={err?.field === 'confirm' ? err.error : null} />
+      </div>
+      <InfoBox title="Password requirements">{PASSWORD_RULE}</InfoBox>
+      {err && !err.field && <Problem text={err.error} />}
+    </>
+  );
+  const submitButton = <button type="submit" form="acc-password" className="ds-button is-large acc-wide" disabled={!ready || busy}>{busy ? 'Saving…' : 'Update password'}</button>;
+  const doneModal = (
+    <Modal open={Boolean(done)} title="Password updated" description="Use your new password the next time you sign in." onClose={leave}>
+      <button type="button" className="ds-button is-large" onClick={leave}>Done</button>
+    </Modal>
+  );
+  if (reset) {
+    // From the "Forgot your password?" email (Figma 402:4085): the sign-in layout, no top-nav.
+    return (
+      <main className="login-page">
+        <header className="login-brand"><Logo className="login-logo" /><p className="login-tagline">Unapologetically you.</p></header>
+        <section className="login-content">
+          <div className="login-intro"><h1 className="login-title">Choose a new password</h1><p>Keep your account secure with a password you don’t use elsewhere.</p></div>
+          <form id="acc-password" className="login-form" onSubmit={submit}>{fields}{submitButton}</form>
+        </section>
+        {doneModal}
+      </main>
+    );
+  }
   return (
-    <Screen title={reset ? 'Reset password' : 'Update password'} back="/settings"
-      footer={<button type="submit" form="acc-password" className="ds-button is-large acc-wide" disabled={!ready || busy}>{busy ? 'Saving…' : 'Update password'}</button>}>
+    <Screen title="Update password" back="/settings" footer={submitButton}>
       <form id="acc-password" className="acc-form" onSubmit={submit}>
         <div className="acc-intro">
           <h1>Choose a new password</h1>
           <p>Keep your account secure with a password you don’t use elsewhere.</p>
         </div>
-        <div className="acc-fields">
-          {!reset && <TextField label="Current password" type="password" autoComplete="current-password" placeholder="Enter your current password" value={f.current} onChange={set('current')}
-            invalid={err?.field === 'current'} support={err?.field === 'current' ? err.error : null} />}
-          <TextField label="New password" type="password" autoComplete="new-password" placeholder="Enter your new password" value={f.next} onChange={set('next')}
-            invalid={err?.field === 'next'} support={err?.field === 'next' ? err.error : null} />
-          <TextField label="Confirm new password" type="password" autoComplete="new-password" placeholder="Re-enter your new password" value={f.confirm} onChange={set('confirm')}
-            invalid={err?.field === 'confirm'} support={err?.field === 'confirm' ? err.error : null} />
-        </div>
-        <InfoBox title="Password requirements">{PASSWORD_RULE}</InfoBox>
-        {err && !err.field && <Problem text={err.error} />}
+        {fields}
       </form>
-      <Modal open={Boolean(done)} title="Password updated" description="Use your new password the next time you sign in." onClose={() => router.push(reset ? '/' : '/settings')}>
-          <button type="button" className="ds-button is-large" onClick={() => router.push(reset ? '/' : '/settings')}>Done</button>
-        </Modal>
+      {doneModal}
     </Screen>
   );
 }
 
 // ── Update email → Verify ──
 const RESEND_SECONDS = 30;
-export function Email({ current }) {
+export function Email({ current, verified = false }) {
   const router = useRouter();
   const [step, setStep] = useState('email');
+  const [justVerified, setJustVerified] = useState(verified);
   const [f, setF] = useState({ newEmail: '', password: '' });
   const [busy, setBusy] = useState(false), [err, setErr] = useState(null), [wait, setWait] = useState(0);
   useEffect(() => { if (wait <= 0) return undefined; const t = setTimeout(() => setWait(wait - 1), 1000); return () => clearTimeout(t); }, [wait]);
@@ -313,11 +343,11 @@ export function Email({ current }) {
   }
   return (
     <Screen title="Update email" back="/settings"
-      footer={<button type="submit" form="acc-email" className="ds-button is-large acc-wide" disabled={!f.newEmail || !f.password || busy}>{busy ? 'Sending…' : 'Send verification code'}</button>}>
+      footer={<button type="submit" form="acc-email" className="ds-button is-large acc-wide" disabled={!f.newEmail || !f.password || busy}>{busy ? 'Sending…' : 'Send verification link'}</button>}>
       <form id="acc-email" className="acc-form" onSubmit={send}>
         <div className="acc-intro">
           <h1>Your new email</h1>
-          <p>Enter the email address you’d like to use to sign in. We’ll send a verification code to this new address.</p>
+          <p>Enter the email address you’d like to use to sign in. We’ll send a verification link to this new address.</p>
         </div>
         <div className="acc-fields">
           <TextField label="New email address" type="email" inputMode="email" autoComplete="email" placeholder="Enter new email address" value={f.newEmail}
@@ -328,6 +358,10 @@ export function Email({ current }) {
         <InfoBox title="Verify before we update">Your account email only changes after you verify the new address.</InfoBox>
         {err && !err.field && <Problem text={err.error} />}
       </form>
+      {/* After the link in the email (app/settings/email/done → ?verified=1), Figma 402:3974. */}
+      <Modal open={justVerified} title="Email verified" description="Use your new email the next time you sign in." onClose={() => { setJustVerified(false); router.push('/settings'); }}>
+        <button type="button" className="ds-button is-large" onClick={() => { setJustVerified(false); router.push('/settings'); }}>Done</button>
+      </Modal>
     </Screen>
   );
 }

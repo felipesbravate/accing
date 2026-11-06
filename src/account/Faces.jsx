@@ -117,7 +117,7 @@ export default function Faces({ initial }) {
       <Screen title="Update face photos" back="/settings"
         footer={<>
           <button type="button" className="ds-button is-large acc-wide" onClick={pickIt} disabled={Boolean(busy)}>{busy || 'This is me'}</button>
-          <button type="button" className="ds-button is-large is-tertiary acc-wide" onClick={startCapture}>None of these look like me</button>
+          <button type="button" className="ds-button is-large is-tertiary acc-wide" onClick={startCapture}>None, retake the photos</button>
         </>}>
         <div className="ob-intro"><h1>Which one looks most like you?</h1><p>Choose the image that looks most like you for your outfit previews.</p></div>
         <div className="ob-picked"><img src={sel.url} alt="The selected version of you" /></div>

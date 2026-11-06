@@ -9,5 +9,5 @@ export default async function Page() {
   const { user, live } = await pageUser();
   // Keep public.users.email in step with the sign-in email.
   if (live && user.email) await (await authClient()).from('users').update({ email: user.email }).eq('id', user.id);
-  redirect('/settings?email=updated');
+  redirect('/settings/email?verified=1');
 }

@@ -69,6 +69,13 @@ export default function LoginApp({ step = 'email', email = '', name = null, unsu
       </header>
 
       <section className="login-content" aria-busy={busy}>
+        {step === 'reset-sent' && (
+          <div className="login-intro" role="status">
+            <h1 className="login-title">Check your email</h1>
+            <p>Click the link in the email to reset your password.</p>
+            <a className="login-link" href="/login">Back to sign in</a>
+          </div>
+        )}
         {step === 'email' && (
           <>
             <h1 className="login-title">Sign in or create an account</h1>

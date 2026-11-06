@@ -154,7 +154,7 @@ export default function DailyMirror({
   const [hearts, setHearts] = useState(() => new Map()); // look id → hearted, for changes made on this page
   const [hidden, setHidden] = useState(() => new Set()); // garment combinations hidden on this page
   const [toast, setToast] = useState(null);
-  const [installHelp, setInstallHelp] = useState(false);
+  const [installHelp, setInstallHelp] = useState(false), [tipOffer, setTipOffer] = useState(null);
   // After a new outfit photo starts looks for this tab: the making screen (no looks yet) or toast until the first new one arrives.
   const [awaiting, setAwaiting] = useState(null); // { tab, known: Set of look ids already there }
   const rootRef = useRef(null);
@@ -344,15 +344,13 @@ export default function DailyMirror({
   // "Add to Home Screen" (install-tip.js): once looks are on screen, a few seconds in, when nothing else is said.
   const tipChecked = useRef(false);
   useEffect(() => {
-    if (tipChecked.current || !count || toast || viewing) return undefined;
+    if (tipChecked.current || !count || toast || viewing) return undefined; // not over a toast or an open look
     const t = setTimeout(() => {
       tipChecked.current = true;
       const tip = installTip();
       if (!tip) return;
       tip.markShown();
-      setToast({ id: Date.now(), ms: 12000, icon: 'smartphone', message: 'Add Accing to your Home Screen to open it like an app.',
-        action: tip.platform === 'android' ? 'Install' : 'How',
-        onAction: async () => { setToast(null); if (tip.platform === 'android') { if (await tip.install()) tip.done(); } else setInstallHelp(true); } });
+      setTipOffer(tip);
     }, 4000);
     return () => clearTimeout(t);
   }, [count, toast, viewing]);
@@ -496,6 +494,13 @@ export default function DailyMirror({
           </div>
         </section>
       </main>
+      {/* The tip (Figma 401:2867), then the iPhone steps (401:2900); Android opens Chrome's own install sheet. */}
+      <Modal open={Boolean(tipOffer)} title="Add Accing to your Home Screen to open it like an app" onClose={() => setTipOffer(null)}>
+        <button type="button" className="ds-button is-large" onClick={async () => {
+          const tip = tipOffer; setTipOffer(null);
+          if (tip?.platform === 'android') { if (await tip.install()) tip.done(); } else setTimeout(() => setInstallHelp(true), 240);
+        }}>{tipOffer?.platform === 'android' ? 'Install' : 'Learn how'}</button>
+      </Modal>
       <Modal open={installHelp} title="Add Accing to your Home Screen" onClose={() => setInstallHelp(false)}
         description="In Safari, open the Share menu (on iOS 26, tap ••• first), choose Add to Home Screen, then tap Add. Accing then opens full screen, like an app.">
         <button type="button" className="ds-button is-large" onClick={() => setInstallHelp(false)}>Got it</button>

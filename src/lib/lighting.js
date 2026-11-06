@@ -23,7 +23,7 @@ export const BACKLIT_GAP = 0.25; // the rest of the frame this much brighter tha
 
 /** What to say about the light, or null when it's fine. */
 export function lightingAdvice({ face, around }) {
-  if (face < TOO_DARK) return { key: 'dark', title: 'It’s too dark here', hint: 'Face a window or a lamp so the light falls on your face.' };
+  if (face < TOO_DARK) return { key: 'dark', title: 'It’s too dark here.', hint: 'Face a window or a lamp so the light falls on your face.' };
   if (around - face > BACKLIT_GAP && face < 0.5) return { key: 'backlit', title: 'The light is behind you', hint: 'Turn so the window or lamp is in front of you, not behind.' };
   return null;
 }

@@ -5,7 +5,8 @@ import { pageUser } from '../../../src/server/page-user.js';
 export const metadata = { title: 'Update email · Accing' };
 export const dynamic = 'force-dynamic';
 
-export default async function Page() {
+export default async function Page({ searchParams }) {
   const { user } = await pageUser();
-  return <Email current={user.email || ''} />;
+  const q = (await searchParams) || {};
+  return <Email current={user.email || ''} verified={q.verified === '1'} />;
 }

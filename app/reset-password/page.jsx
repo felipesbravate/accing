@@ -1,5 +1,4 @@
-// Choose a new password after "Forgot your password?" (no Figma frame: the Update password layout, 287:3529, without
-// the current password). Reached from the email link through /auth/callback, which leaves the reset cookie.
+// Choose a new password after "Forgot your password?" (Figma 402:4085, the sign-in layout). Reached from the email link through /auth/callback, which leaves the reset cookie.
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { Password } from '../../src/account/Account.jsx';

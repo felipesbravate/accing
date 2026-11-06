@@ -20,6 +20,9 @@
 .login-user h1 { margin: 0; font-size: var(--fs-h3); font-weight: var(--fw-medium); line-height: normal; }
 .login-user p { margin: 0; color: var(--text-accent); font-size: var(--fs-body); font-weight: var(--fw-medium); line-height: normal; overflow-wrap: anywhere; }
 
+.login-intro { display: flex; flex-direction: column; gap: var(--space-xs); text-align: center; }
+.login-intro p { margin: 0; color: var(--text-secondary); font-size: var(--fs-body-large); line-height: normal; }
+.login-intro .login-link { margin-top: var(--space-md); text-decoration: none; }
 .login-form { display: flex; flex-direction: column; gap: var(--space-lg); }
 .login-fields { display: flex; flex-direction: column; gap: var(--space-md); }
 .login-submit { width: 100%; }

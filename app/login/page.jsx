@@ -27,8 +27,9 @@ export default async function Page({ searchParams }) {
   const step = await loginStep();
   const message = q.sent === '1'
     ? { text: 'Check your inbox: confirm your email, then sign in.', ok: true }
-    : q.reset === 'sent' ? { text: 'If that email has an account, we’ve sent a link to choose a new password.', ok: true }
     : q.reset === 'done' ? { text: 'Your password is updated.', ok: true }
     : (MESSAGES[q.error] ? { text: MESSAGES[q.error], ok: false } : null);
+  // "Forgot your password?" sent (Figma 402:4185): its own screen.
+  if (q.reset === 'sent') return <LoginApp step="reset-sent" />;
   return <LoginApp {...step} message={message} preview={previewAllowed()} />;
 }

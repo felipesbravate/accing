@@ -9,7 +9,9 @@
 .acc-wide { width: 100%; }
 .acc-screen h1, .acc-screen h2, .acc-screen p { margin: 0; }
 .acc-problem { color: var(--text-fail-danger); font-size: var(--fs-body); }
-.acc-empty { padding: var(--space-xl) 0; color: var(--text-secondary); font-size: var(--fs-body); text-align: center; }
+.acc-empty { display: flex; flex-direction: column; gap: var(--space-xs); padding: var(--space-xl) 0; text-align: center; line-height: normal; }
+.acc-empty h2 { font-size: var(--fs-h3); font-weight: var(--fw-medium); }
+.acc-empty p { color: var(--text-secondary); font-size: var(--fs-body-large); }
 /* Long lists fade out under the bottom edge (bottom-gradient). */
 .acc-screen.has-fade::after { content: ''; position: fixed; left: 0; right: 0; bottom: 0; height: 48px; pointer-events: none;
   background: linear-gradient(to bottom, transparent, var(--bg-primary)); }
