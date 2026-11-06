@@ -5,6 +5,7 @@
 // Where the camera can't be used (no permission, desktop without a webcam, an in-app browser), the shutter falls back
 // to the phone's own camera through a file input.
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { lightLevels, lightingAdvice } from '../lib/lighting.js';
 
 export function useCamera(facing, enabled = true) {
   const videoRef = useRef(null);
@@ -32,6 +33,31 @@ export function useCamera(facing, enabled = true) {
   }, [mode, enabled]);
   const flip = useCallback(() => setMode((m) => (m === 'user' ? 'environment' : 'user')), []);
   return { videoRef, state, mirrored: mode === 'user', canFlip, flip };
+}
+
+/** Live light check (lib/lighting.js): twice a second, a 48×64 copy of the camera image. Advice changes only after two
+ *  readings in a row agree, so it doesn't flicker as the camera adjusts. null when fine, off or unavailable. */
+export function useLighting(camera, enabled = true) {
+  const [advice, setAdvice] = useState(null);
+  useEffect(() => {
+    if (!enabled || camera.state !== 'live') { setAdvice(null); return undefined; }
+    const canvas = document.createElement('canvas'); canvas.width = 48; canvas.height = 64;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    let last = 'ok';
+    const t = setInterval(() => {
+      const v = camera.videoRef.current;
+      if (!v?.videoWidth || !ctx) return;
+      // The middle of the picture, in the viewfinder's shape (3:4), as the oval sees it.
+      const sw = Math.min(v.videoWidth, v.videoHeight * 0.75), sh = sw / 0.75;
+      ctx.drawImage(v, (v.videoWidth - sw) / 2, (v.videoHeight - sh) / 2, sw, sh, 0, 0, 48, 64);
+      const now = lightingAdvice(lightLevels(ctx.getImageData(0, 0, 48, 64).data, 48, 64));
+      const key = now?.key || 'ok';
+      if (key === last) setAdvice((a) => ((a?.key || 'ok') === key ? a : now));
+      last = key;
+    }, 500);
+    return () => clearInterval(t);
+  }, [camera.state, camera.videoRef, enabled]);
+  return advice;
 }
 
 /** The meridian for each angle: a vertical line through the oval that bends the way the face should turn. */

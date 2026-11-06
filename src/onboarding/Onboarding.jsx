@@ -13,7 +13,7 @@ import { Checkbox, InfoBox, Spinner, Tag, TextField } from '../ui/kit.jsx';
 import { replaySlide } from '../ui/slide.js';
 import { FACE_ANGLES, resumeStep } from '../lib/photo-advice.js';
 import { STYLES } from '../lib/styles.js';
-import { useCamera, Viewfinder } from './Camera.jsx';
+import { useCamera, useLighting, Viewfinder } from './Camera.jsx';
 import { fileToJpeg, frameToJpeg } from './resize.js';
 import '../ui/components.css';
 import './onboarding.css';
@@ -98,7 +98,9 @@ export function CaptureBar({ camera, onPhoto, disabled }) {
       {camera.canFlip
         ? <button type="button" className="ob-icon-button" onClick={camera.flip} disabled={disabled} aria-label="Switch camera"><Icon name="refresh-cw" size={24} /></button>
         : <span className="ob-icon-button" aria-hidden="true" />}
-      <input ref={pickRef} className="visually-hidden" type="file" accept="image/*" tabIndex={-1} onChange={fromFile} />
+      {/* One photo only (Felipe, 2026-11-06): no `multiple`, so the photo library lets you pick a single photo here;
+          the mirror's "Shoot your outfit" is where several can be added at once. */}
+      <input ref={pickRef} className="visually-hidden" type="file" accept="image/*" multiple={false} tabIndex={-1} onChange={fromFile} />
       <input ref={shootRef} className="visually-hidden" type="file" accept="image/*" capture={camera.mirrored ? 'user' : 'environment'} tabIndex={-1} onChange={fromFile} />
     </div>
   );
@@ -133,6 +135,7 @@ export default function Onboarding({ name = '', initial = null }) {
 
   const capturing = (step === 'face' || step === 'body') && !still;
   const camera = useCamera(step === 'body' ? 'environment' : 'user', capturing);
+  const light = useLighting(camera, capturing && step === 'face'); // too dark / light behind, before the photo
 
   const refresh = useCallback(async () => {
     const res = await fetch('/api/onboarding', { cache: 'no-store' }).catch(() => null);
@@ -262,6 +265,7 @@ export default function Onboarding({ name = '', initial = null }) {
     const last = angle === FACE_ANGLES.length - 1;
     const notice = retake ? <Notice advice={advice} />
       : great ? <Notice advice={{ title: 'Looks great!' }} icon="star" />
+      : light && !still ? <Notice advice={light} type="warning" icon="sun" />
       : step === 'face' && a.key === 'front' && !still ? <Notice advice={{ title: 'Remove your sunglasses.' }} type="warning" />
       : null;
     return (

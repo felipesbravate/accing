@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation';
 import { Icon } from '../ui/Icon.jsx';
 import { Modal, Spinner, TopNav } from '../ui/kit.jsx';
 import { FACE_ANGLES } from '../lib/photo-advice.js';
-import { useCamera, Viewfinder } from '../onboarding/Camera.jsx';
+import { useCamera, useLighting, Viewfinder } from '../onboarding/Camera.jsx';
 import { Angles, CaptureBar, Notice } from '../onboarding/Onboarding.jsx';
 import { Screen, api, apiUpload } from './Account.jsx';
 import '../onboarding/onboarding.css';
@@ -24,6 +24,7 @@ export default function Faces({ initial }) {
   const [still, setStill] = useState(null), [busy, setBusy] = useState(null), [advice, setAdvice] = useState(null), [good, setGood] = useState(false);
   const [problem, setProblem] = useState(null), [asking, setAsking] = useState(false), [saved, setSaved] = useState(false), [chosen, setChosen] = useState(0);
   const camera = useCamera('user', step === 'capture' && !still);
+  const light = useLighting(camera, step === 'capture' && !still);
   const allNew = FACE_ANGLES.every((a) => state.fresh?.[a.key]);
 
   const refresh = useCallback(async () => {
@@ -65,6 +66,7 @@ export default function Faces({ initial }) {
     const a = FACE_ANGLES[angle];
     const great = good && still && !busy, retaking = Boolean(advice) && !busy;
     const notice = retaking ? <Notice advice={advice} /> : great ? <Notice advice={{ title: 'Looks great!' }} icon="star" />
+      : light && !still ? <Notice advice={light} type="warning" icon="sun" />
       : a.key === 'front' && !still ? <Notice advice={{ title: 'Remove your sunglasses.' }} type="warning" /> : null;
     return (
       <div className="ob-screen">
