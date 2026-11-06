@@ -94,3 +94,11 @@ export function ringVisibility(offset, { side, back }) {
 export function ringPresence(offset, visibleSlots = 1) {
   return Math.min(1, Math.max(0, visibleSlots + 1 - Math.abs(offset)));
 }
+
+/** Is look i within `reach` places of the front one, either way round the ring? Only these load their image, so a
+ *  ring of many looks ("All outfits", up to 160) doesn't download every picture at once. */
+export function nearFront(i, index, length, reach = 4) {
+  if (length <= 2 * reach + 1) return true;
+  const d = Math.abs(wrap(i, length) - wrap(index, length));
+  return Math.min(d, length - d) <= reach;
+}

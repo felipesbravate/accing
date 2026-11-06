@@ -18,6 +18,7 @@ import { dayLine, isNight, timeLine, vibeQuestion } from './greeting.js';
 import LookViewer from './LookViewer.jsx';
 import { LookActions } from './LookActions.jsx';
 import OutfitRing from './OutfitRing.jsx';
+import { RingSkeleton } from './Skeleton.jsx';
 import { ALL_OUTFITS, defaultTab, MENU_TABS, mergeTabs, weatherIcon } from './occasions.js';
 import { SAMPLE_OUTFITS } from './outfits.js';
 import { SEASON_FILTERS, seasonKey } from './seasons.js';
@@ -462,7 +463,7 @@ export default function DailyMirror({
             {showMaking ? <MakingLooks />
               : count ? <OutfitRing key={`${occasion}|${filter}`} outfits={outfits} index={current} onChange={setIndex} onOpen={(i) => setViewing(outfits[i])} leavingId={leavingId} arrivingId={arrivingId} turnMs={rolling ? HIDE_ROLL_MS : undefined} />
               : favoritesView && !loading && !problem ? <NoFavorites onBack={() => pickSeason(SEASONS[0])} />
-              : live && tab?.loading ? <div className="mirror-empty" role="status"><p>Loading…</p></div>
+              : live && tab?.loading ? <RingSkeleton />
               : live && data.hasBase ? <NoLooks title={today_ && tab.failed ? (all ? 'Couldn’t make your looks' : `Couldn’t make your ${occasion} looks`) : today_ ? (all ? 'No looks yet' : `No ${occasion} looks yet`) : (all ? `No ${season} looks yet` : `No ${season} ${occasion} looks yet`)}
                   text={problem || (today_ && tab.failed) || 'Shoot your first outfit.'} onShoot={onShoot} />
               : (

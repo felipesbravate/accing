@@ -83,3 +83,12 @@ test('dragTarget: rounds, flicks carry on, short quick swipes still move one, at
   assert.equal(dragTarget({ pos: -0.2, from: 0, dx: 20, v: 0.8, slotPx: s }), -1);    // flick right: previous
   assert.equal(dragTarget({ pos: 3.4, from: 0, dx: -340, v: -3, slotPx: s }), 2);     // capped
 });
+
+test('only looks near the front load their image', async () => {
+  const { nearFront } = await import('../src/mirror/carousel.js');
+  assert.equal(nearFront(7, 0, 9), true); // a short ring loads everything
+  assert.equal(nearFront(4, 0, 40), true);
+  assert.equal(nearFront(5, 0, 40), false);
+  assert.equal(nearFront(36, 0, 40), true); // round the back
+  assert.equal(nearFront(35, 0, 40), false);
+});

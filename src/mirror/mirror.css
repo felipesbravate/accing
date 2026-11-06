@@ -46,6 +46,23 @@
 .ring-item[data-front="false"] { cursor: pointer; }
 .ring-item[data-front="true"] { cursor: zoom-in; }
 .ring-item img { display: block; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+/* Skeleton (2026-11-06): a standing silhouette in bg/info with a soft shimmer, until the look's image is in; the image
+   then fades in over it. The same silhouette fills the loading ring and the app's loading screen (Skeleton.jsx). */
+:root { --look-silhouette: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 300'%3E%3Ccircle cx='100' cy='34' r='20'/%3E%3Crect x='66' y='60' width='68' height='112' rx='24'/%3E%3Crect x='44' y='66' width='18' height='96' rx='9'/%3E%3Crect x='138' y='66' width='18' height='96' rx='9'/%3E%3Crect x='70' y='150' width='27' height='136' rx='12'/%3E%3Crect x='103' y='150' width='27' height='136' rx='12'/%3E%3C/svg%3E"); }
+.look-skeleton, .ring-item:not(.is-loaded)::before { content: ''; position: absolute; inset: 6% 18% 2%;
+  background: linear-gradient(100deg, var(--bg-info) 40%, var(--bg-primary) 50%, var(--bg-info) 60%) 0 0 / 300% 100%;
+  -webkit-mask: var(--look-silhouette) center bottom / contain no-repeat; mask: var(--look-silhouette) center bottom / contain no-repeat;
+  animation: look-shimmer 1.6s linear infinite; pointer-events: none; }
+@keyframes look-shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
+.ring-item img { opacity: 0; transition: opacity .3s ease-out; }
+.ring-item.is-loaded img { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .look-skeleton, .ring-item:not(.is-loaded)::before { animation: none; } .ring-item img { transition: none; } }
+
+/* The ring while a filter's looks load: three silhouettes, the sides smaller and fainter (as the ring places them). */
+.ring-skeleton { display: flex; align-items: flex-end; justify-content: center; gap: 4%; flex: 0 1 1190px; height: var(--look-h, clamp(320px, 100dvh - 293px, 600px)); overflow: hidden; }
+.ring-skeleton > span { position: relative; height: 100%; aspect-ratio: 2 / 3; flex: none; }
+.ring-skeleton > span:not(:nth-child(2)) { height: 80%; opacity: .55; margin-bottom: 10%; }
+.ring-skeleton .look-skeleton { inset: 6% 18% 2%; }
 /* The fade: page colour over the look, cut to the look's shape, so the person fades without becoming see-through. */
 .ring-veil { position: absolute; inset: 0; background: var(--bg-primary); opacity: var(--fade, 0); pointer-events: none;
   -webkit-mask-size: contain; mask-size: contain; -webkit-mask-position: center; mask-position: center;
@@ -200,4 +217,41 @@
   .mirror-body:has(.mirror-empty.is-none, .mirror-empty.is-making, .mirror-empty.is-favorites) { margin-top: 0; padding-bottom: 0; gap: 0; }
   .mirror-body:has(.mirror-empty.is-none, .mirror-empty.is-making, .mirror-empty.is-favorites) .mirror-carousel { flex: 1; }
   .mirror-empty.is-none, .mirror-empty.is-making, .mirror-empty.is-favorites { flex: 1; min-height: 0; }
+}
+
+/* The app's loading screen (Skeleton.jsx MirrorSkeleton): the mirror's layout with bg/info bars shimmering. */
+.mirror-skel { max-width: 1512px; min-height: 100vh; min-height: 100dvh; margin: 0 auto; background: var(--bg-primary); display: flex; flex-direction: column; }
+.mirror-skel .mirror-content { flex: 1 1 auto; display: flex; flex-direction: column; }
+.skel-bar { display: block; border-radius: var(--radius-full); background: linear-gradient(100deg, var(--bg-info) 40%, var(--bg-primary) 50%, var(--bg-info) 60%) 0 0 / 300% 100%;
+  animation: look-shimmer 1.6s linear infinite; }
+.skel-actions-top { display: flex; align-items: center; gap: var(--space-md); }
+.skel-bar.is-button { width: 184px; height: 40px; border-radius: var(--radius-lg); }
+.skel-bar.is-avatar { width: 40px; height: 40px; }
+.skel-top { display: flex; flex-direction: column; gap: var(--space-sm); padding: var(--space-lg) var(--space-4xl) 0; }
+.skel-bar.is-question { width: 314px; max-width: 70%; height: 20px; }
+.skel-bar.is-meta { width: 180px; height: 14px; }
+.skel-menu { display: flex; justify-content: flex-end; gap: var(--space-xl); padding: 0 var(--space-4xl); margin-top: calc(-1 * var(--space-xl)); }
+.skel-menu .skel-bar { height: 14px; }
+.mirror-skel .mirror-body { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: flex-end; }
+.mirror-skel .mirror-carousel { display: flex; justify-content: center; }
+.skel-look-bar { display: flex; flex-direction: column; align-items: center; gap: var(--space-sm); padding: var(--space-md) 0 var(--space-xl); }
+.skel-look-bar > span { display: flex; align-items: center; gap: var(--space-md); }
+.skel-bar.is-icon { width: 28px; height: 28px; }
+.skel-dots { gap: var(--space-sm) !important; }
+.skel-bar.is-dot { width: 6px; height: 6px; }
+.skel-bar.is-dot.is-active { width: 16px; }
+.skel-bottom { display: none; }
+@media (prefers-reduced-motion: reduce) { .skel-bar { animation: none; } }
+@media (max-width: 1023px) {
+  .mirror-skel .skel-actions-top { display: none; }
+  .skel-top { padding: 0 var(--space-lg); }
+  .skel-menu { justify-content: flex-start; gap: var(--space-lg); margin: var(--space-2xl) 0 0; padding: 0 var(--space-md) var(--space-md); border-bottom: 1px solid var(--border-secondary); overflow: hidden; }
+  .skel-bottom { display: flex; align-items: center; gap: var(--space-md); padding: var(--space-lg) var(--space-xl) calc(var(--space-lg) + env(safe-area-inset-bottom)); }
+  .skel-bottom .is-button { flex: 1 1 auto; height: 48px; }
+  .skel-bottom .is-avatar { width: 48px; height: 48px; }
+  /* The sides peek in at the screen edges, as in the ring: placed from the centre, not squeezed into the row. */
+  .ring-skeleton { position: relative; }
+  .ring-skeleton > span:not(:nth-child(2)) { position: absolute; bottom: 0; }
+  .ring-skeleton > span:first-child { right: calc(50% + 43vw); transform: translateX(50%); }
+  .ring-skeleton > span:last-child { left: calc(50% + 43vw); transform: translateX(-50%); }
 }

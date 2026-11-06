@@ -10,9 +10,9 @@
 // page colour, masked to the look's own shape, sits on each look. Unlike opacity, nobody becomes see-through, so a
 // look behind another never shows through it. Only the front look and one on each side are on screen
 // (--ring-visible-slots); the rest wait at the back and fade in as the ring turns them to a side.
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNoEdgeSwipe } from '../ui/edge-swipe.js';
-import { dragTarget, easeInOutCubic, easeOutCubic, ringOffset, ringPose, ringPresence, ringVisibility, slotPixels, wrap } from './carousel.js';
+import { dragTarget, easeInOutCubic, easeOutCubic, nearFront, ringOffset, ringPose, ringPresence, ringVisibility, slotPixels, wrap } from './carousel.js';
 
 const TURN_MS = 650;
 const INTRO_MS = 1300;
@@ -148,14 +148,24 @@ export default function OutfitRing({ outfits, index, onChange, onOpen = () => {}
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(index); }
   };
 
+  // Images load only near the front (4 either side) and stay once asked for; until one is in, its slot shows the
+  // skeleton silhouette (mirror.css .ring-item:not(.is-loaded)).
+  const asked = useRef(new Set());
+  const [loaded, setLoaded] = useState(() => new Set());
+  outfits.forEach((o, i) => { if (nearFront(i, index, count)) asked.current.add(o.id); });
+  const onLoaded = (id) => setLoaded((s) => (s.has(id) ? s : new Set(s).add(id)));
+
   return (
     <div className="ring" ref={stage} tabIndex={0} aria-label="Outfits. Use the arrow keys to turn, Enter to see the look full screen."
       onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
       onPointerCancel={onPointerCancel} onLostPointerCapture={onPointerCancel} onKeyDown={onKeyDown}>
       {outfits.map((o, i) => (
-        <figure key={o.id} className={`ring-item${i === index ? ' is-front' : ''}${o.id === leavingId ? ' is-leaving' : ''}${o.id === arrivingId ? ' is-arriving' : ''}`} data-i={i} ref={(el) => { items.current[i] = el; }} aria-hidden={i !== index || undefined}>
-          <img src={o.image} alt={i === index ? o.alt : ''} draggable={false} />
-          <span className="ring-veil" aria-hidden="true" style={{ WebkitMaskImage: `url(${o.image})`, maskImage: `url(${o.image})` }} />
+        <figure key={o.id} className={`ring-item${i === index ? ' is-front' : ''}${o.id === leavingId ? ' is-leaving' : ''}${o.id === arrivingId ? ' is-arriving' : ''}${loaded.has(o.id) ? ' is-loaded' : ''}`} data-i={i} ref={(el) => { items.current[i] = el; }} aria-hidden={i !== index || undefined}>
+          {asked.current.has(o.id) && <>
+            <img src={o.image} alt={i === index ? o.alt : ''} draggable={false} onLoad={() => onLoaded(o.id)} onError={() => onLoaded(o.id)}
+              ref={(el) => { if (el?.complete && el.naturalWidth) onLoaded(o.id); }} />
+            <span className="ring-veil" aria-hidden="true" style={{ WebkitMaskImage: `url(${o.image})`, maskImage: `url(${o.image})` }} />
+          </>}
         </figure>
       ))}
     </div>
