@@ -8,6 +8,8 @@ COPY worker/package.json ./package.json
 ENV ONNXRUNTIME_NODE_INSTALL=skip
 RUN npm install --omit=dev --no-audit --no-fund
 COPY scripts ./scripts
+# Pure shared modules the pipeline imports (the style identities for the stylist).
+COPY src/lib ./src/lib
 COPY worker ./worker
 # The two local models (~350 MB) are baked in, so a woken worker starts working at once.
 RUN node worker/fetch-models.mjs

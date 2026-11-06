@@ -46,6 +46,17 @@ const RANK = { full: 2, partial: 1, hidden: 0 };
  * The same garment seen in several photos counts once; it is taken from the photo where it is most visible.
  * Returns [{ ...item, key, seenIn: [photo indexes] }].
  */
+/** Is the read garment x the one described by r ({ photo, category, description }, from an earlier reading of the same
+ *  photo)? Same photo and category, and either half the words in common or the only one of its kind in that photo.
+ *  For garments removed from the wardrobe and for remaking a look (the reader words a garment slightly differently each time). */
+export function sameReadGarment(r, x, all = []) {
+  if (!r || !x || r.photo !== x.photo || r.category !== x.category) return false;
+  const wa = new Set(words(String(r.description || ''))), wb = new Set(words(String(x.description || '')));
+  const shared = [...wa].filter((w) => wb.has(w)).length;
+  if (shared / Math.max(1, new Set([...wa, ...wb]).size) >= 0.5) return true;
+  return all.filter((y) => y.photo === x.photo && y.category === x.category).length === 1;
+}
+
 export function dedupeWardrobe(wardrobe) {
   const byKey = new Map();
   for (const x of withKeys(wardrobe)) {

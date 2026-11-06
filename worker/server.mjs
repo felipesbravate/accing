@@ -74,8 +74,16 @@ async function runJob(job) {
     if (ue) throw new Error(`No profile for this user: ${ue.message}`);
     const { data: photos, error: pe } = await db.from('wardrobe_photos').select('id, path').eq('user_id', job.user_id).eq('is_active', true).order('created_at');
     if (pe) throw new Error(pe.message);
-    const mustPath = job.job_type === 'make_looks' ? job.payload?.include_path || null : null; // "see my new outfit now" (testers)
-    const files = inputsFor(user, photos, { prepared: job.job_type === 'make_looks', mustPath });
+    // A remake: the look to make again (new face photos). Its first garment's photo must be among the photos read.
+    let remakeOf = null;
+    if (job.job_type === 'remake_look') {
+      const { data: o } = await db.from('outfits').select('id, items, occasion, weather, generated_image_path, status').eq('id', job.payload?.outfit_id).eq('user_id', job.user_id).maybeSingle();
+      if (!o || o.status !== 'ready') return { result: { gone: true }, cost: 0 };
+      remakeOf = o;
+    }
+    const remakePhoto = remakeOf ? photos.find((ph) => ph.id === remakeOf.items?.find((x) => x.photo_id)?.photo_id)?.path || null : null;
+    const mustPath = job.job_type === 'make_looks' ? job.payload?.include_path || null : remakePhoto;
+    const files = inputsFor(user, photos, { prepared: job.job_type !== 'prepare_base', mustPath });
     const mustPhoto = files.find((f) => mustPath && f.path === mustPath)?.as || null;
     // The pipeline's photo i is the i-th outfit photo here (photo-01, photo-02…): garments keep their photo's id, and
     // combinations the person hid are passed as indices so they aren't made again (migration 007; none before it).
@@ -90,6 +98,21 @@ async function runJob(job) {
       ]);
       const keys = [...new Set(avoidKeys([...(hidden || []).map((h) => h.combo), ...(made || []).map((o) => photoCombo(o.items))], photoIds))];
       if (keys.length) { avoidFile = join(tmp, 'avoid.json'); await writeFile(avoidFile, JSON.stringify(keys)); }
+    }
+    // Garments removed from the Wardrobe (users.removed_garments, migration 012), in this run's photo numbers.
+    let removeFile = null;
+    const removedHere = (Array.isArray(user.removed_garments) ? user.removed_garments : [])
+      .map((r) => ({ photo: photoIds.indexOf(r.photo_id), category: r.category, description: r.description })).filter((r) => r.photo >= 0);
+    if (removedHere.length) { removeFile = join(tmp, 'removed.json'); await writeFile(removeFile, JSON.stringify(removedHere)); }
+    let remakeFile = null;
+    if (remakeOf) {
+      const items = (remakeOf.items || []).map((x) => ({ photo: photoIds.indexOf(x.photo_id), category: x.category, description: x.description }));
+      if (!items.length || items.some((x) => x.photo < 0)) {
+        await db.from('outfits').update({ remade_at: new Date().toISOString() }).eq('id', remakeOf.id); // can't be remade: don't ask again
+        return { result: { skipped: 'photos no longer available' }, cost: 0 };
+      }
+      remakeFile = join(tmp, 'remake.json'); await writeFile(remakeFile, JSON.stringify({ items }));
+      job.payload = { ...(job.payload || {}), occasion: job.payload?.occasion || remakeOf.occasion, weather: job.payload?.weather || remakeOf.weather };
     }
     let preparedFile = null;
     for (const f of files) {
@@ -121,7 +144,7 @@ async function runJob(job) {
       if (error) throw new Error(error.message);
       early.set(l.n, path); log(`look ${l.n} shown`);
     })().catch((e) => log(`look ${l.n} not shown early: ${e.message}`)));
-    await runPipeline(pipelineArgs(job, person, jsonOut, preparedFile, cutouts, mustPhoto, avoidFile, { warmthOffset: Number(user.warmth_offset) || 0 }), job.job_type === 'make_looks' ? onLook : null);
+    await runPipeline(pipelineArgs(job, person, jsonOut, preparedFile, cutouts, mustPhoto, avoidFile, { warmthOffset: Number(user.warmth_offset) || 0, styles: user.styles || [], removeFile, remakeFile }), job.job_type === 'make_looks' ? onLook : null);
     await Promise.all(pending);
     for (const name of await readdir(cutouts)) if (!known.has(name)) await upload('outfits', `${cutoutPrefix}/${name}`, await readFile(join(cutouts, name))).catch((e) => log('cut-out not kept:', e.message));
     const summary = JSON.parse(await readFile(jsonOut, 'utf8'));
@@ -133,9 +156,21 @@ async function runJob(job) {
       const { data: now } = await db.from('users').select('base_source_path').eq('id', job.user_id).single();
       if (now?.base_source_path !== user.base_source_path) return { result: { superseded: true, base_options: options }, cost: summary.spent };
       if (!options.length) throw new Error('None of the prepared versions passed our checks. Try another full-body photo: standing, face visible, plain background.');
-      const { error } = await db.from('users').update({ base_options: options, base_path: null }).eq('id', job.user_id);
+      // New face photos from Settings keep the current base photo until the person picks a new one (the mirror keeps working).
+      const { error } = await db.from('users').update({ base_options: options, ...(job.payload?.keep_base ? {} : { base_path: null }) }).eq('id', job.user_id);
       if (error) throw new Error(error.message);
       return { result: { base_options: options }, cost: summary.spent };
+    }
+    if (remakeOf) {
+      // The same look, new face: swap the picture in place (favourites, hides and sightings stay with the look).
+      const l = summary.looks.find((x) => x.status === 'ready');
+      const now = new Date().toISOString();
+      if (!l) { await db.from('outfits').update({ remade_at: now }).eq('id', remakeOf.id); return { result: { remade: false }, cost: summary.spent }; }
+      const path = await saveLook(job, l.n, join(summary.dir, l.file), l.cutout && join(summary.dir, l.cutout));
+      const { error } = await db.from('outfits').update({ generated_image_path: path, remade_at: now, validation_confidence: l.identity ?? null }).eq('id', remakeOf.id);
+      if (error) throw new Error(error.message);
+      if (remakeOf.generated_image_path && remakeOf.generated_image_path !== path) await db.storage.from('outfits').remove([remakeOf.generated_image_path]).catch(() => {});
+      return { result: { remade: true, outfit_id: remakeOf.id }, cost: summary.spent };
     }
     for (const l of summary.looks.filter((x) => x.status === 'ready')) uploaded[l.n] = early.get(l.n) || await saveLook(job, l.n, join(summary.dir, l.file), l.cutout && join(summary.dir, l.cutout));
     const rows = outfitRows(job, summary, uploaded, photoIds);

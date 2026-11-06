@@ -1,0 +1,95 @@
+/* Profile and Settings (Figma "Main screens" 226:2154). Phone-first, 390 wide: top-nav, then a 24px-padded body;
+   on wider screens the column stays phone-width in the middle, like onboarding. */
+.acc-screen { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; max-width: 480px; margin: 0 auto;
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); background: var(--bg-primary); color: var(--text-primary); }
+.acc-nav { position: sticky; top: env(safe-area-inset-top); z-index: 5; background: var(--bg-primary); }
+.acc-body { flex: 1 1 auto; display: flex; flex-direction: column; gap: var(--space-lg); padding: var(--space-md) var(--space-lg) var(--space-2xl); }
+.acc-footer { position: sticky; bottom: 0; display: flex; flex-direction: column; gap: var(--space-sm); padding: var(--space-md) var(--space-lg) var(--space-lg);
+  background: var(--bg-primary); }
+.acc-wide { width: 100%; }
+.acc-screen h1, .acc-screen h2, .acc-screen p { margin: 0; }
+.acc-problem { color: var(--text-fail-danger); font-size: var(--fs-body); }
+.acc-empty { padding: var(--space-xl) 0; color: var(--text-secondary); font-size: var(--fs-body); text-align: center; }
+/* Long lists fade out under the bottom edge (bottom-gradient). */
+.acc-screen.has-fade::after { content: ''; position: fixed; left: 0; right: 0; bottom: 0; height: 48px; pointer-events: none;
+  background: linear-gradient(to bottom, transparent, var(--bg-primary)); }
+
+.acc-intro { display: flex; flex-direction: column; gap: var(--space-xs); }
+.acc-intro h1 { font-size: var(--fs-h2); font-weight: var(--fw-medium); line-height: normal; }
+.acc-intro p { color: var(--text-secondary); font-size: var(--fs-body); line-height: normal; }
+.acc-form { display: flex; flex-direction: column; gap: var(--space-lg); }
+.acc-fields { display: flex; flex-direction: column; gap: var(--space-md); }
+
+/* Profile (268:11591): the photo with its edit badge, name, email, then the five counts, the Wardrobe tiles, Log out. */
+.acc-profile { display: flex; flex-direction: column; align-items: center; gap: var(--space-sm); text-align: center; }
+.acc-photo { position: relative; width: 80px; height: 80px; }
+.acc-avatar { width: 80px; height: 80px; overflow: hidden; background: var(--lavanda-500); font-size: var(--fs-h1); }
+.acc-avatar[aria-busy="true"] { opacity: .6; }
+.acc-photo-edit { position: absolute; right: 0; bottom: 0; background: var(--button-primary); color: var(--icon-tertiary); }
+.acc-who h1 { font-size: var(--fs-h2); font-weight: var(--fw-medium); line-height: normal; }
+.acc-who p { color: var(--text-accent); font-size: var(--fs-body); overflow-wrap: anywhere; }
+.acc-stats { display: flex; justify-content: center; gap: var(--space-sm); margin: 0; padding: 0; list-style: none; }
+.acc-stats li { display: flex; flex-direction: column; align-items: center; gap: var(--space-xs); width: 56px; }
+.acc-stat-count { display: flex; align-items: center; justify-content: center; width: 48px; height: 48px; border-radius: var(--radius-full);
+  background: var(--lavanda-250); font-size: var(--fs-label-large); font-weight: var(--fw-medium); }
+.acc-stat-label { display: inline-flex; align-items: center; gap: 2px; color: var(--text-secondary); font-size: var(--fs-label-small); font-weight: var(--fw-medium); white-space: nowrap; }
+.acc-stat-heart { color: var(--icon-accent); fill: var(--bg-accent-light); }
+/* "Wardrobe" as the one tab of the mobile-menu (Outfits isn't designed yet). */
+.acc-section-tab { position: relative; margin: 0 calc(-1 * var(--space-lg)); padding: 0 var(--space-lg) var(--space-sm); border-bottom: 1px solid var(--border-secondary);
+  font-size: var(--fs-label-large); font-weight: var(--fw-medium); text-align: center; }
+.acc-section-tab::after { content: ''; position: absolute; left: 0; bottom: -1px; width: 50%; height: 2px; background: var(--icon-primary); }
+.acc-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-sm); }
+.acc-logout .ds-button { width: 100%; }
+
+/* Wardrobe (306:4775) and Hidden looks (297:2778): two columns of outlined cards, 16px apart. */
+.acc-cat-head { display: flex; align-items: center; gap: var(--space-md); }
+.acc-cat-icon { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: var(--radius-md); background: var(--bg-info); }
+.acc-cat-head h1 { font-size: var(--fs-h2); font-weight: var(--fw-medium); line-height: normal; }
+.acc-cat-head p { color: var(--text-secondary); font-size: var(--fs-label-small); font-weight: var(--fw-medium); }
+.acc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md); margin: 0; padding: 0; list-style: none; }
+.acc-card { display: flex; flex-direction: column; gap: var(--space-sm); padding: var(--space-sm) var(--space-sm) var(--space-sm); border-radius: var(--radius-lg);
+  box-shadow: inset 0 0 0 1px var(--border-default); }
+.acc-card-img { display: flex; align-items: center; justify-content: center; aspect-ratio: 147 / 140; overflow: hidden; border-radius: var(--radius-md); background: var(--bg-info); color: var(--icon-secondary); }
+.acc-card-img img { width: 100%; height: 100%; object-fit: cover; }
+.acc-card.is-look { padding: 0 var(--space-md) var(--space-sm); }
+.acc-card.is-look .acc-card-img { aspect-ratio: 112 / 168; background: transparent; border-radius: 0; }
+.acc-card.is-look .acc-card-img img { object-fit: contain; }
+.acc-card-note { color: var(--text-primary); font-size: var(--fs-label-small); font-weight: var(--fw-medium); }
+.acc-card-action { width: 100%; }
+.acc-toast { position: fixed; left: 0; right: 0; bottom: calc(var(--space-2xl) + env(safe-area-inset-bottom)); z-index: 20; display: flex; justify-content: center; padding: 0 var(--space-lg); }
+
+/* Settings (270:1948): section titles (24 medium) 12px over gray-50 cards of entries; entries 16px padded, a 32px white
+   icon box, title (16 medium) and text (14), a chevron; Tertiary dividers between them, from the text on. */
+.acc-group { display: flex; flex-direction: column; gap: 12px; }
+.acc-group h2 { font-size: var(--fs-h2); font-weight: var(--fw-medium); line-height: normal; }
+.acc-entries { display: flex; flex-direction: column; border-radius: var(--radius-lg); background: var(--bg-info); overflow: hidden; }
+.acc-entry { position: relative; display: flex; align-items: center; gap: var(--space-md); padding: var(--space-md); color: var(--text-primary); text-decoration: none; }
+.acc-entry + .acc-entry::before { content: ''; position: absolute; top: 0; left: 68px; right: var(--space-md); border-top: 1px solid var(--border-light); }
+.acc-entry-icon { flex: none; display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: var(--radius-md); background: var(--bg-primary); color: var(--icon-primary); }
+.acc-entry-text { flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px; min-width: 0; line-height: normal; }
+.acc-entry-title { font-size: var(--fs-label-large); font-weight: var(--fw-medium); }
+.acc-entry-sub { color: var(--text-secondary); font-size: var(--fs-body); }
+.acc-entry-chevron { flex: none; color: var(--icon-secondary); }
+.acc-entry.is-danger .acc-entry-title, .acc-entry.is-danger .acc-entry-icon { color: var(--text-fail-danger); }
+@media (hover: hover) { .acc-entry:hover { background: var(--blue-50); } }
+.acc-entry:focus-visible { outline: 2px solid var(--border-accent); outline-offset: -2px; }
+
+/* Verify (287:3723): the new address with "Change email", six one-digit boxes 8px apart. */
+.acc-email-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); font-size: var(--fs-body); }
+.acc-email-row span { overflow-wrap: anywhere; }
+.acc-action-link { flex: none; padding: 0; border: 0; background: transparent; color: var(--text-accent); font: inherit; font-size: var(--fs-label-small); font-weight: var(--fw-medium); cursor: pointer; }
+.acc-code { display: grid; grid-template-columns: repeat(6, 1fr); gap: var(--space-sm); }
+.acc-code-box { padding: 0; justify-content: center; }
+.acc-code-box input { text-align: center; font-size: var(--fs-h3); }
+
+/* Face photos (297:3383): the icon box, intro, the three photos (Left, Front, Right), "Take new photos". */
+.acc-face-icon { display: flex; align-items: center; justify-content: center; width: 48px; height: 48px; border-radius: var(--radius-lg); background: var(--blue-75); }
+.acc-face-set { display: flex; flex-direction: column; gap: var(--space-sm); }
+.acc-face-set h2 { font-size: var(--fs-label-large); font-weight: var(--fw-medium); }
+.acc-faces { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-sm); margin: 0; padding: 0; list-style: none; }
+.acc-faces li { display: flex; flex-direction: column; align-items: center; gap: var(--space-xs); color: var(--text-primary); font-size: var(--fs-label-small); font-weight: var(--fw-medium); }
+.acc-faces .acc-face-img { width: 100%; aspect-ratio: 1; overflow: hidden; border-radius: var(--radius-lg); background: var(--bg-info); }
+.acc-faces img { width: 100%; height: 100%; object-fit: cover; }
+.acc-face-note { color: var(--text-secondary); font-size: var(--fs-label-small); font-weight: var(--fw-medium); text-align: center; }
+.acc-take { display: flex; flex-direction: column; gap: var(--space-sm); }
+.acc-take .ds-button { width: 100%; }

@@ -9,14 +9,8 @@
 .mirror-shoot { cursor: pointer; }
 .mirror-shoot .icon { width: 16px; height: 16px; } /* button Size=Small: 16px icon (desktop) */
 .mirror-shoot:has(input:focus-visible) { outline: 2px solid var(--border-accent); outline-offset: 2px; }
-.mirror-account { position: relative; }
-.mirror-account > summary { list-style: none; cursor: pointer; }
 /* .mirror-avatar: the Thread avatar as it is (src/ui/components.css): 40px circle here, 48px in the phone's bottom bar. */
-.mirror-account > summary::-webkit-details-marker { display: none; }
-.mirror-account-menu { position: absolute; right: 0; top: calc(100% + var(--space-sm)); z-index: 10; padding: var(--space-xs); border: 1px solid var(--border-default);
-  border-radius: var(--radius-md); background: var(--bg-primary); }
-.mirror-account-menu button { padding: var(--space-sm) var(--space-md); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text-primary); white-space: nowrap; }
-.mirror-account-menu button:hover { background: var(--bg-secondary); }
+.mirror-avatar { flex: none; overflow: hidden; color: var(--text-primary); text-decoration: none; }
 
 /* Top: question and date on the left; season filters and the occasion column pinned to the right. */
 .mirror-top { position: relative; padding: var(--space-lg) var(--space-4xl) 0; } /* Figma 192:1854: the question and the filters 24px under the header */
@@ -170,7 +164,6 @@
   .mirror-shoot { flex: 1 1 auto; height: 48px; font-size: var(--fs-label-large); } /* button Size=Medium (48) */
   .mirror-shoot .icon { width: 20px; height: 20px; }
   .mirror-avatar { width: 48px; height: 48px; } /* avatar Size=48px */
-  .mirror-account-menu { top: auto; bottom: calc(100% + var(--space-sm)); }
 
   /* Carousel (Figma 191:1419): right under the filters, the front look 440 high, neighbours 352.8 high (centres ±183.6,
      raised 43.6) cropped by the screen edges, edges faded; the 62px hide / heart row ends on the bottom bar. 345 = header

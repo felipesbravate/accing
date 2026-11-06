@@ -39,10 +39,17 @@ const ext = (p) => (/\.(jpe?g|png|webp)$/i.exec(p)?.[0] || '.jpg').toLowerCase()
 export const MORNING_LOOKS = 3;
 export const MORNING_OCCASIONS = ['an office day', 'a relaxed casual day', 'dinner out', 'a party'];
 
-export function pipelineArgs(job, person, jsonOut, preparedFile = null, cutoutCache = null, mustPhoto = null, avoidFile = null, { warmthOffset = 0 } = {}) {
+export function pipelineArgs(job, person, jsonOut, preparedFile = null, cutoutCache = null, mustPhoto = null, avoidFile = null, { warmthOffset = 0, styles = [], removeFile = null, remakeFile = null } = {}) {
   const p = job.payload || {};
   const base = [`--person=${person}`, '--only=openai-2.5-flare-medium', '--hd', '--runs=1', `--json-out=${jsonOut}`, ...(cutoutCache ? [`--cutout-cache=${cutoutCache}`] : [])];
   if (job.job_type === 'prepare_base') return [...base, '--looks=1', '--prep-only', '--reprep'];
+  const extra = [...(removeFile ? [`--remove=${removeFile}`] : [])];
+  // New face photos (Settings): one existing look again, same garments and occasion, on the new base photo.
+  if (job.job_type === 'remake_look') {
+    const occasion = typeof p.occasion === 'string' && p.occasion.trim() ? p.occasion.trim().slice(0, 80) : 'an ordinary day';
+    return [...base, '--looks=1', `--occasion=${occasion}`, `--weather=${typeof p.weather === 'string' && p.weather.trim() ? p.weather.trim().slice(0, 80) : 'mild'}`,
+      ...(preparedFile ? [`--prepared=${preparedFile}`] : []), `--remake=${remakeFile}`, ...extra];
+  }
   if (job.job_type !== 'make_looks') throw new Error(`Unknown job type ${job.job_type}`);
   // The morning run makes 3 new looks a day (Felipe, 2026-11-01), until every combination is made: for the day's
   // occasion, else the first other occasion with a combination not made yet.
@@ -54,9 +61,11 @@ export function pipelineArgs(job, person, jsonOut, preparedFile = null, cutoutCa
   return [...base, `--looks=${looks}`, `--occasion=${occasion}`, ...(others.length ? [`--occasions=${others.join('|')}`] : []), `--weather=${clean(p.weather, 'mild')}`,
     ...(p.seed ? [`--seed=${parseInt(p.seed, 10) || 1}`] : []), ...(preparedFile ? [`--prepared=${preparedFile}`] : []),
     ...(mustPhoto ? [`--must-photo=${mustPhoto}`, ...(p.strict ? ['--must-strict'] : [])] : []),
-    ...(avoidFile ? [`--avoid=${avoidFile}`] : []),
+    ...(avoidFile ? [`--avoid=${avoidFile}`] : []), ...extra,
     // The person's own feel for warmth (users.warmth_offset, migration 009): "too warm" / "too cold" when hiding looks.
-    ...(Number.isFinite(warmthOffset) && warmthOffset ? [`--warmth-offset=${Math.max(-4, Math.min(4, warmthOffset))}`] : [])];
+    ...(Number.isFinite(warmthOffset) && warmthOffset ? [`--warmth-offset=${Math.max(-4, Math.min(4, warmthOffset))}`] : []),
+    // The styles they picked in onboarding (users.styles, migration 012): the stylist prefers looks in that spirit.
+    ...(Array.isArray(styles) && styles.length ? [`--styles=${styles.slice(0, 3).map((x) => String(x).replace(/[,\n]/g, ' ')).join(',')}`] : [])];
 }
 
 /** Rows for public.outfits from the pipeline summary (one per look asked for, ready or not). photoIds[i] is the

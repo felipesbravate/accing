@@ -97,15 +97,12 @@ function NoFavorites({ onBack }) {
   );
 }
 
-/** avatar (Figma "avatar", Variation=Default): the person's initial. */
-function Account({ initial }) {
+/** avatar (Figma "avatar": Image, else Default with the initial): opens the Profile (268:11591), where Log out is. */
+function Account({ initial, avatar }) {
   return (
-    <details className="mirror-account">
-      <summary className="ds-avatar mirror-avatar" aria-label="Account"><span aria-hidden="true">{initial}</span></summary>
-      <form className="mirror-account-menu" method="post" action="/auth/signout">
-        <button type="submit">Sign out</button>
-      </form>
-    </details>
+    <a className="ds-avatar mirror-avatar" href="/profile" aria-label="Profile">
+      {avatar ? <img src={avatar} alt="" /> : <span aria-hidden="true">{initial}</span>}
+    </a>
   );
 }
 
@@ -128,7 +125,7 @@ function ShootButton({ onShoot, compact = false }) {
  *  (local preview). Picking a tab with no looks yet asks the worker for some; while any are being made the mirror asks
  *  the server again every few seconds, and each look joins the ring as soon as it's ready. */
 export default function DailyMirror({
-  name = '', today = null, temperature = '24º',
+  name = '', today = null, temperature = '24º', avatar = null,
 }) {
   const [now, setNow] = useState(null); // set on the client, so the time is the viewer's own
   const [index, setIndex] = useState(0);
@@ -352,7 +349,7 @@ export default function DailyMirror({
           </div>
           <section className="mirror-waiting">
             <img src="/brand/symbol.svg" width="56" height="44" alt="" />
-            <div><h1>Your mirror is waiting</h1><p>It needs only 3 face photos and one outfit to show you in your own clothes.</p></div>
+            <div><h1>Your mirror is waiting</h1><p>To set up your mirror, take 3 face photos and a full-body outfit photo.</p></div>
             <div className="mirror-waiting-cta">
               <p className="mirror-waiting-time">About 3 minutes.</p>
               <a className="ds-button is-large" href="/onboarding">Let’s start</a>
@@ -370,7 +367,7 @@ export default function DailyMirror({
         <Logo className="mirror-logo" />
         <div className="mirror-actions">
           <ShootButton onShoot={onShoot} />
-          <Account initial={(name || '·').trim().charAt(0).toUpperCase()} />
+          <Account initial={(name || '·').trim().charAt(0).toUpperCase()} avatar={avatar} />
         </div>
       </header>
 
@@ -436,7 +433,7 @@ export default function DailyMirror({
             {count > 1 && !showMaking && <button type="button" className="ds-round-button mirror-arrow" onClick={() => go(1)} aria-label="Next outfit"><Icon name="arrow-right" size={20} /></button>}
           </div>
           {(note || (problem && count > 0)) && <p className="mirror-note" role="status">{note || problem}</p>}
-          {!note && count <= 1 && more > 0 && <p className="mirror-nudge">Add {more} more outfit{more > 1 ? 's' : ''} for new looks every day</p>}
+          {!note && count <= 1 && more > 0 && <p className="mirror-nudge">Add {more} more outfit{more > 1 ? 's' : ''} to unlock new looks every day</p>}
           {/* hide / heart / worn with the pager under them (Figma 226:2208); the toast sits right on top. */}
           <div className="mirror-look-bar">
             {!viewing && <Toast key={toast?.id} toast={toast} />}

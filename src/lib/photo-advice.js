@@ -3,9 +3,9 @@
 // hand, a mirror or a messy room in the full-body photo are fixed when the base photo is prepared.
 
 export const FACE_ANGLES = [
-  { key: 'front', label: 'Front', title: 'Front-facing photo', text: 'Look straight into the camera and ensure your face is well-lit.' },
-  { key: 'left', label: 'Left', title: 'Left-facing photo', text: 'Turn your face in around 45º angle into the camera and ensure your face is well-lit.' },
-  { key: 'right', label: 'Right', title: 'Right-facing photo', text: 'Turn your face in around 45º angle into the camera and ensure your face is well-lit.' },
+  { key: 'front', label: 'Front', title: 'Front-facing photo', text: 'Look straight at the camera. Make sure your face is well lit.' },
+  { key: 'left', label: 'Left', title: 'Left-side photo', text: 'Turn your head about 45° to show the left side of your face. Keep your face well lit.' },
+  { key: 'right', label: 'Right', title: 'Right-side photo', text: 'Turn your head about 45° to show the right side of your face. Keep your face well lit.' },
 ];
 
 /** reading: { one_face, face_visible, sharp, well_lit, turn: 'straight'|'turned', chin: 'level'|'up'|'down', face_small }.

@@ -28,6 +28,16 @@
 .ds-button:active { background: var(--button-primary-press); }
 .ds-button.is-secondary:active, .ds-button.is-tertiary:active { background: var(--button-secondary-tertiary-press); }
 .ds-button:disabled, .ds-button[aria-disabled="true"] { opacity: var(--opacity-disabled); pointer-events: none; }
+/* Danger (Thread button/danger tokens; no button variant in Figma yet): filled red, or outlined red when secondary
+   (Profile "Log out"), whose hover is the pale danger-hover. */
+.ds-button.is-danger { background: var(--button-danger); color: var(--text-tertiary); }
+.ds-button.is-danger .icon { color: currentColor; }
+.ds-button.is-danger:active { background: var(--button-danger-press); }
+.ds-button.is-secondary.is-danger { background: transparent; color: var(--text-fail-danger); box-shadow: inset 0 0 0 1px var(--border-danger); }
+@media (hover: hover) { .ds-button.is-danger:not(.is-secondary):hover { background: var(--button-danger-press); } .ds-button.is-secondary.is-danger:hover { background: var(--button-danger-hover); } }
+.ds-button.is-secondary.is-danger:active { background: var(--button-danger-hover); }
+/* icon-button Size=Tiny (24, radius 8, 12px icon): the edit badge on the Profile photo */
+.ds-icon-button.is-tiny { width: 24px; height: 24px; border-radius: var(--radius-md); }
 
 /* icon-button (Thread 56:53) — Size=Small (32, radius md, 16px icon) | Medium (40, the default, 20px icon) | Large (48,
    .is-large, 24px icon); Style=Primary (navy, light icon) | Secondary (.is-secondary: a border/secondary ring that turns
@@ -118,10 +128,13 @@
 /* divider (Thread 178:1401) — a 1px rule: Primary border/default, Secondary border/secondary */
 .ds-divider { display: block; width: 100%; height: 0; margin: 0; border: 0; border-top: 1px solid var(--border-default); }
 .ds-divider.is-secondary { border-top-color: var(--border-secondary); }
+.ds-divider.is-tertiary { border-top-color: var(--border-light); }
 
-/* top-nav (Thread 178:1363, 2026-11-03) — 64px bar, 16px side padding: Left action (a 48px Secondary icon-button), then
-   Right action and Second right action at the far right, 8px apart. Each is optional (Look zoom has only × on the right). */
-.ds-top-nav { display: flex; align-items: center; justify-content: space-between; height: 64px; padding: 0 var(--space-md); }
+/* top-nav (Thread 178:1363, 2026-11-06) — 64px bar on bg/primary, 16px side padding, 16px gaps: Left action (a 48px
+   Secondary icon-button), an optional centred Title (18 medium), Right action. Each is optional (Look zoom: × only). */
+.ds-top-nav { display: flex; align-items: center; justify-content: space-between; gap: var(--space-md); height: 64px; padding: 0 var(--space-md); }
+.ds-top-nav-title { flex: 1 1 auto; min-width: 0; margin: 0; overflow: hidden; color: var(--text-primary); font-size: var(--fs-h3);
+  font-weight: var(--fw-medium); line-height: normal; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
 .ds-top-nav-side { display: flex; align-items: center; gap: var(--space-sm); min-width: 48px; }
 .ds-top-nav-side.is-end { justify-content: flex-end; }
 
@@ -148,6 +161,108 @@
 .ds-toast-extra { display: flex; gap: var(--space-sm); }
 .ds-toast-extra .ds-toast-action { flex: 1 1 0; min-width: 0; border: 1px solid var(--border-secondary); }
 .ds-toast-action:focus-visible { outline: 2px solid var(--border-accent); outline-offset: 2px; }
+
+/* Modal (Thread 224:1421) + modal-top-nav (213:439) — the page behind under white 40%; a glass panel (white 88%, 4px blur,
+   1px border/light inside, radius 40) 8px from the bottom and sides: a 72px top bar with optional 40px Secondary
+   icon-buttons, then the centred title (24 medium) and text (14) 8px apart, then the actions 40px under them, in a row
+   16px apart, 16px from the bottom edge. */
+.ds-modal { position: fixed; inset: 0; z-index: 200; display: flex; flex-direction: column; justify-content: flex-end; align-items: center;
+  padding: 0 var(--space-sm) calc(var(--space-sm) + env(safe-area-inset-bottom)); background: var(--bg-modal); animation: ds-modal-fade .2s ease-out; }
+.ds-modal-panel { display: flex; flex-direction: column; width: 100%; max-width: 480px; padding-bottom: var(--space-md); border-radius: var(--radius-2xl);
+  background: var(--bg-glass); box-shadow: inset 0 0 0 1px var(--border-light), 0 0 16px rgba(22, 21, 15, .08);
+  -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); animation: ds-modal-up .24s cubic-bezier(.2, .8, .2, 1); outline: none; }
+.ds-modal-top { display: flex; align-items: center; justify-content: space-between; height: 72px; padding: 0 var(--space-md); }
+.ds-modal-info { display: flex; flex-direction: column; gap: var(--space-2xl); padding: 0 var(--space-lg); }
+.ds-modal-text { display: flex; flex-direction: column; gap: var(--space-sm); text-align: center; }
+.ds-modal-title { margin: 0; color: var(--text-primary); font-size: var(--fs-h2); font-weight: var(--fw-medium); line-height: normal; }
+.ds-modal-description { margin: 0; color: var(--text-secondary); font-size: var(--fs-body); line-height: normal; }
+.ds-modal-actions { display: flex; gap: var(--space-md); }
+.ds-modal-actions > * { flex: 1 1 0; min-width: 0; }
+@keyframes ds-modal-fade { from { background: transparent; } }
+@keyframes ds-modal-up { from { transform: translateY(24px); opacity: 0; } }
+@media (min-width: 1024px) { .ds-modal { justify-content: center; } }
+
+/* text-field (Thread 122:683) — Size=Medium; State=Empty | Filled | Focus | Disabled. A 14px medium label 8px above a
+   48px box (radius 16, 16px sides, 8px gaps): optional 20px icons either side, the value (16 medium; placeholder
+   text/empty) and an optional unit or support text (14, text/secondary). Border: border/default empty, border/secondary
+   filled, border/active focused; 32% disabled. */
+.ds-field { display: flex; flex-direction: column; gap: var(--space-sm); min-width: 0; }
+.ds-field-label { color: var(--text-primary); font-size: var(--fs-label-medium); font-weight: var(--fw-medium); line-height: normal; }
+.ds-field-box { display: flex; align-items: center; gap: var(--space-sm); height: 48px; padding: 0 var(--space-md); border-radius: var(--radius-lg);
+  background: var(--bg-primary); box-shadow: inset 0 0 0 1px var(--border-default); color: var(--icon-secondary); cursor: text; }
+.ds-field-box:has(input:not(:placeholder-shown)) { box-shadow: inset 0 0 0 1px var(--border-secondary); }
+.ds-field-box:focus-within { box-shadow: inset 0 0 0 1px var(--border-active); }
+.ds-field-box input { flex: 1 1 auto; min-width: 0; height: 100%; padding: 0; border: 0; outline: 0; background: transparent; color: var(--text-primary);
+  font: inherit; font-size: var(--fs-body-large); font-weight: var(--fw-medium); }
+.ds-field-box input::placeholder { color: var(--text-empty); opacity: 1; }
+.ds-field-unit { flex: none; color: var(--text-secondary); font-size: var(--fs-body); font-weight: var(--fw-medium); }
+.ds-field-icon { flex: none; display: inline-flex; padding: 0; border: 0; background: transparent; color: var(--icon-secondary); cursor: pointer; }
+.ds-field-icon:focus-visible { outline: 2px solid var(--border-accent); outline-offset: 2px; border-radius: var(--radius-sm); }
+.ds-field.is-disabled { opacity: var(--opacity-disabled); }
+.ds-field-support { color: var(--text-secondary); font-size: var(--fs-body); line-height: normal; }
+.ds-field.is-invalid .ds-field-box { box-shadow: inset 0 0 0 1px var(--border-danger); }
+.ds-field.is-invalid .ds-field-support { color: var(--text-fail-danger); }
+
+/* Info-box (Thread 201:348) — Type=Default (gray-50) | Danger (fail-danger light) | Warning (yellow pale): 16px padding,
+   radius 16, an optional 20px icon 8px from a 14px medium title and 14px text, 4px apart, coloured by type. */
+.ds-info { display: flex; align-items: flex-start; gap: var(--space-sm); padding: var(--space-md); border-radius: var(--radius-lg);
+  background: var(--bg-info); color: var(--text-primary); line-height: normal; }
+.ds-info > .icon { flex: none; color: var(--icon-primary); }
+.ds-info-body { display: flex; flex-direction: column; gap: var(--space-xs); min-width: 0; }
+.ds-info-title { margin: 0; font-size: var(--fs-label-medium); font-weight: var(--fw-medium); }
+.ds-info-text { margin: 0; color: var(--text-secondary); font-size: var(--fs-body); }
+.ds-info.is-danger { background: var(--fail-danger-light); color: var(--text-fail-danger); }
+.ds-info.is-danger > .icon, .ds-info.is-danger .ds-info-text { color: var(--text-fail-danger); }
+.ds-info.is-warning { background: var(--yellow-pale); color: var(--text-warning); }
+.ds-info.is-warning > .icon, .ds-info.is-warning .ds-info-text { color: var(--text-warning); }
+
+/* tag (Thread 20:8) — a pill with a border/accent outline: Size=Medium (14) | Small (12); hover bg/accent-fade, selected
+   bg/accent-light. A toggle: aria-pressed. */
+.ds-tag { display: inline-flex; align-items: center; justify-content: center; padding: var(--space-xs) var(--space-sm); border: 0; border-radius: var(--radius-full);
+  background: transparent; box-shadow: inset 0 0 0 1px var(--border-accent); color: var(--text-primary); font: inherit; font-size: var(--fs-label-medium);
+  font-weight: var(--fw-medium); line-height: normal; cursor: pointer; transition: background-color .12s; }
+.ds-tag.is-small { font-size: var(--fs-label-small); }
+@media (hover: hover) { .ds-tag:hover { background: var(--bg-accent-fade); } }
+.ds-tag[aria-pressed="true"] { background: var(--bg-accent-light); }
+.ds-tag:disabled { opacity: var(--opacity-disabled); cursor: default; }
+.ds-tag:focus-visible { outline: 2px solid var(--border-accent); outline-offset: 2px; }
+
+/* label (Thread 187:1569) — a status chip, radius 8: Type=Neutral (gray-50, gray-600 text) | Positive | Negative |
+   Warning (status colour, light text); Size=Medium (14) | Small (12). */
+.ds-label { display: inline-flex; align-items: center; padding: var(--space-xs) var(--space-sm); border-radius: var(--radius-md); background: var(--gray-50);
+  color: var(--gray-600); font-size: var(--fs-label-medium); font-weight: var(--fw-medium); line-height: normal; white-space: nowrap; }
+.ds-label.is-small { font-size: var(--fs-label-small); }
+.ds-label.is-positive { background: var(--status-positive); color: var(--text-tertiary); }
+.ds-label.is-negative { background: var(--status-negative); color: var(--text-tertiary); }
+.ds-label.is-warning { background: var(--status-warning); color: var(--text-tertiary); }
+
+/* checkbox (Thread 122:658) — a 16px box (radius 4), 2px down so it sits on the first line, 8px from 14px text. Unchecked:
+   border/secondary outline; checked: bg/accent with a 12px check. */
+.ds-checkbox { position: relative; display: flex; align-items: flex-start; gap: var(--space-sm); color: var(--text-primary); font-size: var(--fs-body);
+  line-height: normal; cursor: pointer; }
+.ds-checkbox input { position: absolute; width: 16px; height: 16px; margin: 2px 0 0; opacity: 0; }
+.ds-checkbox-box { flex: none; display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; margin-top: 2px; border-radius: var(--radius-sm);
+  box-shadow: inset 0 0 0 1px var(--border-secondary); color: var(--icon-tertiary); }
+.ds-checkbox-box .icon { opacity: 0; }
+.ds-checkbox input:checked + .ds-checkbox-box { background: var(--bg-accent); box-shadow: none; }
+.ds-checkbox input:checked + .ds-checkbox-box .icon { opacity: 1; }
+.ds-checkbox input:focus-visible + .ds-checkbox-box { outline: 2px solid var(--border-accent); outline-offset: 2px; }
+
+/* tile (Thread 183:1491) — 68px high, radius 16, gray-50: a 24px icon 16px from a 14px medium label over a 12px medium
+   sub-label (text/secondary). A link or button. */
+.ds-tile { display: flex; align-items: center; gap: var(--space-md); min-width: 0; height: 68px; padding: 0 var(--space-md); border: 0; border-radius: var(--radius-lg);
+  background: var(--bg-info); color: var(--icon-primary); font: inherit; text-align: left; text-decoration: none; cursor: pointer; }
+.ds-tile-text { display: flex; flex-direction: column; min-width: 0; line-height: normal; }
+.ds-tile-label { overflow: hidden; color: var(--text-primary); font-size: var(--fs-label-medium); font-weight: var(--fw-medium); text-overflow: ellipsis; white-space: nowrap; }
+.ds-tile-sub { color: var(--text-secondary); font-size: var(--fs-label-small); font-weight: var(--fw-medium); }
+@media (hover: hover) { .ds-tile:hover { background: var(--blue-50); } }
+.ds-tile:active { background: var(--blue-75); }
+.ds-tile:focus-visible { outline: 2px solid var(--border-accent); outline-offset: 2px; }
+
+/* spinner (Thread 220:634) — the Accing symbol turning a quarter anticlockwise every 0.6 s, linear, without stopping. */
+.ds-spinner { display: block; width: 35px; height: 36px; color: var(--icon-primary); animation: ds-spin 2.4s linear infinite; }
+@keyframes ds-spin { to { transform: rotate(-360deg); } }
+@media (prefers-reduced-motion: reduce) { .ds-spinner { animation-duration: 9.6s; } }
 
 /* Toggle (vertical, 20×32) */
 .ds-toggle { display: inline-flex; align-items: center; justify-content: flex-end; gap: var(--space-sm); padding: 0; border: 0; background: transparent; }

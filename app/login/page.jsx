@@ -13,9 +13,10 @@ const MESSAGES = {
   credentials: "That email and password didn't match. Try again.",
   name: 'Enter your name.',
   email: 'Enter a valid email address.',
-  password: 'Use a password of at least 8 characters.',
+  password: 'Use at least 8 characters, including an uppercase letter, a lowercase letter, a number, and a symbol.',
   signup: "We couldn't create that account. It may already exist: try signing in.",
   link: 'That confirmation link did not work. Sign in, or create the account again.',
+  reset: 'That reset link has expired or was already used. Ask for a new one.',
 };
 
 export default async function Page({ searchParams }) {
@@ -26,6 +27,8 @@ export default async function Page({ searchParams }) {
   const step = await loginStep();
   const message = q.sent === '1'
     ? { text: 'Check your inbox: confirm your email, then sign in.', ok: true }
+    : q.reset === 'sent' ? { text: 'If that email has an account, we’ve sent a link to choose a new password.', ok: true }
+    : q.reset === 'done' ? { text: 'Your password is updated.', ok: true }
     : (MESSAGES[q.error] ? { text: MESSAGES[q.error], ok: false } : null);
   return <LoginApp {...step} message={message} preview={previewAllowed()} />;
 }

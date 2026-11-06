@@ -7,7 +7,7 @@ import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { appendFileSync, existsSync } from 'node:fs';
 import { extname, join, resolve } from 'node:path';
-import { CATEGORIES, blameGarment, composeLooks, lookKey, mergeLayers, normaliseReading, weatherForGarments } from './image-test-lib.mjs';
+import { CATEGORIES, blameGarment, composeLooks, lookKey, mergeLayers, normaliseReading, sameReadGarment, weatherForGarments } from './image-test-lib.mjs';
 import { judgeLooks, STYLIST_MIN } from './stylist.mjs';
 import { checkFaces, checkTable, MIN_IDENTITY } from './face-check/index.mjs';
 import { confirmClaims, outfitCheck, photoCheck, poseCheck } from './face-check/look-check.mjs';
@@ -68,7 +68,10 @@ function args() {
     else if (k === 'occasions') out.occasions = v.split('|').map((x) => x.trim()).filter(Boolean); // fallbacks for --occasion
     else if (k === 'no-stylist') out.stylist = false;
     else if (k === 'warmth-offset') out.warmthOffset = Math.max(-4, Math.min(4, parseFloat(v) || 0)); // °C, users.warmth_offset
+    else if (k === 'styles') out.styles = String(v || '').split(',').map((x) => x.trim()).filter(Boolean).slice(0, 3); // users.styles
     else if (k === 'avoid') out.avoidFile = v; // JSON list of combinations not to make ("0/top + 1/bottom + 2/shoes")
+    else if (k === 'remove') out.removeFile = v; // JSON list of garments removed from the wardrobe: [{ photo, category, description }]
+    else if (k === 'remake') out.remakeFile = v; // JSON { items: [{ photo, category, description }] }: make this one combination again
     else if (k === 'looks') out.looks = Math.max(1, Math.min(8, parseInt(v, 10) || 1));
     else if (k === 'dry-run') out.dryRun = true;
     else if (k === 'no-check') out.check = false;
@@ -516,6 +519,10 @@ async function main() {
   // With --prep-only no look is made, so a wardrobe that can't make one yet (onboarding) must not stop the base photo.
   // Combinations already made or hidden (worker: --avoid) are never made again.
   const avoid = new Set(opts.avoidFile ? JSON.parse(await readFile(opts.avoidFile, 'utf8')) : []);
+  // Garments the person removed from their Wardrobe (users.removed_garments): never used again.
+  const removed = opts.removeFile ? JSON.parse(await readFile(opts.removeFile, 'utf8')) : [];
+  const pool = removed.length ? wardrobe.filter((x) => !removed.some((r) => sameReadGarment(r, x, wardrobe))) : wardrobe;
+  if (pool.length < wardrobe.length) console.log(`Left out ${wardrobe.length - pool.length} garment(s) removed from the wardrobe.`);
   const mustIndex = opts.mustPhoto ? outfits.findIndex((o) => o.file === opts.mustPhoto) : null;
   if (mustIndex != null && mustIndex >= 0) {
     const w = weatherForGarments(readings[mustIndex].items, opts.weather);
@@ -527,25 +534,38 @@ async function main() {
   const composeFor = async (occasion) => {
     const base = { seed, occasion, weather: opts.weather, mustPhoto: mustIndex, warmthOffset: opts.warmthOffset || 0 };
     let first;
-    try { first = composeLooks(wardrobe, { ...base, count: opts.looks, avoid }); } catch (e) { if (opts.prepOnly) return emptyLooks(); throw e; }
+    try { first = composeLooks(pool, { ...base, count: opts.looks, avoid }); } catch (e) { if (opts.prepOnly) return emptyLooks(); throw e; }
     if (!opts.stylist || opts.prepOnly || !first.length) return first;
-    const pool = composeLooks(wardrobe, { ...base, count: Math.max(opts.looks * 4, 8), avoid });
-    const verdicts = await judgeLooks(pool, { occasion, weather: opts.weather, model: opts.reader, warmthOffset: opts.warmthOffset || 0 });
+    const candidates = composeLooks(pool, { ...base, count: Math.max(opts.looks * 4, 8), avoid });
+    const verdicts = await judgeLooks(candidates, { occasion, weather: opts.weather, model: opts.reader, warmthOffset: opts.warmthOffset || 0, styles: opts.styles || [] });
     if (!verdicts) { console.log('(stylist unavailable: looks picked by the rules only)'); return first; }
-    const vetoed = pool.filter((_, i) => verdicts[i].score < STYLIST_MIN);
-    pool.forEach((l, i) => console.log(`  stylist ${verdicts[i].score}/5 ${verdicts[i].score < STYLIST_MIN ? '✗' : '✓'} ${l.items.map((x) => x.description).join(' + ')} — ${verdicts[i].reason}`));
+    const vetoed = candidates.filter((_, i) => verdicts[i].score < STYLIST_MIN);
+    candidates.forEach((l, i) => console.log(`  stylist ${verdicts[i].score}/5 ${verdicts[i].score < STYLIST_MIN ? '✗' : '✓'} ${l.items.map((x) => x.description).join(' + ')} — ${verdicts[i].reason}`));
     // Only looks the stylist passed are made (Felipe, 2026-11-01: "always fashion judged"). Re-composing after a veto
     // used to pick combinations the stylist never saw (a winter parka over a red hoodie at 22 °C). The pool is already in
     // the rules' order (fit, then variety); the stylist's 4s and 5s go before its 3s.
-    const passed = pool.map((l, i) => ({ l, i, score: verdicts[i].score })).filter((x) => x.score >= STYLIST_MIN)
+    const passed = candidates.map((l, i) => ({ l, i, score: verdicts[i].score })).filter((x) => x.score >= STYLIST_MIN)
       .sort((a, b) => (Math.min(b.score, 4) - Math.min(a.score, 4)) || (a.i - b.i)).slice(0, opts.looks).map((x) => x.l);
-    const picked = Object.assign(passed, { skipped: pool.skipped, mustMissed: pool.mustMissed, avoided: pool.avoided, occasion: pool.occasion });
+    const picked = Object.assign(passed, { skipped: candidates.skipped, mustMissed: candidates.mustMissed, avoided: candidates.avoided, occasion: candidates.occasion });
     if (!picked.length) picked.noneStylish = vetoed.length;
     return picked;
   };
   // --occasions: other occasions to try, in order, when nothing new is left for the first (the daily look).
   const tries = [opts.occasion, ...(opts.occasions || [])].filter((o, i, a) => o && a.indexOf(o) === i);
   let looks = emptyLooks();
+  // --remake (new face photos): the same garments again, for the same occasion, with the new base photo. No stylist:
+  // the combination was judged when it was first made.
+  const remake = opts.remakeFile ? JSON.parse(await readFile(opts.remakeFile, 'utf8')) : null;
+  if (remake) {
+    const items = (remake.items || []).map((r) => pool.find((x) => sameReadGarment(r, x, pool)));
+    if (!items.length || items.some((x) => !x)) {
+      console.log('Remake: a garment of this look is no longer in the wardrobe.');
+      if (opts.jsonOut) await writeFile(resolve(opts.jsonOut), JSON.stringify({ stage: 'looks', dir: null, spent: readCost, prep: [], skipped: [], rejected: [], looks: [], occasion: opts.occasion, remakeMissing: true }, null, 2));
+      return;
+    }
+    looks = Object.assign([{ items, distinctPhotos: new Set(items.map((x) => x.photo)).size, newCombination: false }], { skipped: [], avoided: 0, occasion: emptyLooks().occasion });
+    tries.length = 0;
+  }
   for (const [i, occasion] of tries.entries()) {
     try { looks = await composeFor(occasion); } catch (e) { if (i === tries.length - 1) throw e; console.log(`No look for "${occasion}": ${e.message}`); continue; }
     if (looks.length || looks.mustMissed || i === tries.length - 1) { opts.occasion = occasion; break; }

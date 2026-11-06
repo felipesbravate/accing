@@ -11,7 +11,10 @@
   /* Fail / danger (Thread primitives indicator-fail-danger, indicator-fail-danger-light; button/danger-press is a raw hex
      in Figma, kept here as one too) */
   --fail-danger: #b51552; --fail-danger-light: #f8e1ea; --fail-danger-dark: #840f3c;
-  --lavanda-500: #ebd8ff; --lavanda-600: #d7b9f9; --lavanda-700: #c399f1; --lavanda-800: #a97ade; --lavanda-900: #8f56ce;
+  /* Yellow and green indicators (Thread: indicator-yellow-*, yellow, indicator-positive-success) */
+  --yellow: #805918; --yellow-indicator: #cea157; --yellow-medium: #ce8e24; --yellow-light: #ffda56; --yellow-pale: #fcf3d6;
+  --positive-success: #397d68;
+  --lavanda-250: #f5eafd; --lavanda-500: #ebd8ff; --lavanda-600: #d7b9f9; --lavanda-700: #c399f1; --lavanda-800: #a97ade; --lavanda-900: #8f56ce;
 
   /* Design Tokens: color */
   --brand-primary: var(--blue-800);
@@ -24,7 +27,11 @@
   --bg-accent: var(--lavanda-900);
   --bg-accent-light: var(--lavanda-600);
   --bg-fail: var(--fail-danger);
-  --bg-warning: #cea157; /* indicator-yellow */
+  --bg-warning: var(--yellow-indicator);
+  --bg-accent-fade: var(--lavanda-250); /* tag hover */
+  --bg-modal: rgb(255 255 255 / .4); /* white 40%: the page behind a modal */
+  --bg-glass: rgb(255 255 255 / .88); /* white 88%: the modal panel, blurred behind */
+  --bg-info: var(--gray-50); /* Info-box Default and tile (primitive gray-50) */
 
   --text-primary: var(--blue-800);
   --text-secondary: var(--blue-500); /* Figma color/text/secondary, 2026-10-31 (was blue-400) */
@@ -33,6 +40,7 @@
   --text-empty: var(--blue-400); /* placeholders, steps not reached */
   --text-press: var(--blue-700);
   --text-accent: var(--lavanda-900);
+  --text-warning: var(--yellow);
 
   --icon-primary: var(--blue-800);
   --icon-secondary: var(--blue-500);
@@ -43,6 +51,12 @@
   --border-secondary: var(--blue-300);
   --border-active: var(--blue-500); /* Figma color/border/active (its Dev Mode name says --border-secondary; this is the active one) */
   --border-accent: var(--lavanda-600);
+  --border-light: var(--blue-100);
+
+  --status-neutral: var(--gray-300);
+  --status-positive: var(--positive-success);
+  --status-negative: var(--fail-danger);
+  --status-warning: var(--yellow-indicator);
 
   /* Buttons (Thread variables, 2026-11-02): navy primary; secondary and tertiary are see-through until hovered or pressed. */
   --button-primary: var(--blue-800);

@@ -6,6 +6,7 @@ import { askForLooks, wakeWorker } from './looks.js';
 import { planFeatures } from '../lib/plans.js';
 import { checkPhoto } from './photo-check.js';
 import { bodyNote } from '../lib/photo-advice.js';
+import { STYLES } from '../lib/styles.js';
 import { defaultTab, OCCASION_TABS } from '../mirror/occasions.js';
 
 const URL_SECONDS = 60 * 60;
@@ -33,6 +34,7 @@ export async function onboardingState(userId) {
     faces: { front: Boolean(u?.face_front_path), left: Boolean(u?.face_left_path), right: Boolean(u?.face_right_path) },
     bodyPhoto: Boolean(u?.base_source_path),
     bodyNote: u?.body_note || null,
+    styles: Array.isArray(u?.styles) ? u.styles : [],
     basePath: u?.base_path || null,
     later: Boolean(u?.onboarding_later_at),
     outfits: count || 0,
@@ -121,6 +123,14 @@ export async function saveDetails(userId, height, weight) {
   const sb = await authClient();
   const { error } = await sb.from('users').update({ body_note: bodyNote(height, weight) }).eq('id', userId);
   return error ? { error: error.message } : { ok: true };
+}
+
+/** Step 4: up to 3 styles from the list (Onboarding.jsx STYLES). Before migration 012 it saves nothing, quietly. */
+export async function saveStyles(userId, styles) {
+  const keep = [...new Set((Array.isArray(styles) ? styles : []).filter((x) => STYLES.includes(x)))].slice(0, 3);
+  const sb = await authClient();
+  const { error } = await sb.from('users').update({ styles: keep }).eq('id', userId);
+  return error && !/styles/.test(error.message) ? { error: error.message } : { ok: true };
 }
 
 /** "This is me": keeps the picked prepared photo and asks for the first looks (not counted in the daily limit). */

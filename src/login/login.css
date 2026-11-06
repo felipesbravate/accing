@@ -13,26 +13,18 @@
 .login-content:has(.login-user) { gap: var(--space-2xl); }
 .login-title { margin: 0; text-align: center; font-size: var(--fs-h2); font-weight: var(--fw-medium); line-height: 24px; color: var(--text-primary); }
 
-/* "Hello, Felipe!" (186:4112): a round 55px initial, then the name and email, centred, 16px apart */
+/* "Hello, Juliana!" (186:3991): avatar 80px (Variation Default: the initial on lavanda), then the name and email, centred, 16px apart */
 .login-user { display: flex; flex-direction: column; align-items: center; gap: var(--space-md); text-align: center; }
-.login-avatar { flex: none; display: flex; align-items: center; justify-content: center; width: 55px; height: 55px; border-radius: var(--radius-full);
-  border: 1px solid var(--border-default); background: var(--lavanda-500); color: var(--text-primary); font-size: var(--fs-h3); font-weight: var(--fw-medium); }
+.login-avatar { flex: none; display: flex; align-items: center; justify-content: center; width: 80px; height: 80px; border-radius: var(--radius-full);
+  border: 1px solid var(--border-default); background: var(--lavanda-500); color: var(--text-primary); font-size: var(--fs-h1); font-weight: var(--fw-medium); }
 .login-user h1 { margin: 0; font-size: var(--fs-h3); font-weight: var(--fw-medium); line-height: normal; }
 .login-user p { margin: 0; color: var(--text-accent); font-size: var(--fs-body); font-weight: var(--fw-medium); line-height: normal; overflow-wrap: anywhere; }
 
 .login-form { display: flex; flex-direction: column; gap: var(--space-lg); }
 .login-fields { display: flex; flex-direction: column; gap: var(--space-md); }
 .login-submit { width: 100%; }
+.login-secondary { display: flex; flex-direction: column; gap: var(--space-xs); margin-top: calc(var(--space-sm) - var(--space-2xl)); }
 
-/* text-field: Empty (border default), Filled (border secondary), Focus (dark border) */
-.login-field { display: flex; flex-direction: column; gap: var(--space-sm); }
-.login-field label { color: var(--text-secondary); font-size: var(--fs-label-medium); font-weight: var(--fw-medium); line-height: normal; }
-.login-field input { height: 48px; padding: 0 var(--space-md); border: 1px solid var(--border-default); border-radius: var(--radius-md);
-  background: var(--bg-primary); color: var(--text-primary); font: inherit; font-size: var(--fs-label-large); font-weight: var(--fw-medium); }
-.login-field input::placeholder { color: var(--text-hover); }
-.login-field input:not(:placeholder-shown) { border-color: var(--border-secondary); }
-.login-field input:focus { border-color: var(--border-active); outline: 0; }
-.login-field input:focus-visible { box-shadow: 0 0 0 2px var(--border-accent); }
 
 .login-msg { margin: 0; padding: var(--space-sm) var(--space-md); border-radius: var(--radius-md); background: var(--fail-danger-light); color: var(--text-fail-danger); font-size: var(--fs-body); }
 .login-msg.is-ok { background: var(--bg-secondary); color: var(--text-primary); }

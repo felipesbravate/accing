@@ -1,5 +1,6 @@
-# Only scripts/ and worker/ go into the worker image.
+# Only scripts/, worker/ and the pure shared modules in src/lib go into the worker image.
 *
 !scripts/
 !worker/
+!src/lib/
 scripts/assets/*-house.png
