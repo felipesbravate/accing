@@ -74,13 +74,14 @@
 .mirror-look-actions { display: flex; flex-direction: column; align-items: center; gap: var(--space-sm); min-height: 62px; padding: 0 var(--space-md); max-width: 100%; }
 .mirror-look-buttons { display: flex; align-items: center; gap: var(--space-xs); }
 .mirror-look-actions .ds-pager { max-width: none; } /* the Max pager may be wider than the three buttons */
-/* Exactly as the outfit-actions component (Thread 246:498, 2026-11-06): hide, heart and medal in icon/secondary. Hearted: filled bg/accent-light, icon/accent stroke, a #D4B7F6 glow (Figma blur 24, exported as stdDeviation 12 = CSS drop-shadow 24px). Worn
+/* Exactly as the outfit-actions component (Thread 246:498, 2026-11-06): hide, heart and medal in icon/secondary. Hearted: filled bg/accent-light, icon/accent stroke, a #D4B7F6 glow (Figma blur 24 = an SVG stdDeviation 12 filter, Icon.jsx GLOW). Worn
    today: filled #FFDA56, #CE8E24 stroke, a #FFBB00 glow (blur 24); no tokens for the gold in the system. */
 .ds-icon-button.mirror-look-action { color: var(--icon-secondary); } /* all three, unselected (246:498, 2026-11-06) */
 .ds-icon-button.mirror-look-action[aria-pressed="true"] { color: var(--icon-accent); }
-.mirror-look-action[aria-pressed="true"] svg { fill: var(--bg-accent-light); filter: drop-shadow(0 0 24px #d4b7f6); }
+.mirror-look-action[aria-pressed="true"] svg { fill: var(--bg-accent-light); overflow: visible; }
+.mirror-look-action[aria-pressed="true"]:not(.is-wear) svg path { filter: url(#heart-glow); } /* the exported filter, not CSS drop-shadow */
 .ds-icon-button.mirror-look-action.is-wear[aria-pressed="true"] { color: #ce8e24; }
-.mirror-look-action.is-wear[aria-pressed="true"] svg { fill: #ffda56; filter: none; overflow: visible; }
+.mirror-look-action.is-wear[aria-pressed="true"] svg { fill: #ffda56; }
 .mirror-look-action.is-wear[aria-pressed="true"] svg path { filter: url(#award-glow); } /* each shape glows, as in award_filled.svg */
 .ds-icon-button.mirror-look-action:disabled { opacity: var(--opacity-disabled-large); cursor: default; }
 /* The toast sits right on top of the hide / heart row (Figma 191:1462, 210:6295: its bottom on the row's top). */

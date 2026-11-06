@@ -22,17 +22,24 @@ const THREAD = {
  "high-heels": "<path d=\"M2.25 10.5V4.5C5.25 9 7.5 12 11.25 12L14.25 9L22.95 19.2H15.75C10.3686 19.2 11.25 18 2.25 10.5ZM2.25 10.5V19.5\"/>"
 };
 
+// Glows of the selected look actions (Thread outfit-actions 246:498), as Figma exports a drop shadow: blur 24 →
+// stdDeviation 12, outside the shape only. CSS switches them on per shape (mirror.css), as in award_filled.svg.
+const glow = (id, [r, g, b], sd = 12) => `<defs><filter id="${id}" filterUnits="userSpaceOnUse" x="-30" y="-30" width="84" height="84" color-interpolation-filters="sRGB"><feGaussianBlur in="SourceAlpha" stdDeviation="${sd}"/><feComposite in2="SourceAlpha" operator="out"/><feColorMatrix type="matrix" values="0 0 0 0 ${r} 0 0 0 0 ${g} 0 0 0 0 ${b} 0 0 0 1 0" result="glow"/><feBlend mode="normal" in="SourceGraphic" in2="glow"/></filter></defs>`;
+// The heart: as the component shows it (a close halo), stdDeviation 6; the medal's own export says 12 (award_filled.svg).
+const GLOW = { heart: glow('heart-glow', [212 / 255, 183 / 255, 246 / 255].map((x) => x.toFixed(6)), 6) }; // #D4B7F6
+
 /** strokeWidth is in the 24-unit viewBox: 2 is Feather's own; Figma's 24px slots hold 20px icons scaled up (1.67). */
 export function Icon({ name, size = 24, label, className = '', strokeWidth = 2 }) {
   const icon = THREAD[name] ? { contents: THREAD[name] } : feather.icons[name];
   if (!icon) return null;
+  const contents = (GLOW[name] || '') + icon.contents;
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24"
       fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"
       className={('icon ' + className).trim()}
       role={label ? 'img' : undefined} aria-label={label} aria-hidden={label ? undefined : true}
-      dangerouslySetInnerHTML={{ __html: icon.contents }}
+      dangerouslySetInnerHTML={{ __html: contents }}
     />
   );
 }
