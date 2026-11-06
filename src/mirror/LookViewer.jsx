@@ -14,8 +14,8 @@ const DOUBLE_TAP_MS = 300;
 const PAGE_GAP = 16;     // px between a look and the next one while swiping
 const PAGE_MS = 320;
 
-export default function LookViewer({ look, prev = null, next = null, onStep = null, onClose, onHide, hiding, favorite, onFavorite, worn, onWear, toast = null }) {
-  const stage = useRef(null), frame = useRef(null), img = useRef(null), dialog = useRef(null), track = useRef(null);
+export default function LookViewer({ look, prev = null, next = null, onStep = null, pager = null, onClose, onHide, hiding, favorite, onFavorite, worn, onWear, toast = null }) {
+  const stage = useRef(null), frame = useRef(null), img = useRef(null), dialog = useRef(null), track = useRef(null), clip = useRef(null);
   const paging = useRef(false);
   const view = useRef({ s: 1, x: 0, y: 0 });
   const pointers = useRef(new Map());
@@ -39,10 +39,10 @@ export default function LookViewer({ look, prev = null, next = null, onStep = nu
   };
   // Measured on the frame (the look's box at scale 1, never transformed), so maths and CSS share one centre.
   const size = () => ({ w: frame.current?.clientWidth || 1, h: frame.current?.clientHeight || 1 });
-  // From the frame's centre, measured on the stage (it never moves): the frame itself slides while paging.
+  // From the look's centre, measured on the stage and the clip box (they never move): the frame itself slides while paging.
   const local = (e) => {
-    const r = stage.current.getBoundingClientRect(), f = frame.current;
-    return { x: e.clientX - r.left - (f.offsetLeft + f.offsetWidth / 2), y: e.clientY - r.top - (f.offsetTop + f.offsetHeight / 2) };
+    const r = stage.current.getBoundingClientRect(), c = clip.current;
+    return { x: e.clientX - r.left - (c.offsetLeft + c.offsetWidth / 2), y: e.clientY - r.top - (c.offsetTop + c.offsetHeight / 2) };
   };
 
   // Open: focus the dialog itself (not ×: Safari draws the focus ring on a button focused by script), stop the page behind from scrolling, and let the back gesture close the viewer.
@@ -145,11 +145,11 @@ export default function LookViewer({ look, prev = null, next = null, onStep = nu
     <div ref={dialog} tabIndex={-1} className="look-viewer" role="dialog" aria-modal="true" aria-label="Look, full screen. Pinch to zoom, swipe up or down for the next look.">
       <div className="look-viewer-stage" ref={stage} onPointerDown={onPointerDown} onPointerMove={onPointerMove}
         onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
-        <div className="look-viewer-track" ref={track}>
+        <div className="look-viewer-clip" ref={clip}><div className="look-viewer-track" ref={track}>
           {canPage && prev && <div className="look-viewer-frame is-prev" aria-hidden="true"><img src={prev.image} alt="" draggable={false} /></div>}
           <div className="look-viewer-frame" ref={frame}><img ref={img} src={look.image} alt={look.alt} draggable={false} /></div>
           {canPage && <div className="look-viewer-frame is-next" aria-hidden="true"><img src={next.image} alt="" draggable={false} /></div>}
-        </div>
+        </div></div>
       </div>
       <div className="ds-top-nav look-viewer-nav">
         <span className="ds-top-nav-side" />
@@ -161,6 +161,7 @@ export default function LookViewer({ look, prev = null, next = null, onStep = nu
         <button type="button" className="ds-icon-button is-large is-tertiary mirror-look-action" onClick={onShare} disabled={share !== 'ready'}
           aria-label={share === 'failed' ? 'Sharing isn’t available for this look' : 'Share this look'} title="Share"><Icon name="share" size={24} strokeWidth={5 / 3} /></button>
       </LookActions>
+      {pager && <div className="look-viewer-pager">{pager}</div>}
       {toast && <div className="look-viewer-toast">{toast}</div>}
     </div>
   );

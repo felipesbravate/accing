@@ -130,8 +130,10 @@
    the right side, 4px apart; the toast near the bottom. */
 .look-viewer { position: fixed; inset: 0; z-index: 100; outline: none; background: var(--bg-primary); animation: look-viewer-in .2s ease-out; }
 .look-viewer-stage { position: absolute; inset: 0; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
-.look-viewer-frame { position: absolute; inset: calc(64px + env(safe-area-inset-top)) 0 env(safe-area-inset-bottom); }
-/* Swipe up / down between looks: the one before waits above, the next below, 16px apart (LookViewer.jsx PAGE_GAP). */
+.look-viewer-clip { position: absolute; inset: calc(64px + env(safe-area-inset-top)) 0 env(safe-area-inset-bottom); overflow: hidden; }
+.look-viewer-frame { position: absolute; inset: 0; }
+/* Swipe up / down between looks: the one before waits above, the next below, 16px apart (LookViewer.jsx PAGE_GAP),
+   both out of sight until the finger brings them in (clipped to the look's area, under the top bar). */
 .look-viewer-track { position: absolute; inset: 0; will-change: transform; }
 .look-viewer-frame.is-prev { transform: translateY(calc(-100% - 16px)); }
 .look-viewer-frame.is-next { transform: translateY(calc(100% + 16px)); }
@@ -140,6 +142,7 @@
 .look-viewer-nav { position: absolute; z-index: 1; top: env(safe-area-inset-top); left: 0; right: 0; }
 .look-viewer-actions { position: absolute; z-index: 1; right: var(--space-md); top: calc(200px + env(safe-area-inset-top));
   flex-direction: column; }
+.look-viewer-pager { position: absolute; z-index: 1; left: 0; right: 0; bottom: calc(var(--space-lg) + env(safe-area-inset-bottom)); display: flex; justify-content: center; }
 .look-viewer-toast { position: absolute; z-index: 2; left: 0; right: 0; bottom: calc(var(--space-2xl) + env(safe-area-inset-bottom)); }
 .look-viewer-toast .mirror-toast { bottom: 0; }
 @media (min-width: 1024px) { .look-viewer-actions { top: 50%; right: var(--space-3xl); transform: translateY(-50%); } .look-viewer-nav { padding: var(--space-md) var(--space-2xl) 0; } }

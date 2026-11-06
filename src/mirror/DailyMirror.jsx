@@ -480,6 +480,14 @@ export default function DailyMirror({
       </main>
       {viewing && (
         <LookViewer look={viewing} prev={neighbour(-1)} next={neighbour(1)} onStep={(d) => { const i = wrap(outfits.findIndex((o) => o.id === viewing.id) + d, outfits.length); setViewing(outfits[i]); setIndex(i); }}
+          pager={count > 1 ? (
+            <div className={'ds-pager' + density} role="group" aria-label="Choose an outfit">
+              {outfits.map((outfit, i) => (
+                <button key={outfit.id} type="button" className="ds-pager-dot" aria-current={outfit.id === viewing.id} aria-label={`Outfit ${i + 1} of ${count}`}
+                  onClick={() => { setViewing(outfit); setIndex(i); }} />
+              ))}
+            </div>
+          ) : null}
           onClose={() => setViewing(null)} hiding={Boolean(leavingId)} favorite={isFav(viewing)} worn={isWorn(viewing)}
           onFavorite={() => toggleFavorite(viewing)} onWear={() => toggleWorn(viewing)}
           onHide={() => { const look = viewing; setViewing(null); if (history.state?.lookViewer) history.back(); hide(look); }} toast={<Toast key={toast?.id} toast={toast} />} />
