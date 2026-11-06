@@ -273,7 +273,7 @@
 
 /* Page slides (src/ui/slide.js): in from the right going forward; after a back arrow, out to the right and the screen
    before in from the left. */
-html, body { overflow-x: clip; }
+html, body { overflow-x: clip; overscroll-behavior-x: none; } /* Chrome / Android: no swipe-to-go-back over the app */
 .slide-in-forward { animation: slide-in-forward .3s cubic-bezier(.2, .8, .2, 1) both; }
 .slide-in-back { animation: slide-in-back .3s cubic-bezier(.2, .8, .2, 1) both; }
 .slide-out-back { animation: slide-out-back .2s cubic-bezier(.4, 0, 1, 1) both; pointer-events: none; }

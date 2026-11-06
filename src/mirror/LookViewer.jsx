@@ -9,6 +9,7 @@ import { Icon } from '../ui/Icon.jsx';
 import { clampView, pinch, toggleZoom } from './zoom.js';
 import { prepareLookFile, shareLookFile } from './share.js';
 import { LookActions } from './LookActions.jsx';
+import { useNoEdgeSwipe } from '../ui/edge-swipe.js';
 
 const DOUBLE_TAP_MS = 300;
 const PAGE_GAP = 16;     // px between a look and the next one while swiping, beyond the top bar's height (mirror.css --page-gap)
@@ -17,6 +18,7 @@ const PAGE_MS = 320;
 export default function LookViewer({ look, prev = null, next = null, onStep = null, pager = null, onClose, onHide, hiding, favorite, onFavorite, worn, onWear, toast = null }) {
   const stage = useRef(null), frame = useRef(null), img = useRef(null), dialog = useRef(null), track = useRef(null), clip = useRef(null);
   const paging = useRef(false);
+  useNoEdgeSwipe(stage); // edge swipes stay with the look (no back / forward in history)
   const view = useRef({ s: 1, x: 0, y: 0 });
   const pointers = useRef(new Map());
   const gesture = useRef(null);

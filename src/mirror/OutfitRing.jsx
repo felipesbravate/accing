@@ -11,6 +11,7 @@
 // look behind another never shows through it. Only the front look and one on each side are on screen
 // (--ring-visible-slots); the rest wait at the back and fade in as the ring turns them to a side.
 import { useCallback, useEffect, useRef } from 'react';
+import { useNoEdgeSwipe } from '../ui/edge-swipe.js';
 import { dragTarget, easeInOutCubic, easeOutCubic, ringOffset, ringPose, ringPresence, ringVisibility, slotPixels, wrap } from './carousel.js';
 
 const TURN_MS = 650;
@@ -26,6 +27,7 @@ export default function OutfitRing({ outfits, index, onChange, onOpen = () => {}
   const target = useRef(index);
   const frame = useRef(0);
   const drag = useRef(null);
+  useNoEdgeSwipe(stage); // a swipe from the screen's edge turns the ring, never goes back in history
   const geo = useRef({ radius: 0, backScale: 1, lift: 0, slotPx: 200, side: 1, back: 1 });
 
   const measure = useCallback(() => {
