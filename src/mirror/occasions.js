@@ -2,10 +2,35 @@
 // scripts/image-test-lib.mjs occasionProfile). Pure, shared by the server and the browser; tested.
 export const OCCASION_TABS = [
   { label: 'Casual', occasion: 'a relaxed casual day' },
-  { label: 'Office day', occasion: 'an office day' },
+  { label: 'Office day', short: 'Office', occasion: 'an office day' }, // "Office" in the desktop menu (Figma 226:2161)
   { label: 'Dinner', occasion: 'dinner out' },
   { label: 'Party', occasion: 'a party' },
 ];
+
+// "All outfits" (Figma 226:2208, 226:2161): every occasion's looks together, under the same season filters. It is not an
+// occasion: nothing is made "for" it, so asking for looks or adding an outfit from it uses today's default occasion.
+export const ALL_OUTFITS = 'All outfits';
+export const MENU_TABS = [{ label: ALL_OUTFITS }, ...OCCASION_TABS];
+
+/** The occasion tabs' looks as one list for "All outfits": taken in turn from each tab (each newest first), so one
+ *  occasion doesn't fill the start, and a garment combination met twice is kept once. Making / loading if any tab is;
+ *  failed only if nothing is there and a tab failed. */
+export function mergeTabs(tabs = {}) {
+  const lists = OCCASION_TABS.map((t) => tabs[t.label]).filter(Boolean);
+  const looks = [], seen = new Set();
+  for (let i = 0; lists.some((t) => i < (t.looks?.length || 0)); i += 1) {
+    for (const t of lists) {
+      const l = t.looks?.[i];
+      if (!l) continue;
+      const k = l.combo || l.id;
+      if (seen.has(k) || seen.has(l.id)) continue;
+      seen.add(k); seen.add(l.id); looks.push(l);
+    }
+  }
+  const making = lists.some((t) => t.making), loading = lists.some((t) => t.loading);
+  const failed = !looks.length && !making ? lists.find((t) => t.failed)?.failed || null : null;
+  return { looks, making, loading, ...(failed ? { failed } : {}) };
+}
 
 /** The tab a job's occasion text belongs to (morning jobs say "a relaxed weekend day" at weekends). */
 export function tabFor(occasion) {

@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { defaultTab, startOfToday, tabFor, temperatureOf } from '../src/mirror/occasions.js';
+import { ALL_OUTFITS, MENU_TABS, mergeTabs } from '../src/mirror/occasions.js';
 import { occasionProfile } from '../scripts/image-test-lib.mjs';
 import { OCCASION_TABS } from '../src/mirror/occasions.js';
 
@@ -40,4 +41,21 @@ test('weather icon: rain, snow and cloud from the forecast, else sun or moon', a
   assert.equal(weatherIcon('cloud', false), 'cloud');
   assert.equal(weatherIcon(null, true), 'moon');
   assert.equal(weatherIcon(null, false), 'sun');
+});
+
+test('All outfits takes the occasion tabs in turn, once per garment combination', () => {
+  const l = (id, combo = id) => ({ id, combo });
+  const tabs = {
+    Casual: { looks: [l('c1'), l('c2', 'same'), l('c3')], making: false },
+    'Office day': { looks: [l('o1'), l('o2', 'same')], making: true },
+    Dinner: { looks: [], making: false, failed: 'Out of credit' },
+    Party: { looks: [l('p1')], making: false },
+  };
+  const all = mergeTabs(tabs);
+  assert.deepEqual(all.looks.map((x) => x.id), ['c1', 'o1', 'p1', 'c2', 'c3']);
+  assert.equal(all.making, true);
+  assert.equal(all.failed, undefined);
+  const empty = mergeTabs({ Casual: { looks: [] }, Dinner: { looks: [], failed: 'Out of credit' } });
+  assert.deepEqual(empty, { looks: [], making: false, loading: false, failed: 'Out of credit' });
+  assert.equal(MENU_TABS[0].label, ALL_OUTFITS);
 });

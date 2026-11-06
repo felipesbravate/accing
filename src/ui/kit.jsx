@@ -1,9 +1,10 @@
 'use client';
 // Thread Design System pieces as React (styles in components.css): top-nav, Modal, text-field, Info-box, tag, label,
-// checkbox, tile, spinner. Each follows its Figma component; see the comments in components.css.
-import { useEffect, useId, useRef, useState } from 'react';
+// checkbox, tile, spinner, mobile-menu, pager. Each follows its Figma component; see the comments in components.css.
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Icon } from './Icon.jsx';
+import { dotsThatFit, pagerDots } from './pager.js';
 
 /** top-nav (178:1363): back on the left (a Secondary 48px icon-button), an optional title, an optional right action. */
 export function TopNav({ title, onBack, backLabel = 'Back', right = null, className = '' }) {
@@ -136,5 +137,59 @@ export function Spinner({ label = 'Loading', className = '' }) {
     <svg className={('ds-spinner ' + className).trim()} viewBox="0 0 35 36" role="img" aria-label={label}>
       <path fill="currentColor" d="M0.629723 29.6162C0.343097 27.8213 -1.16517 18.7002 1.85433 19.1279C4.0051 19.4146 8.31542 20.2773 10.2547 21.3545C11.8338 22.2887 8.89043 23.5811 7.81234 24.874C12.9841 33.4947 27.2039 30.9808 29.4305 20.4951C29.7179 18.9863 32.5192 19.7764 33.453 19.7051C34.3864 19.6336 34.3866 20.2077 34.3866 20.4951C32.4487 34.8595 13.2714 40.9644 3.93441 28.0361C2.78498 28.8982 0.98929 31.4841 0.629723 29.6162ZM0.341637 13.5986C2.42484 -0.33265 19.5898 -4.35711 28.5672 5.26662C29.7881 4.04574 33.2359 1.24573 33.452 2.8965C33.5957 4.2618 35.4626 16.0406 32.3748 14.9639C30.1468 14.247 24.7617 14.1753 21.6737 12.1641C19.8782 11.014 23.6831 9.50692 24.6893 8.21388C21.0266 2.97068 7.59564 2.68314 4.79574 13.6006C4.65124 15.0364 2.13854 14.3172 1.27621 14.3906C0.34266 14.4629 0.270166 13.8875 0.341637 13.5986Z" />
     </svg>
+  );
+}
+
+// Layout effect in the browser only (the server render has nothing to measure).
+const useMeasure = typeof window === 'undefined' ? useEffect : useLayoutEffect;
+
+/** mobile-menu (Thread 150:1019) of menu-item-mobile (95:592): a row of tabs as wide as their words, scrolling sideways
+ *  when they don't fit, a 1px line under all and a 2px icon/primary bar under the chosen one, sliding to it. The chosen
+ *  tab scrolls into view; the cut edge fades. items: [{ value, label }]. */
+export function MobileMenu({ items, value, onChange, label }) {
+  const scroller = useRef(null);
+  const [bar, setBar] = useState(null);
+  const [edges, setEdges] = useState({ left: false, right: false });
+  const edgesOf = () => { const el = scroller.current; if (el) setEdges({ left: el.scrollLeft > 1, right: el.scrollLeft + el.clientWidth < el.scrollWidth - 1 }); };
+  useMeasure(() => {
+    const el = scroller.current, tab = el?.querySelector('[aria-selected="true"]');
+    if (!tab) return undefined;
+    const place = () => setBar({ left: tab.offsetLeft, width: tab.offsetWidth });
+    place();
+    const want = tab.offsetLeft - (el.clientWidth - tab.offsetWidth) / 2; // the chosen tab towards the middle
+    el.scrollTo({ left: Math.max(0, want), behavior: bar ? 'smooth' : 'auto' });
+    edgesOf();
+    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => { place(); edgesOf(); });
+    ro?.observe(el);
+    return () => ro?.disconnect();
+  }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <div className={'ds-mobile-menu' + (edges.left ? ' has-more-left' : '') + (edges.right ? ' has-more-right' : '')}>
+      <div ref={scroller} className="ds-mobile-menu-scroll" role="tablist" aria-label={label} onScroll={edgesOf}>
+        {items.map((it) => (
+          <button key={it.value} type="button" role="tab" className="ds-mobile-menu-item" aria-selected={it.value === value} onClick={() => onChange(it.value)}>{it.label}</button>
+        ))}
+        {bar && <span className="ds-mobile-menu-bar" aria-hidden="true" style={{ width: bar.width, transform: `translateX(${bar.left}px)` }} />}
+      </div>
+    </div>
+  );
+}
+
+/** pager (Thread 64:800): a dot per page, the current one long; past what fits ("Max", up to 408px) a window of dots
+ *  follows the current page and the dot at a cut edge fades (src/ui/pager.js). onPick(page). */
+export function Pager({ count, current, onPick, label = 'Choose a page', itemLabel = (i) => `Page ${i + 1} of ${count}` }) {
+  const [fit, setFit] = useState(() => dotsThatFit(408));
+  useEffect(() => {
+    const measure = () => setFit(dotsThatFit(window.innerWidth - 48)); // the phone's width less its 24px sides
+    measure(); window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, []);
+  if (count < 2) return null;
+  return (
+    <div className="ds-pager" role="group" aria-label={label}>
+      {pagerDots(count, current, fit).map((d) => (
+        <button key={d.page} type="button" className={'ds-pager-dot' + (d.faded ? ' is-faded' : '')} aria-current={d.current} aria-label={itemLabel(d.page)} onClick={() => onPick(d.page)} />
+      ))}
+    </div>
   );
 }

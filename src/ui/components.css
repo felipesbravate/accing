@@ -96,6 +96,25 @@
   transform: translateX(calc(100% * var(--tab, 0))); transition: transform .16s ease-out; pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { .ds-tabs-indicator, .ds-tab { transition: none; } }
 
+/* mobile-menu (Thread 150:1019) of menu-item-mobile (95:592, 16 medium, 14px sides): tabs as wide as their words,
+   scrolling sideways; a 1px line under all, a 2px icon/primary bar under the chosen one sliding to it (160 ms ease-out);
+   text/secondary, text/hover, text/press, text/primary when chosen; the cut edge fades into the page (226:2208). */
+.ds-mobile-menu { position: relative; }
+.ds-mobile-menu::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: var(--border-secondary); }
+.ds-mobile-menu-scroll { position: relative; z-index: 1; display: flex; height: 36px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; overscroll-behavior-x: contain; }
+.ds-mobile-menu-scroll::-webkit-scrollbar { display: none; }
+.ds-mobile-menu-item { flex: none; height: 22px; padding: 0 14px; border: 0; background: transparent; color: var(--text-secondary);
+  font: inherit; font-size: var(--fs-label-large); font-weight: var(--fw-medium); line-height: normal; white-space: nowrap; cursor: pointer; transition: color .24s ease-out; }
+@media (hover: hover) { .ds-mobile-menu-item:hover { color: var(--text-hover); } }
+.ds-mobile-menu-item:active { color: var(--text-press); transition-duration: .16s; }
+.ds-mobile-menu-item[aria-selected="true"] { color: var(--text-primary); }
+.ds-mobile-menu-item:focus-visible { outline: 2px solid var(--border-accent); outline-offset: -2px; border-radius: var(--radius-sm); }
+.ds-mobile-menu-bar { position: absolute; left: 0; bottom: 0; height: 2px; background: var(--icon-primary); transition: transform .16s ease-out, width .16s ease-out; pointer-events: none; }
+.ds-mobile-menu.has-more-right .ds-mobile-menu-scroll { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent); }
+.ds-mobile-menu.has-more-left .ds-mobile-menu-scroll { -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 40px), transparent); mask-image: linear-gradient(to left, #000 calc(100% - 40px), transparent); }
+.ds-mobile-menu.has-more-left.has-more-right .ds-mobile-menu-scroll { -webkit-mask-image: linear-gradient(to right, transparent, #000 40px, #000 calc(100% - 40px), transparent); mask-image: linear-gradient(to right, transparent, #000 40px, #000 calc(100% - 40px), transparent); }
+@media (prefers-reduced-motion: reduce) { .ds-mobile-menu-bar, .ds-mobile-menu-item { transition: none; } }
+
 /* filter-item — State=Default | Hover | Press | Active (bold, with a 4px dot below) */
 .ds-filter-item { display: inline-flex; flex-direction: column; align-items: center; gap: var(--space-sm); height: 26px; padding: 0; border: 0;
   border-radius: var(--radius-lg); background: transparent; color: var(--text-secondary);
@@ -119,11 +138,9 @@
 .ds-pager-dot { display: block; width: 6px; height: 6px; padding: 0; border: 0; border-radius: var(--radius-full); background: var(--blue-300); transition: width .2s, background-color .2s; }
 .ds-pager-dot[aria-current="true"] { width: 16px; background: var(--bg-accent); }
 /* Many looks: smaller dots so one per look still fits (13–24, then 25+). */
-.ds-pager.is-dense { gap: 3px; }
-.ds-pager.is-dense .ds-pager-dot { width: 4px; height: 4px; }
-.ds-pager.is-tiny { gap: 2px; }
-.ds-pager.is-tiny .ds-pager-dot { width: 3px; height: 3px; }
-.ds-pager.is-dense .ds-pager-dot[aria-current="true"], .ds-pager.is-tiny .ds-pager-dot[aria-current="true"] { width: 12px; }
+/* "Max" (2026-11-06): past what fits (408px, 29 dots) a window follows the current page; the dot at a cut edge fades. */
+.ds-pager { flex: none; }
+.ds-pager-dot.is-faded { opacity: .3; }
 
 /* divider (Thread 178:1401) — a 1px rule: Primary border/default, Secondary border/secondary */
 .ds-divider { display: block; width: 100%; height: 0; margin: 0; border: 0; border-top: 1px solid var(--border-default); }

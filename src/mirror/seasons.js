@@ -9,10 +9,10 @@ import { DEFAULT_CLIMATE, seasonDays } from '../lib/climate.js';
 
 export const SEASON_FILTERS = [
   { label: "Today's suggestions", key: 'today' },
+  { label: 'All', key: 'all' }, // second (Figma 226:2161, 2026-11-06)
   { label: 'Summer', key: 'summer' },
   { label: 'Mid-season', key: 'mid' },
   { label: 'Winter', key: 'winter' },
-  { label: 'All', key: 'all' },
   { label: 'Favorites', key: 'favorites' }, // the looks the person hearted (Figma 192:1652); last in the row and the dropdown
 ];
 export const seasonKey = (label) => SEASON_FILTERS.find((f) => f.label === label)?.key || 'today';

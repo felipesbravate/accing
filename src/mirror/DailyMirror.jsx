@@ -10,7 +10,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Icon } from '../ui/Icon.jsx';
 import { useSlideIn } from '../ui/slide.js';
-import { Modal } from '../ui/kit.jsx';
+import { MobileMenu, Modal, Pager } from '../ui/kit.jsx';
 import { installTip } from './install-tip.js';
 import { Logo } from '../ui/Logo.jsx';
 import { wrap } from './carousel.js';
@@ -18,13 +18,13 @@ import { dayLine, isNight, timeLine, vibeQuestion } from './greeting.js';
 import LookViewer from './LookViewer.jsx';
 import { LookActions } from './LookActions.jsx';
 import OutfitRing from './OutfitRing.jsx';
-import { defaultTab, OCCASION_TABS, weatherIcon } from './occasions.js';
+import { ALL_OUTFITS, defaultTab, MENU_TABS, mergeTabs, weatherIcon } from './occasions.js';
 import { SAMPLE_OUTFITS } from './outfits.js';
 import { SEASON_FILTERS, seasonKey } from './seasons.js';
 
 const SEASONS = SEASON_FILTERS.map((f) => f.label);
 
-const OCCASIONS = OCCASION_TABS.map((t) => t.label);
+const OCCASIONS = MENU_TABS.map((t) => t.label); // "All outfits" first (Figma 226:2208)
 const POLL_MS = 5000;
 import '../ui/components.css';
 import './mirror.css';
@@ -135,7 +135,10 @@ export default function DailyMirror({
   const [now, setNow] = useState(null); // set on the client, so the time is the viewer's own
   const [index, setIndex] = useState(0);
   const [season, setSeason] = useState(SEASONS[0]);
-  const [occasion, setOccasionState] = useState(() => defaultTab());
+  const [occasion, setOccasionState] = useState(ALL_OUTFITS); // the mirror opens on All outfits (Figma 226:2208)
+  const all = occasion === ALL_OUTFITS;
+  // Looks are made for an occasion: from All outfits, for today's default one (office on weekdays, casual at weekends).
+  const askTab = all ? defaultTab() : occasion;
   const [data, setData] = useState(today);
   const [problem, setProblem] = useState(null);
   const [viewing, setViewing] = useState(null); // the look shown full screen
@@ -148,7 +151,8 @@ export default function DailyMirror({
   const live = Boolean(data);
   const favoritesView = filter === 'favorites';
   const seasonTabs = !today_ && past?.key === filter ? past.tabs : null;
-  const tab = live ? (today_ ? data.tabs[occasion] : seasonTabs?.[occasion] || { looks: [], making: false, loading: true }) : null;
+  const tabsNow = live ? (today_ ? data.tabs : seasonTabs) : null;
+  const tab = !live ? null : !tabsNow ? { looks: [], making: false, loading: true } : all ? mergeTabs(tabsNow) : tabsNow[occasion] || { looks: [], making: false };
 
   // Hearts and hides change on screen at once; the server is told in the background (POST /api/looks/mark).
   const [hearts, setHearts] = useState(() => new Map()); // look id → hearted, for changes made on this page
@@ -203,7 +207,7 @@ export default function DailyMirror({
         setNote(many ? `Adding your outfits… ${n + 1} of ${files.length}` : 'Adding your outfit…');
         try {
           const form = new FormData();
-          form.append('kind', 'outfit'); form.append('tab', occasion); form.append('photo', await fileToJpeg(file), 'outfit.jpg');
+          form.append('kind', 'outfit'); form.append('tab', askTab); form.append('photo', await fileToJpeg(file), 'outfit.jpg');
           const res = await fetch('/api/onboarding/photo', { method: 'POST', body: form });
           const r = await res.json().catch(() => ({}));
           if (r.error) { firstError = firstError || (many ? `Photo ${n + 1}: ${r.error}` : r.error); continue; }
@@ -223,15 +227,16 @@ export default function DailyMirror({
     if (queued) {
       setSeason(SEASONS[0]);
       // Looks already on screen: they stay, and a toast says new ones are coming (Figma 210:6191) until one arrives.
-      if (data?.tabs?.[occasion]?.looks?.length) setToast({ id: Date.now(), making: true, message: 'Making your new looks. The first one takes about a minute.', action: 'Dismiss', onAction: () => setToast(null) });
-      setAwaiting({ tab: occasion, known: new Set((data?.tabs?.[occasion]?.looks || []).map((l) => l.id)) });
-      setData((d) => ({ ...d, tabs: { ...d.tabs, [occasion]: { ...d.tabs[occasion], making: true } } }));
+      if (tab?.looks?.length) setToast({ id: Date.now(), making: true, message: 'Making your new looks. The first one takes about a minute.', action: 'Dismiss', onAction: () => setToast(null) });
+      setAwaiting({ tab: askTab, known: new Set((data?.tabs?.[askTab]?.looks || []).map((l) => l.id)) });
+      setData((d) => ({ ...d, tabs: { ...d.tabs, [askTab]: { ...d.tabs[askTab], making: true } } }));
       refresh();
     }
     setData((d) => ({ ...d, outfitPhotos: (d.outfitPhotos || 0) + added }));
-  }, [live, occasion, refresh, data]);
+  }, [live, askTab, refresh, data, tab]);
   const setOccasion = (label) => {
     setOccasionState(label); setIndex(0);
+    if (label === ALL_OUTFITS) { if (live && today_ && data.hasBase && !mergeTabs(data.tabs).looks.length && !mergeTabs(data.tabs).making) ask(defaultTab()); return; }
     if (live && today_ && data.hasBase && !data.tabs[label].looks.length && !data.tabs[label].making) ask(label);
   };
   // Season filters other than today's look back over earlier looks (src/mirror/seasons.js).
@@ -246,7 +251,7 @@ export default function DailyMirror({
   // While looks are being made, fetch again every few seconds; new ones join the ring as they arrive.
   useEffect(() => { if (!making) return undefined; const t = setInterval(refresh, POLL_MS); return () => clearInterval(t); }, [making, refresh]);
   // Opening the mirror on a tab with no looks today (the morning run hasn't happened, or another occasion) asks for some.
-  useEffect(() => { if (live && data.hasBase && !tab.looks.length && !tab.making) ask(occasion); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (live && data.hasBase && !tab.looks.length && !tab.making) ask(askTab); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The making screen after a new outfit ends when a new look arrives or that tab's looks are done.
   useEffect(() => {
@@ -322,7 +327,7 @@ export default function DailyMirror({
     // Why (Figma 216:1373, optional): too warm / too cold tune the person's season filters; not my style is kept for
     // the stylist. One tap swaps in a thank-you (216:1496). The toast stays longer, since it asks something.
     const because = (reason) => () => {
-      mark(look.id, 'reason', { reason, filter, occasion });
+      mark(look.id, 'reason', { reason, filter, occasion: askTab });
       setToast({ id: Date.now(), icon: 'check-circle', message: 'Thanks. You’ll see fewer looks like this.' });
     };
     setToast({ id: Date.now(), ms: HIDE_TOAST_MS, icon: 'eye-off', message: 'Look hidden. What was off?', action: 'Undo', onAction: () => {
@@ -360,7 +365,6 @@ export default function DailyMirror({
     return i >= 0 && outfits.length > 1 ? outfits[wrap(i + d, outfits.length)] : null;
   };
   // One dot per look (Felipe, 2026-11-01); the dots get smaller as the count grows so up to 40 fit a phone row.
-  const density = count > 24 ? ' is-tiny' : count > 12 ? ' is-dense' : '';
   // The making screen: a tab with nothing to show yet while looks are made, or right after a new outfit photo.
   // The making screen only when the tab has nothing to show yet (Figma 206:5722); with looks there, a toast says so (210:6191).
   const showMaking = live && today_ && data.hasBase && tab.making && !count;
@@ -434,19 +438,14 @@ export default function DailyMirror({
             </div>
             <div className="mirror-menu" role="group" aria-label="Occasion">
               {OCCASIONS.map((o) => (
-                <button key={o} type="button" className="ds-menu-item" aria-current={occasion === o} onClick={() => setOccasion(o)}>{o}</button>
+                <button key={o} type="button" className="ds-menu-item" aria-current={occasion === o} onClick={() => setOccasion(o)}>{MENU_TABS.find((t) => t.label === o)?.short || o}</button>
               ))}
             </div>
           </nav>
 
           {/* Mobile: occasions as tabs, season as a dropdown. */}
           <div className="mirror-mobile-filters">
-            <div className="ds-tabs" role="tablist" aria-label="Occasion" style={{ '--tabs': OCCASIONS.length, '--tab': Math.max(0, OCCASIONS.indexOf(occasion)) }}>
-              {OCCASIONS.map((o) => (
-                <button key={o} type="button" role="tab" className="ds-tab" aria-selected={occasion === o} onClick={() => setOccasion(o)}>{o}</button>
-              ))}
-              <span className="ds-tabs-indicator" aria-hidden="true" />
-            </div>
+            <MobileMenu label="Occasion" items={OCCASIONS.map((o) => ({ value: o, label: o }))} value={occasion} onChange={setOccasion} />
             <label className="ds-filter-selector">
               <span>{season}</span>
               <Icon name="chevron-down" size={16} />
@@ -457,14 +456,14 @@ export default function DailyMirror({
           </div>
         </div>
 
-        <section className="mirror-body" aria-roledescription="carousel" aria-label={`${occasion} outfits, ${season}`}>
+        <section className="mirror-body" aria-roledescription="carousel" aria-label={`${all ? "All" : occasion} outfits, ${season}`}>
           <div className="mirror-carousel">
             {count > 1 && !showMaking && <button type="button" className="ds-round-button mirror-arrow" onClick={() => go(-1)} aria-label="Previous outfit"><Icon name="arrow-left" size={20} /></button>}
             {showMaking ? <MakingLooks />
               : count ? <OutfitRing key={`${occasion}|${filter}`} outfits={outfits} index={current} onChange={setIndex} onOpen={(i) => setViewing(outfits[i])} leavingId={leavingId} arrivingId={arrivingId} turnMs={rolling ? HIDE_ROLL_MS : undefined} />
               : favoritesView && !loading && !problem ? <NoFavorites onBack={() => pickSeason(SEASONS[0])} />
               : live && tab?.loading ? <div className="mirror-empty" role="status"><p>Loading…</p></div>
-              : live && data.hasBase ? <NoLooks title={today_ && tab.failed ? `Couldn’t make your ${occasion} looks` : today_ ? `No ${occasion} looks yet` : `No ${season} ${occasion} looks yet`}
+              : live && data.hasBase ? <NoLooks title={today_ && tab.failed ? (all ? 'Couldn’t make your looks' : `Couldn’t make your ${occasion} looks`) : today_ ? (all ? 'No looks yet' : `No ${occasion} looks yet`) : (all ? `No ${season} looks yet` : `No ${season} ${occasion} looks yet`)}
                   text={problem || (today_ && tab.failed) || 'Shoot your first outfit.'} onShoot={onShoot} />
               : (
               <div className="mirror-empty" role="status">
@@ -482,13 +481,7 @@ export default function DailyMirror({
               <div className="mirror-look-actions">
                 <LookActions look={front} onHide={() => hide(front)} hiding={Boolean(leavingId)} favorite={isFav(front)}
                   onFavorite={() => toggleFavorite(front)} worn={isWorn(front)} onWear={() => toggleWorn(front)} />
-                {count > 1 && (
-                  <div className={'ds-pager' + density} role="group" aria-label="Choose an outfit">
-                    {outfits.map((outfit, i) => (
-                      <button key={outfit.id} type="button" className="ds-pager-dot" aria-current={i === current} aria-label={`Outfit ${i + 1} of ${count}`} onClick={() => setIndex(i)} />
-                    ))}
-                  </div>
-                )}
+                <Pager count={count} current={current} onPick={setIndex} label="Choose an outfit" itemLabel={(i) => `Outfit ${i + 1} of ${count}`} />
               </div>
             )}
           </div>
@@ -507,14 +500,8 @@ export default function DailyMirror({
       </Modal>
       {viewing && (
         <LookViewer look={viewing} prev={neighbour(-1)} next={neighbour(1)} onStep={(d) => { const i = wrap(outfits.findIndex((o) => o.id === viewing.id) + d, outfits.length); setViewing(outfits[i]); setIndex(i); }}
-          pager={count > 1 ? (
-            <div className={'ds-pager' + density} role="group" aria-label="Choose an outfit">
-              {outfits.map((outfit, i) => (
-                <button key={outfit.id} type="button" className="ds-pager-dot" aria-current={outfit.id === viewing.id} aria-label={`Outfit ${i + 1} of ${count}`}
-                  onClick={() => { setViewing(outfit); setIndex(i); }} />
-              ))}
-            </div>
-          ) : null}
+          pager={<Pager count={count} current={Math.max(0, outfits.findIndex((o) => o.id === viewing.id))} label="Choose an outfit" itemLabel={(i) => `Outfit ${i + 1} of ${count}`}
+            onPick={(i) => { setViewing(outfits[i]); setIndex(i); }} />}
           onClose={() => setViewing(null)} hiding={Boolean(leavingId)} favorite={isFav(viewing)} worn={isWorn(viewing)}
           onFavorite={() => toggleFavorite(viewing)} onWear={() => toggleWorn(viewing)}
           onHide={() => { const look = viewing; setViewing(null); if (history.state?.lookViewer) history.back(); hide(look); }} toast={<Toast key={toast?.id} toast={toast} />} />

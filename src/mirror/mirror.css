@@ -57,7 +57,7 @@
 .mirror-look-bar { position: relative; display: flex; justify-content: center; width: 100%; }
 .mirror-look-actions { display: flex; flex-direction: column; align-items: center; gap: var(--space-sm); min-height: 62px; padding: 0 var(--space-md); max-width: 100%; }
 .mirror-look-buttons { display: flex; align-items: center; gap: var(--space-xs); }
-.mirror-look-actions .ds-pager { max-width: 100%; }
+.mirror-look-actions .ds-pager { max-width: none; } /* the Max pager may be wider than the three buttons */
 .ds-icon-button.mirror-look-action { color: var(--icon-primary); }
 .ds-icon-button.mirror-look-action[aria-pressed="true"] { color: var(--icon-accent); }
 .mirror-look-action[aria-pressed="true"] svg { fill: var(--bg-accent-light); }
@@ -165,7 +165,7 @@
   .mirror-meta { color: var(--icon-secondary); }
   .mirror-nav { display: none; }
   .mirror-mobile-filters { display: flex; flex-direction: column; align-items: center; gap: var(--space-md); margin-top: var(--space-2xl); }
-  .mirror-mobile-filters .ds-tabs { align-self: stretch; }
+  .mirror-mobile-filters .ds-mobile-menu { align-self: stretch; }
 
   /* Short phones (SE, Safari with both toolbars): less room above the looks so they stay big. */
   @media (max-height: 640px) { .mirror-mobile-filters { margin-top: var(--space-lg); } }
