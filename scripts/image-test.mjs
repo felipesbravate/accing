@@ -867,7 +867,9 @@ async function main() {
       // reporting the real Adidas logo as "added" and rejected all 3 tries, the best at identity 0.752 (2026-10-28).
       // Tattoos and piercings too: the base photo is the real person (2026-10-28: Ricardo's real arm tattoos rejected all 3 tries).
       const clothesMark = /logo|print|text|wordmark|graphic|stripe|shirt|t-shirt|skirt|trousers|shoe|sneaker|earring|stud|tattoo|ink|piercing/i;
-      const lookReasons = (look.reasons || []).filter((x) => !(x.startsWith('added:') && clothesMark.test(x)));
+      // Glasses follow the face photos: the face is painted from them (the body photo's face is covered), so glasses worn
+      // only in the body photo can't come back (2026-11-06: Claudia, all 6 tries rejected for "glasses" at identity 0.74–0.88).
+      const lookReasons = (look.reasons || []).filter((x) => !(x.startsWith('added:') && clothesMark.test(x)) && !x.startsWith('glasses:'));
       const added = (look.look?.added || []).filter((x) => !clothesMark.test(x));
       const left = [...after.blocking, ...after.fixes.filter((f) => f !== 'room or objects in the background'), ...lookReasons.filter((x) => !x.startsWith('added:')), ...(added.length ? [`added: ${added.join(', ')}`] : [])];
       if (id == null || id < minId) left.unshift(`identity ${id == null ? 'no face' : id.toFixed(3)} < ${minId.toFixed(3)}`);
