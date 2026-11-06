@@ -11,7 +11,7 @@ import { prepareLookFile, shareLookFile } from './share.js';
 import { LookActions } from './LookActions.jsx';
 
 const DOUBLE_TAP_MS = 300;
-const PAGE_GAP = 16;     // px between a look and the next one while swiping
+const PAGE_GAP = 16;     // px between a look and the next one while swiping, beyond the top bar's height (mirror.css --page-gap)
 const PAGE_MS = 320;
 
 export default function LookViewer({ look, prev = null, next = null, onStep = null, pager = null, onClose, onHide, hiding, favorite, onFavorite, worn, onWear, toast = null }) {
@@ -41,8 +41,8 @@ export default function LookViewer({ look, prev = null, next = null, onStep = nu
   const size = () => ({ w: frame.current?.clientWidth || 1, h: frame.current?.clientHeight || 1 });
   // From the look's centre, measured on the stage and the clip box (they never move): the frame itself slides while paging.
   const local = (e) => {
-    const r = stage.current.getBoundingClientRect(), c = clip.current;
-    return { x: e.clientX - r.left - (c.offsetLeft + c.offsetWidth / 2), y: e.clientY - r.top - (c.offsetTop + c.offsetHeight / 2) };
+    const r = stage.current.getBoundingClientRect(), c = clip.current, f = frame.current;
+    return { x: e.clientX - r.left - (c.offsetLeft + f.offsetLeft + f.offsetWidth / 2), y: e.clientY - r.top - (c.offsetTop + f.offsetTop + f.offsetHeight / 2) };
   };
 
   // Open: focus the dialog itself (not ×: Safari draws the focus ring on a button focused by script), stop the page behind from scrolling, and let the back gesture close the viewer.
@@ -60,6 +60,9 @@ export default function LookViewer({ look, prev = null, next = null, onStep = nu
 
   // Paging: the track holds the look before (above), this one and the next (below).
   const canPage = Boolean(onStep && next && next.id !== look.id);
+  // The looks run behind the see-through top bar, so the gap between two is the bar's height plus PAGE_GAP: the one
+  // above never shows under the bar until the finger brings it down.
+  const gap = () => (frame.current?.offsetTop || 0) + PAGE_GAP;
   const slide = (y, ms = 0) => {
     const el = track.current; if (!el) return;
     el.style.transition = ms ? `transform ${ms}ms cubic-bezier(.2, .8, .2, 1)` : 'none';
@@ -69,7 +72,7 @@ export default function LookViewer({ look, prev = null, next = null, onStep = nu
     if (!canPage || paging.current) return;
     paging.current = true;
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const h = size().h + PAGE_GAP;
+    const h = size().h + gap();
     if (reduce) { onStep(delta); return; }
     slide(-delta * h, PAGE_MS);
     setTimeout(() => onStep(delta), PAGE_MS);
@@ -126,7 +129,7 @@ export default function LookViewer({ look, prev = null, next = null, onStep = nu
       const dy = (at?.y ?? g.from.y) - g.from.y;
       const first = g.samples.find((s) => performance.now() - s.t < 120) || g.samples[0];
       const v = (at ? at.y - first.y : 0) / Math.max(1, performance.now() - first.t); // px/ms, + down
-      const far = Math.abs(dy) > h * 0.18, quick = Math.abs(v) > 0.45 && Math.abs(dy) > 24;
+      const far = Math.abs(dy) > h * 0.18, quick = Math.abs(v) > 0.3 && Math.abs(dy) > 24;
       if (canPage && (far || quick)) pageTo(dy < 0 ? 1 : -1); // up: the next look; down: the one before
       else slide(0, 260);
       return;

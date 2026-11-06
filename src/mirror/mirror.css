@@ -130,13 +130,15 @@
    the right side, 4px apart; the toast near the bottom. */
 .look-viewer { position: fixed; inset: 0; z-index: 100; outline: none; background: var(--bg-primary); animation: look-viewer-in .2s ease-out; }
 .look-viewer-stage { position: absolute; inset: 0; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
-.look-viewer-clip { position: absolute; inset: calc(64px + env(safe-area-inset-top)) 0 env(safe-area-inset-bottom); overflow: hidden; }
-.look-viewer-frame { position: absolute; inset: 0; }
-/* Swipe up / down between looks: the one before waits above, the next below, 16px apart (LookViewer.jsx PAGE_GAP),
-   both out of sight until the finger brings them in (clipped to the look's area, under the top bar). */
-.look-viewer-track { position: absolute; inset: 0; will-change: transform; }
-.look-viewer-frame.is-prev { transform: translateY(calc(-100% - 16px)); }
-.look-viewer-frame.is-next { transform: translateY(calc(100% + 16px)); }
+.look-viewer-clip { position: absolute; inset: 0; overflow: hidden; }
+.look-viewer-frame { position: absolute; inset: calc(64px + env(safe-area-inset-top)) 0 env(safe-area-inset-bottom); }
+/* Swipe up / down between looks: the one before waits above, the next below. The top bar is see-through here
+   (2026-11-06: only on the open look), so they pass behind it; the gap is the bar's height + 16px (LookViewer.jsx gap())
+   so the one above stays out of sight until the finger brings it down. */
+.look-viewer-track { position: absolute; inset: 0; will-change: transform; --page-gap: calc(80px + env(safe-area-inset-top)); }
+.look-viewer-frame.is-prev { transform: translateY(calc(-100% - var(--page-gap))); }
+.look-viewer-frame.is-next { transform: translateY(calc(100% + var(--page-gap))); }
+.look-viewer-nav { background: transparent; }
 .look-viewer-frame img { display: block; width: 100%; height: 100%; object-fit: contain; transform-origin: center; will-change: transform; pointer-events: none; }
 @media (max-aspect-ratio: 3/5) { .look-viewer-frame img { object-fit: cover; } } /* phones: fill the height */
 .look-viewer-nav { position: absolute; z-index: 1; top: env(safe-area-inset-top); left: 0; right: 0; }
