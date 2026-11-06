@@ -164,7 +164,7 @@ export default function Faces({ initial }) {
       {problem && <p className="acc-problem" role="alert">{problem}</p>}
       <Modal open={Boolean(asking)} title="Discard new photos?" description="Your new face photos won’t be saved. Your current photos will stay unchanged." onClose={() => setAsking(false)}>
           <button type="button" className="ds-button is-large is-tertiary" onClick={() => setAsking(false)}>Go back</button>
-          <button type="button" className="ds-button is-large" onClick={discard}>Discard photos</button>
+          <button type="button" className="ds-button is-large is-danger" onClick={discard}>Discard photos</button>
         </Modal>
     </Screen>
   );

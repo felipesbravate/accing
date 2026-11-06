@@ -148,7 +148,7 @@ export function Wardrobe({ data }) {
       ) : <Empty title="Nothing here yet" text="Garments appear once a look has been made with them." />}
       <Modal open={Boolean(asking)} title={`Remove this ${c.one}?`} description="This permanently removes the item and all its looks, including favorites." onClose={() => !busy && setAsking(null)}>
           <button type="button" className="ds-button is-large is-tertiary" onClick={() => setAsking(null)} disabled={busy}>Cancel</button>
-          <button type="button" className="ds-button is-large" onClick={remove} disabled={busy}>{busy ? 'Removing…' : 'Remove'}</button>
+          <button type="button" className="ds-button is-large is-danger" onClick={remove} disabled={busy}>{busy ? 'Removing…' : 'Remove'}</button>
         </Modal>
       {open && <PhotoViewer src={open.image} alt={open.description} caption={open.description} focus={open.isLook ? null : open.position} onClose={() => setOpen(null)} />}
     </Screen>
