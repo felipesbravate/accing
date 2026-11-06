@@ -1,7 +1,7 @@
 'use client';
 // Profile and Settings (Figma "Main screens" 226:2154): Profile (268:11591), Wardrobe (306:4775, Remove 312:5607),
 // Settings (270:1948), Hidden looks (297:2778, Unhide 313:6057, restored 322:6192), Update password (287:3529), Update
-// email (287:3642) and Verify (287:3723), Delete account (287:3811), and Reset password (no frame: the Update password
+// email (287:3642) and Verify (287:3723, with the emailed link), Delete account (287:3811), and Reset password (no frame: the Update password
 // layout without the current password). Face photos live in Faces.jsx.
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -280,68 +280,36 @@ export function Email({ current }) {
   const router = useRouter();
   const [step, setStep] = useState('email');
   const [f, setF] = useState({ newEmail: '', password: '' });
-  const [digits, setDigits] = useState(['', '', '', '', '', '']);
-  const [busy, setBusy] = useState(false), [err, setErr] = useState(null), [wait, setWait] = useState(0), [done, setDone] = useState(false);
-  const boxes = useRef([]);
+  const [busy, setBusy] = useState(false), [err, setErr] = useState(null), [wait, setWait] = useState(0);
   useEffect(() => { if (wait <= 0) return undefined; const t = setTimeout(() => setWait(wait - 1), 1000); return () => clearTimeout(t); }, [wait]);
   const send = async (e) => {
     e?.preventDefault(); setBusy(true); setErr(null);
     const r = await api({ action: 'email', ...f });
     setBusy(false);
     if (r.error) { setErr(r); return; }
-    setStep('verify'); setWait(RESEND_SECONDS); setDigits(['', '', '', '', '', '']);
-    setTimeout(() => boxes.current[0]?.focus(), 50);
-  };
-  const verify = async (e) => {
-    e.preventDefault(); setBusy(true); setErr(null);
-    const r = await api({ action: 'verify-email', newEmail: f.newEmail, code: digits.join('') });
-    setBusy(false);
-    if (r.error) setErr(r); else setDone(true);
+    setStep('verify'); setWait(RESEND_SECONDS);
   };
   const resend = async () => { setErr(null); const r = await api({ action: 'resend-email', newEmail: f.newEmail }); if (r.error) setErr(r); else setWait(RESEND_SECONDS); };
-  const type = (i) => (e) => {
-    const v = e.target.value.replace(/\D/g, '');
-    if (v.length > 1) { // pasted the whole code
-      const all = v.slice(0, 6).split(''); setDigits((d) => d.map((_, k) => all[k] || '')); boxes.current[Math.min(5, all.length)]?.focus(); return;
-    }
-    setDigits((d) => d.map((x, k) => (k === i ? v : x)));
-    if (v && i < 5) boxes.current[i + 1]?.focus();
-  };
-  const key = (i) => (e) => { if (e.key === 'Backspace' && !digits[i] && i > 0) boxes.current[i - 1]?.focus(); };
   const fmt = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
   if (step === 'verify') {
+    // Supabase's default email has a confirmation link, not a code (a code needs custom SMTP to edit the template):
+    // Figma 287:3723's layout with the link instead of the six boxes.
     return (
       <Screen title="Verify your new email" back="/settings"
         footer={<>
-          <button type="submit" form="acc-verify" className="ds-button is-large acc-wide" disabled={digits.join('').length !== 6 || busy}>{busy ? 'Verifying…' : 'Verify and update email'}</button>
-          <button type="button" className="ds-button is-large is-tertiary acc-wide" disabled={wait > 0} onClick={resend}>{wait > 0 ? `Resend code (${fmt(wait)})` : 'Resend code'}</button>
+          <button type="button" className="ds-button is-large acc-wide" onClick={() => router.push('/settings')}>Done</button>
+          <button type="button" className="ds-button is-large is-tertiary acc-wide" disabled={wait > 0} onClick={resend}>{wait > 0 ? `Resend email (${fmt(wait)})` : 'Resend email'}</button>
         </>}>
-        <form id="acc-verify" className="acc-form" onSubmit={verify}>
+        <div className="acc-form">
           <div className="acc-intro">
             <h1>Check your email</h1>
-            <p>Enter the 6-digit code sent to your new email address.</p>
+            <p>Open the link we sent to your new email address to confirm the change.</p>
           </div>
           <div className="acc-email-row"><span>{f.newEmail}</span><button type="button" className="acc-action-link" onClick={() => { setStep('email'); setErr(null); }}>Change email</button></div>
-          <div className="ds-field">
-            <span className="ds-field-label" id="acc-code-label">Verification code</span>
-            <div className="acc-code" role="group" aria-labelledby="acc-code-label">
-              {digits.map((d, i) => (
-                <span key={i} className="ds-field-box acc-code-box">
-                  <input ref={(el) => { boxes.current[i] = el; }} value={d} onChange={type(i)} onKeyDown={key(i)} inputMode="numeric" autoComplete={i === 0 ? 'one-time-code' : 'off'}
-                    maxLength={6} aria-label={`Digit ${i + 1}`} placeholder=" " />
-                </span>
-              ))}
-            </div>
-            <p className="ds-field-support">Verifying this code will update the email you use to sign in.</p>
-          </div>
+          <InfoBox title="Verify before we update">Your account email only changes after you open the link. Until then, sign in with {current}.</InfoBox>
           {err && <Problem text={err.error} />}
-        </form>
-        {done && (
-          <Modal title="Email updated" description={`You’ll sign in with ${f.newEmail} from now on.`} onClose={() => router.push('/settings')}>
-            <button type="button" className="ds-button is-large" onClick={() => router.push('/settings')}>Done</button>
-          </Modal>
-        )}
+        </div>
       </Screen>
     );
   }

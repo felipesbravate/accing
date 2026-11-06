@@ -147,16 +147,17 @@ export async function changePassword(userId, email, { current, next, confirm }) 
   return { ok: true };
 }
 
-/** Update email (287:3642): checks the password, then Supabase sends a 6-digit code to the new address. The email
- *  only changes once it's verified (verifyEmail). Needs the "Change email address" template to show {{ .Token }}. */
-export async function startEmailChange(email, { newEmail, password }) {
+/** Update email (287:3642): checks the password, then Supabase emails the new address a confirmation link (its
+ *  default template; a code needs custom SMTP to edit the template). The email only changes once the link is opened:
+ *  /auth/callback → Settings. "Secure email change" is off in Supabase, so only the new address confirms. */
+export async function startEmailChange(email, { newEmail, password }, origin = '') {
   const to = cleanEmail(newEmail);
   if (!to) return { error: 'Enter a valid email address.', field: 'email' };
   if (to === email) return { error: 'That’s already your email.', field: 'email' };
   const sb = await authClient();
   const { error: pe } = await sb.auth.signInWithPassword({ email, password: String(password || '') });
   if (pe) return { error: 'That isn’t your current password.', field: 'password' };
-  const { error } = await sb.auth.updateUser({ email: to });
+  const { error } = await sb.auth.updateUser({ email: to }, origin ? { emailRedirectTo: `${origin}/auth/callback?next=/settings/email/done` } : undefined);
   if (error) return { error: error.message, field: 'email' };
   return { ok: true, email: to };
 }
@@ -164,7 +165,7 @@ export async function startEmailChange(email, { newEmail, password }) {
 /** Verify new email (287:3723). */
 export async function verifyEmail(userId, { newEmail, code }) {
   const to = cleanEmail(newEmail), token = String(code || '').replace(/\D/g, '');
-  if (!to || token.length !== 6) return { error: 'Enter the 6-digit code.' };
+  if (!to || token.length < 6 || token.length > 8) return { error: 'Enter the code from the email.' };
   const sb = await authClient();
   const { error } = await sb.auth.verifyOtp({ email: to, token, type: 'email_change' });
   if (error) return { error: 'That code didn’t work. Check it, or ask for a new one.' };
@@ -172,11 +173,11 @@ export async function verifyEmail(userId, { newEmail, code }) {
   return { ok: true };
 }
 
-export async function resendEmailCode({ newEmail }) {
+export async function resendEmailCode({ newEmail }, origin = '') {
   const to = cleanEmail(newEmail);
   if (!to) return { error: 'Enter a valid email address.' };
   const sb = await authClient();
-  const { error } = await sb.auth.resend({ type: 'email_change', email: to });
+  const { error } = await sb.auth.resend({ type: 'email_change', email: to, ...(origin ? { options: { emailRedirectTo: `${origin}/auth/callback?next=/settings/email/done` } } : {}) });
   return error ? { error: error.message } : { ok: true };
 }
 

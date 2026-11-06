@@ -46,9 +46,9 @@ export async function POST(request) {
   switch (b.action) {
     case 'remove-garment': return reply(await account.removeGarment(u.id, String(b.key || '')));
     case 'password': return reply(await account.changePassword(u.id, u.email, b));
-    case 'email': return reply(await account.startEmailChange(u.email, b));
+    case 'email': return reply(await account.startEmailChange(u.email, b, new URL(request.url).origin));
     case 'verify-email': return reply(await account.verifyEmail(u.id, b));
-    case 'resend-email': return reply(await account.resendEmailCode(b));
+    case 'resend-email': return reply(await account.resendEmailCode(b, new URL(request.url).origin));
     case 'delete': return reply(await account.deleteAccount(u.id, b.confirm));
     case 'faces-discard': return reply(await account.discardNewFaces(u.id));
     case 'faces-commit': return reply(await account.commitNewFaces(u.id));
