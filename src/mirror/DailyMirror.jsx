@@ -338,6 +338,11 @@ export default function DailyMirror({
   const count = outfits.length;
   const current = wrap(index, count);
   const go = (delta) => setIndex((i) => wrap(i + delta, count));
+  // The looks above and below the one open full screen: the ones on its left and right in the ring.
+  const neighbour = (d) => {
+    const i = viewing ? outfits.findIndex((o) => o.id === viewing.id) : -1;
+    return i >= 0 && outfits.length > 1 ? outfits[wrap(i + d, outfits.length)] : null;
+  };
   // One dot per look (Felipe, 2026-11-01); the dots get smaller as the count grows so up to 40 fit a phone row.
   const density = count > 24 ? ' is-tiny' : count > 12 ? ' is-dense' : '';
   // The making screen: a tab with nothing to show yet while looks are made, or right after a new outfit photo.
@@ -474,7 +479,8 @@ export default function DailyMirror({
         </section>
       </main>
       {viewing && (
-        <LookViewer look={viewing} onClose={() => setViewing(null)} hiding={Boolean(leavingId)} favorite={isFav(viewing)} worn={isWorn(viewing)}
+        <LookViewer look={viewing} prev={neighbour(-1)} next={neighbour(1)} onStep={(d) => { const i = wrap(outfits.findIndex((o) => o.id === viewing.id) + d, outfits.length); setViewing(outfits[i]); setIndex(i); }}
+          onClose={() => setViewing(null)} hiding={Boolean(leavingId)} favorite={isFav(viewing)} worn={isWorn(viewing)}
           onFavorite={() => toggleFavorite(viewing)} onWear={() => toggleWorn(viewing)}
           onHide={() => { const look = viewing; setViewing(null); if (history.state?.lookViewer) history.back(); hide(look); }} toast={<Toast key={toast?.id} toast={toast} />} />
       )}
