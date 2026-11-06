@@ -8,7 +8,7 @@ import { lookKeys } from '../mirror/seasons.js';
 import { OCCASION_TABS, tabFor } from '../mirror/occasions.js';
 import { WARDROBE_CATEGORIES, changedAgo, cropFor, garmentKey, wardrobeCounts, wardrobeFrom } from '../lib/wardrobe.js';
 import { cleanEmail, validPassword } from '../lib/login-form.js';
-import { FACE_ANGLES } from '../lib/photo-advice.js';
+import { FACE_ANGLES, PREP_FAILED } from '../lib/photo-advice.js';
 
 export const RESET_COOKIE = 'pw_reset';
 const URL_SECONDS = 60 * 60;
@@ -236,7 +236,7 @@ export async function facePhotos(userId) {
     current: Object.fromEntries(FACE_ANGLES.map((a) => [a.key, urls.get(current[a.key]) || null])),
     fresh: Object.fromEntries(FACE_ANGLES.map((a) => [a.key, fresh[a.key] ? urls.get(newFacePath(userId, a.key)) || null : null])),
     preparing: Boolean(job && ['pending', 'processing'].includes(job.status)),
-    failed: job?.status === 'failed' ? (job.error_message || 'We couldn’t prepare your photo.') : null,
+    failed: job?.status === 'failed' ? PREP_FAILED : null,
     options: options.map((o) => ({ path: o.path, url: optionUrls.get(o.path) || null })).filter((o) => o.url),
   };
 }

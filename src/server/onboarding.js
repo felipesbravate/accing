@@ -5,7 +5,7 @@ import { authClient } from './auth.js';
 import { askForLooks, wakeWorker } from './looks.js';
 import { planFeatures } from '../lib/plans.js';
 import { checkPhoto } from './photo-check.js';
-import { bodyNote } from '../lib/photo-advice.js';
+import { PREP_FAILED, bodyNote } from '../lib/photo-advice.js';
 import { STYLES } from '../lib/styles.js';
 import { defaultTab, OCCASION_TABS } from '../mirror/occasions.js';
 
@@ -39,7 +39,7 @@ export async function onboardingState(userId) {
     later: Boolean(u?.onboarding_later_at),
     outfits: count || 0,
     preparing: Boolean(current && ['pending', 'processing'].includes(current.status)),
-    failed: current?.status === 'failed' && !options.length ? (current.error_message || 'We couldn’t prepare your photo.') : null,
+    failed: current?.status === 'failed' && !options.length ? PREP_FAILED : null,
     options: options.map((o) => ({ path: o.path, url: urlOf.get(o.path) || null })).filter((o) => o.url),
   };
 }

@@ -37,6 +37,10 @@ export function bodyAdvice(r) {
   return null;
 }
 
+/** What people see when their base photo couldn't be prepared (the worker's own message, with the reasons, stays in
+ *  generation_jobs.error_message for us). */
+export const PREP_FAILED = 'We couldn’t make a clear picture of you from this photo. Try another one: standing, facing the camera, in good light, with your face uncovered.';
+
 /** The onboarding screen to open, from what the person has done so far. */
 export function resumeStep(s) {
   if (!s) return 'welcome';

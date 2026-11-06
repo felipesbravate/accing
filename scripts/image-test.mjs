@@ -878,7 +878,12 @@ async function main() {
       prepRows.push(t.row);
       if (t.ok && (!best || t.img.id > best.id)) best = t.img;
     }
-    if (!best) throw new Error(`Could not prepare the base photo in ${opts.anchorTries} tries (attempts are in ${out}). Try a photo without a mirror, or --no-prep to use it as it is.`);
+    // The reasons go into the message, so a failed job in Supabase (generation_jobs.error_message) says why. People never
+    // see this text: the app shows its own (src/lib/photo-advice.js PREP_FAILED).
+    if (!best) {
+      const why = tries.map((t, k) => `try ${k + 1}: ${t ? t.row.reasons.join('; ') || 'ok' : 'no image'}`).join(' | ');
+      throw new Error(`Could not prepare the base photo in ${opts.anchorTries} tries (${why}). Attempts in ${out}; --no-prep uses it as it is.`);
+    }
     await mkdir(PREPARED_DIR, { recursive: true });
     await writeFile(cached, best.bytes);
     console.log(`Kept ${best.file} (identity ${best.id.toFixed(3)})`);
