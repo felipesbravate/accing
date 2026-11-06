@@ -63,10 +63,10 @@
   --button-primary-hover: var(--blue-500);
   --button-primary-press: var(--blue-600);
   --button-secondary-tertiary: transparent;
-  --button-secondary-tertiary-hover: var(--blue-300);
-  --button-secondary-tertiary-press: var(--blue-400);
+  --button-secondary-tertiary-hover: var(--blue-75);  /* Thread color/button/secondary-tertiary-hover, 2026-11-06 */
+  --button-secondary-tertiary-press: var(--blue-100); /* …-press */
   --button-danger: var(--bg-fail);
-  --button-danger-hover: var(--fail-danger-light);
+  --button-danger-hover: var(--bg-fail-danger-light); /* Thread color/button/danger-hover = #FCF0F5, 2026-11-06 */
   --button-danger-press: var(--fail-danger-dark);
   --text-fail-danger: var(--fail-danger);
   --bg-fail-danger-light: #fcf0f5; /* Thread color/bg/fail-danger-light (the Negative toast), 2026-11-06 */
