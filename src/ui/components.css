@@ -156,18 +156,19 @@
 .ds-top-nav-side.is-end { justify-content: flex-end; }
 
 /* toast (Thread 140:144, 2026-11-06): 358 wide, radius/lg, 8/16 padding, a 0 8 24 shadow; a 16px icon on the left, level
-   with the first line. Default: bg/selected, text/tertiary, no action on the message line; its buttons (Undo, the hide
-   reasons) go in a row of equal outlined Tiny Secondary buttons under it. Negative (bg/fail-danger-light,
-   text/fail-danger) and Warning (yellow-pale, text/warning): the icon 8px from the content, one Tertiary action on the
-   right that drops under the message when it wraps. */
-.ds-toast { display: flex; align-items: flex-start; gap: var(--space-md); width: min(358px, 100%); min-height: 44px; padding: var(--space-sm) var(--space-md);
+   with the first line, 8px from the content (2026-11-07). Default: bg/selected, text/tertiary, Dismiss (or its action)
+   on the right; buttons (Undo, the hide reasons) in a row of equal outlined Tiny Secondary buttons 4px under it.
+   Negative (bg/fail-danger-light, text/fail-danger) and Warning (yellow-pale, text/warning): one Tertiary action on
+   the right that drops under the message when it wraps. */
+.ds-toast { display: flex; align-items: flex-start; gap: var(--space-sm); width: min(358px, 100%); min-height: 44px; padding: var(--space-sm) var(--space-md);
   border-radius: var(--radius-lg); background: var(--bg-selected); color: var(--text-tertiary); box-shadow: 0 8px 24px rgba(12, 12, 54, .18);
   font-size: var(--fs-body); font-weight: var(--fw-regular); line-height: normal; text-align: left; }
-.ds-toast.is-negative { background: var(--bg-fail-danger-light); color: var(--text-fail-danger); gap: var(--space-sm); }
-.ds-toast.is-warning { background: var(--yellow-pale); color: var(--text-warning); gap: var(--space-sm); }
+.ds-toast.is-negative { background: var(--bg-fail-danger-light); color: var(--text-fail-danger); }
+.ds-toast.is-warning { background: var(--yellow-pale); color: var(--text-warning); }
 .ds-toast-lead { flex: none; display: flex; padding-top: 6px; }
 .ds-toast-icon { flex: none; display: block; }
-.ds-toast-content { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: var(--space-md); }
+.ds-toast-content { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: var(--space-xs); }
+.ds-toast:not(.is-negative):not(.is-warning) .ds-toast-main { flex-wrap: nowrap; }
 .ds-toast-main { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; column-gap: var(--space-md); row-gap: var(--space-xs); min-height: 28px; }
 .ds-toast-message { flex: 1 1 180px; min-width: 0; padding: 5px 0; }
 .ds-toast-main.is-stacked { flex-direction: column; align-items: flex-start; }

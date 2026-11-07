@@ -196,20 +196,24 @@ export function Pager({ count, current, onPick, label = 'Choose a page', itemLab
 
 const ONE_LINE = 40; // characters of a 14px message that fit beside an action in a 358px toast
 const TOAST_ICON = { default: 'check', negative: 'alert-triangle', warning: 'alert-circle' };
-/** toast (Thread 140:144): { type: default | negative | warning, message, icon (null: none; default by type), action +
- *  onAction (Negative and Warning: on the right), extra: [{ label, onClick }] (Default: a row of buttons under it). */
-export function ToastView({ toast }) {
+/** toast (Thread 140:144, 2026-11-07): { type: default | negative | warning, message, icon (null: none; default by
+ *  type), action + onAction (on the right), extra: [{ label, onClick }] (a row of buttons under it). A Default toast with
+ *  neither gets "Dismiss" (onDismiss). */
+export function ToastView({ toast, onDismiss }) {
   const type = toast.type || 'default';
   const icon = toast.icon === null ? null : toast.icon || TOAST_ICON[type];
   const extra = toast.extra?.length ? toast.extra : null;
+  const action = toast.action || (type === 'default' && !extra && onDismiss ? 'Dismiss' : null);
+  const onAction = toast.action ? toast.onAction : onDismiss;
   return (
     <div className={'ds-toast' + (type !== 'default' ? ` is-${type}` : '')} role={type === 'negative' ? 'alert' : 'status'}>
       {icon && <span className="ds-toast-lead"><Icon name={icon} size={16} className="ds-toast-icon" /></span>}
       <div className="ds-toast-content">
-        {/* A message longer than one line takes the full width and its action goes under it (Figma 429:5170). */}
-        <div className={'ds-toast-main' + (String(toast.message || '').length > ONE_LINE ? ' is-stacked' : '')}>
+        {/* Warning / Negative: a message longer than one line takes the full width and its action goes under it (429:5170);
+            Default keeps Dismiss on the right beside the wrapped message (440:3975). */}
+        <div className={'ds-toast-main' + (type !== 'default' && String(toast.message || '').length > ONE_LINE ? ' is-stacked' : '')}>
           <span className="ds-toast-message">{toast.message}</span>
-          {toast.action && <button type="button" className="ds-toast-action" onClick={toast.onAction}>{toast.action}</button>}
+          {action && <button type="button" className="ds-toast-action" onClick={onAction}>{action}</button>}
         </div>
         {extra && (
           <div className="ds-toast-extra" role="group" aria-label={toast.extraLabel || 'More actions'}>

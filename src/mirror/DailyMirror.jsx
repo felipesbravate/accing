@@ -31,8 +31,7 @@ const POLL_MS = 5000;
 import '../ui/components.css';
 import './mirror.css';
 
-const TOAST_MS = 5000; // Figma toast: "Shows for ~5 s"
-const HIDE_TOAST_MS = 8000; // the hide toast asks why: a little longer to read and tap
+const TOAST_MS = 8000; // every toast leaves after 8 s (Felipe, 2026-11-07), or at once with Dismiss
 const TOAST_OUT_MS = 250; // its exit animation (mirror.css mirror-toast-out)
 const SEEN_MS = 1500; // a look at the front of Today's suggestions this long counts as seen
 const MAX_PICK = 20; // photos per pick: each makes ~3 looks; the plan's daily limit applies too (src/lib/plans.js)
@@ -40,12 +39,15 @@ const HIDE_FADE_MS = 350; // a hidden look fades out, with the hide button (mirr
 const HIDE_ROLL_MS = 550; // …then the look on its right rolls into its place
 
 /** The mirror's toasts sit just above hide · heart, one or two at once (Figma 429:5205: `toast.above` sits on top). */
-function Toast({ toast }) {
+function Toast({ toast, setToast }) {
   if (!toast) return null;
+  // Dismiss (Figma 140:144, Default type): the one on top goes alone; the main one takes the stack with it.
+  const dismissAbove = () => setToast((x) => (x && x.id === toast.id ? { ...x, above: null } : x));
+  const dismiss = () => setToast((x) => (x && x.id === toast.id ? { ...x, leaving: true } : x));
   return (
     <div className={`ds-toast-stack mirror-toast${toast.leaving ? ' is-leaving' : ''}`}>
-      {toast.above && <ToastView toast={toast.above} />}
-      <ToastView toast={toast} />
+      {toast.above && <ToastView toast={toast.above} onDismiss={dismissAbove} />}
+      <ToastView toast={toast} onDismiss={dismiss} />
     </div>
   );
 }
@@ -218,20 +220,19 @@ export default function DailyMirror({
     // photos left out, with the "added" toast on top of it when some went in (429:5205).
     const reopen = () => { setToast(null); document.querySelector('.mirror-shoot input')?.click(); };
     if (firstError) console.warn('Adding outfit photos:', firstError);
-    if (!added && !leftOut) { setToast({ id: Date.now(), type: 'negative', message: 'Something went wrong.', action: 'Try again', onAction: reopen, ms: HIDE_TOAST_MS }); return; }
-    const addedToast = added ? { message: `${added === 1 ? 'Outfit' : `${added} outfits`} added!${queued || queueError ? '' : ` ${added === 1 ? 'It’ll be' : 'They’ll be'} in your next looks.`}` } : null;
+    if (!added && !leftOut) { setToast({ id: Date.now(), type: 'negative', message: 'Something went wrong.', action: 'Try again', onAction: reopen }); return; }
+    // Added, and new looks on the way (Figma 440:3975, 429:5241): one toast for both.
+    const addedToast = added ? { message: `${added === 1 ? 'Outfit' : `${added} outfits`} added! ${queued ? 'The first one takes about a minute.' : queueError ? '' : added === 1 ? 'It’ll be in your next looks.' : 'They’ll be in your next looks.'}`.trim() } : null;
     const leftToast = leftOut ? { type: 'warning', action: leftOut === 1 ? 'Retake photo' : 'Retake photos', onAction: reopen,
       message: leftOut === 1 ? 'This photo has more than one person, so we left it out to keep someone else’s clothes out of your looks.'
         : `${leftOut} photos have more than one person, so we left them out to keep someone else’s clothes out of your looks.` } : null;
     const limitToast = queueError ? { type: 'warning', message: queueError } : null;
     const main = leftToast || limitToast || addedToast;
-    if (main) setToast({ id: Date.now(), ms: leftToast ? HIDE_TOAST_MS : undefined, ...main, above: main === addedToast ? null : addedToast });
+    if (main) setToast({ id: Date.now(), ...main, above: main === addedToast ? null : addedToast });
     if (!added) return;
     if (queued) {
       setSeason(SEASONS[0]);
-      // Looks already on screen: they stay, and a toast says new ones are coming (Figma 210:6191) until one arrives.
-      // …unless a warning about a left-out photo is showing: that one stays, and the ring shows the new looks as they come.
-      if (tab?.looks?.length && !leftOut && !queueError) setToast({ id: Date.now(), making: true, icon: 'pen-tool', message: 'Making your new looks. The first one takes about a minute.', above: addedToast });
+      // Looks already on screen stay; the "added" toast says the first new one takes about a minute (Figma 210:6191).
       setAwaiting({ tab: askTab, known: new Set((data?.tabs?.[askTab]?.looks || []).map((l) => l.id)) });
       setData((d) => ({ ...d, tabs: { ...d.tabs, [askTab]: { ...d.tabs[askTab], making: true } } }));
       refresh();
@@ -263,16 +264,14 @@ export default function DailyMirror({
     const t = data.tabs[awaiting.tab];
     if (t?.making && !t.looks.some((l) => !awaiting.known.has(l.id))) return;
     setAwaiting(null);
-    setToast((x) => (x?.making ? { ...x, leaving: true } : x)); // the "making" toast leaves once a new look is in
     // Done without a new look: say why (out of credit, nothing suited the occasion…), not just the old looks again.
-    if (!t?.making && t?.failed) setToast({ id: Date.now(), type: 'negative', message: `Couldn’t make looks with your new outfit. ${t.failed}`, action: 'Try again', onAction: () => { setToast(null); ask(awaiting.tab); }, ms: HIDE_TOAST_MS });
+    if (!t?.making && t?.failed) setToast({ id: Date.now(), type: 'negative', message: `Couldn’t make looks with your new outfit. ${t.failed}`, action: 'Try again', onAction: () => { setToast(null); ask(awaiting.tab); } });
   }, [data, awaiting]);
-  // Toasts leave after ~5 s (the "making" one when a look arrives); a new one replaces the last.
+  // Toasts leave after 8 s; a new one replaces the last.
   useEffect(() => {
     if (!toast) return undefined;
-    if (toast.making && !toast.leaving) return undefined; // stays until a new look arrives or Dismiss
     if (toast.leaving) { const t = setTimeout(() => setToast(null), TOAST_OUT_MS); return () => clearTimeout(t); }
-    const t = setTimeout(() => setToast((x) => (x && x.id === toast.id ? { ...x, leaving: true } : x)), toast.ms || TOAST_MS);
+    const t = setTimeout(() => setToast((x) => (x && x.id === toast.id ? { ...x, leaving: true } : x)), TOAST_MS);
     return () => clearTimeout(t);
   }, [toast]);
   const mark = useCallback((id, action, extra = {}) => {
@@ -343,13 +342,13 @@ export default function DailyMirror({
       mark(look.id, 'reason', { reason: 'not_my_style', filter, occasion: its });
       setToast({ id: Date.now(), message: 'Thanks. You’ll see fewer looks like this.' }); // Figma 253:9400
     };
-    // Figma 191:1465: no icon; Undo leads the row of buttons, then the two reasons (Felipe, 2026-11-06).
+    // Figma 191:1465: the eye-off icon; Undo leads the row of buttons, then the two reasons (Felipe, 2026-11-06).
     const undo = () => {
       setToast(null);
       setHidden((h) => { const n = new Set(h); [...keys, ...scoped].forEach((k) => n.delete(k)); return n; });
       mark(look.id, 'unhide');
     };
-    setToast({ id: Date.now(), ms: HIDE_TOAST_MS, icon: null, message: 'Outfit hidden. Why wasn’t it a match?', extraLabel: 'Undo, or why you hid it', extra: [
+    setToast({ id: Date.now(), icon: 'eye-off', message: 'Outfit hidden. Why wasn’t it a match?', extraLabel: 'Undo, or why you hid it', extra: [
       { label: 'Undo', onClick: undo },
       { label: NOT_FOR[its] || `Not for ${its.toLowerCase()}`, onClick: notFor },
       { label: 'Not my style', onClick: notMyStyle },
@@ -491,7 +490,7 @@ export default function DailyMirror({
           {!note && count <= 1 && more > 0 && <p className="mirror-nudge">Add {more} more outfit{more > 1 ? 's' : ''} to unlock new looks every day</p>}
           {/* hide / heart / worn with the pager under them (Figma 226:2208); the toast sits right on top. */}
           <div className="mirror-look-bar">
-            {!viewing && <Toast key={toast?.id} toast={toast} />}
+            {!viewing && <Toast key={toast?.id} toast={toast} setToast={setToast} />}
             {front && (
               <div className="mirror-look-actions">
                 <LookActions look={front} onHide={() => hide(front)} hiding={Boolean(leavingId)} favorite={isFav(front)}
@@ -519,7 +518,7 @@ export default function DailyMirror({
             onPick={(i) => { setViewing(outfits[i]); setIndex(i); }} />}
           onClose={() => setViewing(null)} hiding={Boolean(leavingId)} favorite={isFav(viewing)} worn={isWorn(viewing)}
           onFavorite={() => toggleFavorite(viewing)} onWear={() => toggleWorn(viewing)}
-          onHide={() => { const look = viewing; setViewing(null); if (history.state?.lookViewer) history.back(); hide(look); }} toast={<Toast key={toast?.id} toast={toast} />} />
+          onHide={() => { const look = viewing; setViewing(null); if (history.state?.lookViewer) history.back(); hide(look); }} toast={<Toast key={toast?.id} toast={toast} setToast={setToast} />} />
       )}
     </div>
   );

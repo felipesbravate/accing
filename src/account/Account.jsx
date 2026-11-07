@@ -197,7 +197,7 @@ const fmtDay = (iso) => new Date(iso).toLocaleDateString('en-US', { month: 'shor
 export function HiddenLooks({ looks: initial }) {
   const [looks, setLooks] = useState(initial);
   const [asking, setAsking] = useState(null), [toast, setToast] = useState(null), [problem, setProblem] = useState(null);
-  useEffect(() => { if (!toast) return undefined; const t = setTimeout(() => setToast(null), 6000); return () => clearTimeout(t); }, [toast]);
+  useEffect(() => { if (!toast) return undefined; const t = setTimeout(() => setToast(null), 8000); return () => clearTimeout(t); }, [toast]);
   const mark = async (id, action) => {
     const res = await fetch('/api/looks/mark', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id, action }) }).catch(() => null);
     return res?.ok;
@@ -207,10 +207,6 @@ export function HiddenLooks({ looks: initial }) {
     if (!(await mark(look.id, 'unhide'))) { setProblem('Couldn’t restore that look. Try again.'); return; }
     setLooks((l) => l.filter((x) => x.id !== look.id));
     setToast({ look });
-  };
-  const undo = async () => {
-    const { look } = toast; setToast(null);
-    if (await mark(look.id, 'hide')) setLooks((l) => [look, ...l]);
   };
   return (
     <Screen title="Hidden looks" back="/settings" className="has-fade">
@@ -236,7 +232,7 @@ export function HiddenLooks({ looks: initial }) {
         </Modal>
       {toast && (
         <div className="acc-toast">
-          <ToastView toast={{ message: 'Look restored to your gallery.', extra: [{ label: 'Undo', onClick: undo }] }} />
+          <ToastView toast={{ message: 'Look restored to your gallery.' }} onDismiss={() => setToast(null)} /> {/* Figma 322:6192 */}
         </div>
       )}
     </Screen>
