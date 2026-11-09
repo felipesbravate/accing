@@ -60,14 +60,26 @@ export async function checkPhoto(kind, bytes) {
   }
 }
 
-/** An outfit photo (from the mirror) is used for its clothes only, so the one thing that matters is that it shows one
- *  person: with two, the reader could put someone else's clothes in the wardrobe (Felipe, 2026-11-06). Returns
- *  'more_than_one_person' (leave it out) or null (use it). A covered face, a cut-off foot or sitting don't change the
- *  looks, so they aren't mentioned. If the check fails the photo is used. */
+// An outfit photo (from the mirror) is used for its clothes only. It may show the person wearing them, or the clothes
+// alone: shoes on the floor, a jacket on a hanger, a flat lay (Felipe, 2026-11-09: a photo of just shoes was refused
+// as "more than one person", because the old check only asked "exactly one person?").
+const OUTFIT_PROMPT = `This photo was added to someone's wardrobe in a styling app. Describe it strictly and literally:
+- people: how many different people are in the photo (0 if none; a person and their own reflection in a mirror count as 1; people in posters, screens or photos on the wall don't count)
+- clothes: the photo shows at least one garment, pair of shoes or fashion accessory clearly enough to describe it (worn or not)`;
+const OUTFIT_SCHEMA = { type: 'OBJECT', properties: { people: { type: 'INTEGER' }, clothes: { type: 'BOOLEAN' } }, required: ['people', 'clothes'] };
+
+/** Why an outfit photo is left out, or null to use it: 'more_than_one_person' (the reader could put someone else's
+ *  clothes in the wardrobe) or 'no_clothes' (nothing to read). A covered face, a cut-off foot, no person at all: fine.
+ *  If the check fails the photo is used. Tested in tests/photo-check.test.js. */
+export function outfitVerdict(r) {
+  if (!r) return null;
+  if (Number(r.people) >= 2) return 'more_than_one_person';
+  if (r.clothes === false) return 'no_clothes';
+  return null;
+}
 export async function outfitProblem(bytes) {
   try {
-    const r = await ask(bytes, BODY_PROMPT, BODY_SCHEMA);
-    return r?.one_person === false ? 'more_than_one_person' : null;
+    return outfitVerdict(await ask(bytes, OUTFIT_PROMPT, OUTFIT_SCHEMA));
   } catch {
     return null;
   }

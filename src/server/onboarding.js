@@ -66,8 +66,9 @@ export async function savePhoto(userId, kind, bytes, { tab = null } = {}) {
     return { ok: true, advice };
   }
   if (kind === 'outfit') {
-    // More than one person: left out of the wardrobe and deleted (the mirror's warning toast says so, Figma 429:5170).
-    if (advice === 'more_than_one_person') {
+    // More than one person, or no clothes: left out of the wardrobe and deleted (the mirror's warning toast says so,
+    // Figma 429:5170). Clothes on their own (shoes, a flat lay) are fine.
+    if (advice) {
       await sb.storage.from('wardrobe').remove([path]).catch(() => {});
       return { ok: true, leftOut: advice };
     }

@@ -197,7 +197,7 @@ export default function DailyMirror({
     if (!files.length) return;
     const many = files.length > 1;
     setProblem(null);
-    let queued = 0, added = 0, leftOut = 0, firstError = null, queueError = null;
+    let queued = 0, added = 0, leftOut = 0, crowded = 0, firstError = null, queueError = null;
     try {
       const { fileToJpeg } = await import('../onboarding/resize.js');
       for (const [n, file] of files.entries()) {
@@ -208,7 +208,7 @@ export default function DailyMirror({
           const res = await fetch('/api/onboarding/photo', { method: 'POST', body: form });
           const r = await res.json().catch(() => ({}));
           if (r.error) { firstError = firstError || (many ? `Photo ${n + 1}: ${r.error}` : r.error); continue; }
-          if (r.leftOut) { leftOut += 1; continue; } // more than one person: not in the wardrobe
+          if (r.leftOut) { leftOut += 1; if (r.leftOut === 'more_than_one_person') crowded += 1; continue; } // not in the wardrobe
           added += 1;
           if (r.queued) queued += 1;
           if (r.queueError) queueError = r.queueError;
@@ -223,9 +223,15 @@ export default function DailyMirror({
     if (!added && !leftOut) { setToast({ id: Date.now(), type: 'negative', message: 'Something went wrong.', action: 'Try again', onAction: reopen }); return; }
     // Added, and new looks on the way (Figma 440:3975, 429:5241): one toast for both.
     const addedToast = added ? { message: `${added === 1 ? 'Outfit' : `${added} outfits`} added! ${queued ? 'The first one takes about a minute.' : queueError ? '' : added === 1 ? 'It’ll be in your next looks.' : 'They’ll be in your next looks.'}`.trim() } : null;
-    const leftToast = leftOut ? { type: 'warning', action: leftOut === 1 ? 'Retake photo' : 'Retake photos', onAction: reopen,
-      message: leftOut === 1 ? 'This photo has more than one person, so we left it out to keep someone else’s clothes out of your looks.'
-        : `${leftOut} photos have more than one person, so we left them out to keep someone else’s clothes out of your looks.` } : null;
+    // Left out (src/server/photo-check.js outfitVerdict): more than one person (Figma 429:5170 / 429:5205), or no clothes.
+    const one = leftOut === 1;
+    const leftMessage = crowded === leftOut
+      ? (one ? 'This photo has more than one person, so we left it out to keep someone else’s clothes out of your looks.'
+        : `${leftOut} photos have more than one person, so we left them out to keep someone else’s clothes out of your looks.`)
+      : !crowded
+        ? (one ? 'We couldn’t find any clothes in this photo, so we left it out.' : `We couldn’t find any clothes in ${leftOut} photos, so we left them out.`)
+        : `We left out ${leftOut} photos: some had more than one person, others no clothes we could see.`;
+    const leftToast = leftOut ? { type: 'warning', action: one ? 'Retake photo' : 'Retake photos', onAction: reopen, message: leftMessage } : null;
     const limitToast = queueError ? { type: 'warning', message: queueError } : null;
     const main = leftToast || limitToast || addedToast;
     if (main) setToast({ id: Date.now(), ...main, above: main === addedToast ? null : addedToast });

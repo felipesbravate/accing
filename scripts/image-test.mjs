@@ -175,11 +175,12 @@ async function loadInputs() {
   return { faces, outfits, base, images: [...faces, ...outfits] };
 }
 
-// Body card: the person's build in words, read once from the full-body outfit photos. The base photo only had those
+// Body card: the person's build in words, read once from the full-body outfit photos (photos of clothes alone are
+// ignored: since 2026-11-09 the mirror accepts them). The base photo only had those
 // photos as one hint among many and could miss someone's build (Felipe, 2026-10-28: "can we also match height and
 // body shape?"). A photo has no scale, so height and weight can only come from the person: image-test/inputs/body.txt
 // (or people/<name>/body.txt), e.g. "height 182 cm, weight 78 kg", is added to the card when present.
-const BODY_PROMPT = `These photos show one person, head to toe, in different clothes. Describe their body precisely and neutrally, so an artist could draw the same body: never flattering, never judging. Ignore the clothes' cut where you can (loose clothes hide shape; say so if you cannot tell).
+const BODY_PROMPT = `These photos show one person, head to toe, in different clothes. Some may show only clothes (shoes, a garment on a hanger or laid flat) and no person: ignore those. Describe their body precisely and neutrally, so an artist could draw the same body: never flattering, never judging. Ignore the clothes' cut where you can (loose clothes hide shape; say so if you cannot tell).
 build: overall build in plain words (e.g. "slim", "lean and athletic", "average", "broad and muscular", "soft and rounded", "heavy-set").
 shoulders: width compared with the hips, and slope.
 torso: chest, waist and belly, and how long the torso is compared with the legs.
