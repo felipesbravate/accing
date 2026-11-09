@@ -64,6 +64,8 @@
 .acc-card.is-look .acc-card-img img { object-fit: contain; }
 .acc-card-note { color: var(--text-primary); font-size: var(--fs-label-small); font-weight: var(--fw-medium); }
 .acc-card-action { width: 100%; }
+.acc-card-actions { display: flex; flex-direction: column; gap: var(--space-xs); }
+a.acc-card-action { text-decoration: none; }
 .acc-toast { position: fixed; left: 0; right: 0; bottom: calc(var(--space-2xl) + env(safe-area-inset-bottom)); z-index: 20; display: flex; justify-content: center; padding: 0 var(--space-lg); }
 
 /* Settings (270:1948): section titles (24 medium) 12px over gray-50 cards of entries; entries 16px padded, a 32px white

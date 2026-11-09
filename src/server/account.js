@@ -84,6 +84,15 @@ export async function wardrobe(userId, tile) {
   };
 }
 
+/** A wardrobe garment and the looks made with it ("See matching outfits", Figma 446:7190): { key, description, tile,
+ *  ids }, or null. The same grouping as the Wardrobe page, so its count and this list agree. */
+export async function garmentLooks(userId, key) {
+  const sb = await authClient();
+  const [u, looks] = await Promise.all([me(sb, userId), readyLooks(sb, userId)]);
+  const g = wardrobeFrom(looks, u.removed_garments).find((x) => x.key === key || x.keys.includes(key));
+  return g ? { key: g.key, description: g.description, tile: g.tile, ids: g.looks } : null;
+}
+
 /** Wardrobe "Remove" (312:5607): the garment and every look with it go, favourites included; the pipeline never uses
  *  it again (users.removed_garments, migration 012). */
 export async function removeGarment(userId, key) {

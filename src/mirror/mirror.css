@@ -257,3 +257,8 @@
   .ring-skeleton > span:first-child { right: calc(50% + 49vw); transform: translateX(50%); }
   .ring-skeleton > span:last-child { left: calc(50% + 49vw); transform: translateX(-50%); }
 }
+
+/* "See matching outfits" (Figma 446:7190): the top-nav (back, the category's icon and "T-shirts matching") instead of
+   the greeting, logo, Shoot button and avatar; the menu, filter, ring and actions as in the mirror. */
+.mirror-garment-nav { flex: none; height: calc(64px + env(safe-area-inset-top)); padding-top: env(safe-area-inset-top); background: var(--bg-primary); }
+.mirror.is-garment .mirror-top { padding-top: var(--space-md); }

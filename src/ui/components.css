@@ -34,7 +34,9 @@
 .ds-button.is-danger .icon { color: currentColor; }
 .ds-button.is-danger:active { background: var(--button-danger-press); }
 .ds-button.is-secondary.is-danger { background: transparent; color: var(--text-fail-danger); box-shadow: inset 0 0 0 1px var(--border-danger); }
-@media (hover: hover) { .ds-button.is-danger:not(.is-secondary):hover { background: var(--button-danger-press); } .ds-button.is-secondary.is-danger:hover { background: var(--button-danger-hover); } }
+.ds-button.is-tertiary.is-danger { background: transparent; color: var(--text-fail-danger); } /* Remove on a wardrobe card (306:4775) */
+.ds-button.is-tertiary.is-danger:active { background: var(--button-danger-hover); }
+@media (hover: hover) { .ds-button.is-danger:not(.is-secondary):hover { background: var(--button-danger-press); } .ds-button.is-secondary.is-danger:hover, .ds-button.is-tertiary.is-danger:hover { background: var(--button-danger-hover); } }
 .ds-button.is-secondary.is-danger:active { background: var(--button-danger-hover); }
 /* icon-button Size=Tiny (24, radius 8, 12px icon): the edit badge on the Profile photo */
 .ds-icon-button.is-tiny { width: 24px; height: 24px; border-radius: var(--radius-md); }

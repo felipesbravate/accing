@@ -9,8 +9,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Icon } from '../ui/Icon.jsx';
-import { useSlideIn } from '../ui/slide.js';
-import { MobileMenu, Modal, Pager, ToastView } from '../ui/kit.jsx';
+import { useRouter } from 'next/navigation';
+import { slideBack, useSlideIn } from '../ui/slide.js';
+import { MobileMenu, Modal, Pager, ToastView, TopNav } from '../ui/kit.jsx';
 import { installTip } from './install-tip.js';
 import { Logo } from '../ui/Logo.jsx';
 import { wrap } from './carousel.js';
@@ -122,10 +123,15 @@ function ShootButton({ onShoot, compact = false }) {
  *  the server again every few seconds, and each look joins the ring as soon as it's ready. */
 export default function DailyMirror({
   name = '', today = null, temperature = '24º', avatar = null,
+  // "See matching outfits" (Figma 446:7190): { key, title, icon, description, back }. The looks made with that wardrobe
+  // garment, under a top-nav instead of the greeting; no Today's suggestions (it starts on All); nothing is asked for.
+  garment = null,
 }) {
+  const seasons = garment ? SEASONS.filter((s) => seasonKey(s) !== 'today') : SEASONS;
+  const router = useRouter();
   const [now, setNow] = useState(null); // set on the client, so the time is the viewer's own
   const [index, setIndex] = useState(0);
-  const [season, setSeason] = useState(SEASONS[0]);
+  const [season, setSeason] = useState(seasons[0]);
   const [occasion, setOccasionState] = useState(ALL_OUTFITS); // the mirror opens on All outfits (Figma 226:2208)
   const all = occasion === ALL_OUTFITS;
   // Looks are made for an occasion: from All outfits, for today's default one (office on weekdays, casual at weekends).
@@ -161,7 +167,7 @@ export default function DailyMirror({
   // After a new outfit photo starts looks for this tab: the making screen (no looks yet) or toast until the first new one arrives.
   const [awaiting, setAwaiting] = useState(null); // { tab, known: Set of look ids already there }
   const rootRef = useRef(null);
-  useSlideIn(rootRef, { onlyBack: true }); // back from Profile: the mirror comes in from the left
+  useSlideIn(rootRef, { onlyBack: !garment }); // back from Profile: the mirror comes in from the left; a garment's looks slide in like any screen
   const [rolling, setRolling] = useState(false);      // the next look rolling into a hidden one's place
   const [leavingId, setLeavingId] = useState(null);   // the look fading out after "hide"
   const [arrivingId, setArrivingId] = useState(null); // the look that takes its place, fading in
@@ -255,14 +261,14 @@ export default function DailyMirror({
   useEffect(() => {
     if (!live || today_) return;
     let gone = false;
-    Promise.all([...pending.current]).then(() => fetch(`/api/looks?season=${filter}`, { cache: 'no-store' })).then((r) => (r.ok ? r.json() : null)).catch(() => null)
+    Promise.all([...pending.current]).then(() => fetch(`/api/looks?season=${filter}${garment ? `&garment=${encodeURIComponent(garment.key)}` : ''}`, { cache: 'no-store' })).then((r) => (r.ok ? r.json() : null)).catch(() => null)
       .then((r) => { if (!gone) { if (r?.tabs) setPast({ key: filter, tabs: r.tabs }); else setProblem('Could not load those looks. Try again.'); } });
     return () => { gone = true; };
   }, [filter, live, today_]);
   // While looks are being made, fetch again every few seconds; new ones join the ring as they arrive.
   useEffect(() => { if (!making) return undefined; const t = setInterval(refresh, POLL_MS); return () => clearInterval(t); }, [making, refresh]);
   // Opening the mirror on a tab with no looks today (the morning run hasn't happened, or another occasion) asks for some.
-  useEffect(() => { if (live && data.hasBase && !tab.looks.length && !tab.making) ask(askTab); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!garment && live && data.hasBase && !tab.looks.length && !tab.making) ask(askTab); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The making screen after a new outfit ends when a new look arrives or that tab's looks are done.
   useEffect(() => {
@@ -369,7 +375,7 @@ export default function DailyMirror({
   // "Add to Home Screen" (install-tip.js): once looks are on screen, a few seconds in, when nothing else is said.
   const tipChecked = useRef(false);
   useEffect(() => {
-    if (tipChecked.current || !count || toast || viewing) return undefined; // not over a toast or an open look
+    if (garment || tipChecked.current || !count || toast || viewing) return undefined; // not over a toast or an open look
     const t = setTimeout(() => {
       tipChecked.current = true;
       const tip = installTip();
@@ -425,20 +431,24 @@ export default function DailyMirror({
     );
   }
 
-  const more = live ? Math.max(0, 3 - (data.outfitPhotos || 0)) : 0;
+  const more = live && !garment ? Math.max(0, 3 - (data.outfitPhotos || 0)) : 0;
   return (
-    <div ref={rootRef} className={`mirror${(note || (problem && count > 0) || (!note && count <= 1 && more > 0)) ? ' has-note' : ''}`}>
-      <header className="mirror-header">
-        <Logo className="mirror-logo" />
-        <div className="mirror-actions">
-          <ShootButton onShoot={onShoot} />
-          <Account initial={(name || '·').trim().charAt(0).toUpperCase()} avatar={avatar} />
-        </div>
-      </header>
+    <div ref={rootRef} className={`mirror${garment ? ' is-garment' : ''}${(note || (problem && count > 0) || (!note && count <= 1 && more > 0)) ? ' has-note' : ''}`}>
+      {garment ? (
+        <TopNav title={garment.title} icon={garment.icon} onBack={() => slideBack(rootRef.current, () => router.push(garment.back))} className="mirror-garment-nav" />
+      ) : (
+        <header className="mirror-header">
+          <Logo className="mirror-logo" />
+          <div className="mirror-actions">
+            <ShootButton onShoot={onShoot} />
+            <Account initial={(name || '·').trim().charAt(0).toUpperCase()} avatar={avatar} />
+          </div>
+        </header>
+      )}
 
       <main className="mirror-content">
         <div className="mirror-top">
-          <div className="mirror-intro">
+          {!garment && <div className="mirror-intro">
             <h1 className="mirror-question" suppressHydrationWarning>{vibeQuestion(shown, name)}</h1>
             <p className="mirror-meta" suppressHydrationWarning>
               <span>{dayLine(shown)}</span>
@@ -447,12 +457,12 @@ export default function DailyMirror({
               <img className="mirror-sep" src="/brand/sep.svg" width="5" height="11" alt="" />
               <span className="mirror-weather"><Icon name={weatherIcon(live ? data.condition : null, isNight(shown))} size={16} label="Weather" />{(live && data.temperature) || temperature}</span>
             </p>
-          </div>
+          </div>}
 
           {/* Desktop: season filters in a row, occasions in a column on the right. */}
           <nav className="mirror-nav" aria-label="Filters">
             <div className="mirror-filters" role="group" aria-label="Season">
-              {SEASONS.map((s) => (
+              {seasons.map((s) => (
                 <button key={s} type="button" className="ds-filter-item" aria-pressed={season === s} onClick={() => pickSeason(s)}>{s}</button>
               ))}
             </div>
@@ -470,7 +480,7 @@ export default function DailyMirror({
               <span>{season}</span>
               <Icon name="chevron-down" size={16} />
               <select aria-label="Season" value={season} onChange={(e) => pickSeason(e.target.value)}>
-                {SEASONS.map((s) => <option key={s} value={s}>{s}</option>)}
+                {seasons.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             </label>
           </div>
@@ -481,8 +491,9 @@ export default function DailyMirror({
             {count > 1 && !showMaking && <button type="button" className="ds-round-button mirror-arrow" onClick={() => go(-1)} aria-label="Previous outfit"><Icon name="arrow-left" size={20} /></button>}
             {showMaking ? <MakingLooks />
               : count ? <OutfitRing key={`${occasion}|${filter}`} outfits={outfits} index={current} onChange={setIndex} onOpen={(i) => setViewing(outfits[i])} leavingId={leavingId} arrivingId={arrivingId} turnMs={rolling ? HIDE_ROLL_MS : undefined} />
-              : favoritesView && !loading && !problem ? <NoFavorites onBack={() => pickSeason(SEASONS[0])} />
+              : favoritesView && !loading && !problem ? <NoFavorites onBack={() => pickSeason(seasons[0])} />
               : live && tab?.loading ? <RingSkeleton />
+              : live && garment ? <div className="mirror-empty" role="status"><p>{problem || `No looks with this ${(garment.description || 'item').toLowerCase()} here yet.`}</p></div>
               : live && data.hasBase ? <NoLooks title={today_ && tab.failed ? (all ? 'Couldn’t make your looks' : `Couldn’t make your ${occasion} looks`) : today_ ? (all ? 'No looks yet' : `No ${occasion} looks yet`) : (all ? `No ${season} looks yet` : `No ${season} ${occasion} looks yet`)}
                   text={problem || (today_ && tab.failed) || 'Shoot your first outfit.'} onShoot={onShoot} />
               : (

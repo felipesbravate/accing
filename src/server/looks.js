@@ -54,7 +54,8 @@ const HISTORY_ROWS = 300;
 const MAX_PER_TAB_HISTORY = 40;
 
 /** Every look so far that suits the season filter (Summer, Mid-season, Winter, All, Favorites), per tab, newest first. */
-export async function seasonLooks(userId, key) {
+/** `only`: outfit ids (a wardrobe garment's looks, /wardrobe/[tile]/[garment]): just those, every one of them. */
+export async function seasonLooks(userId, key, only = null) {
   const sb = await authClient();
   const [mine, { data: profile }] = await Promise.all([marks(sb, userId), sb.from('users').select('*').eq('id', userId).single()]);
   // Summer, Mid-season, Winter: judged against the typical temperature of each season where the person lives.
@@ -62,9 +63,10 @@ export async function seasonLooks(userId, key) {
   let query = sb.from('outfits').select('id, job_id, look_n, generated_image_path, items, occasion, created_at')
     .eq('user_id', userId).eq('status', 'ready');
   if (key === 'favorites') query = query.in('id', [...mine.favorites].slice(0, HISTORY_ROWS)); // favourites of any age
-  const { data: rows } = mine.favorites.size || key !== 'favorites'
+  if (only) query = query.in('id', only.slice(0, HISTORY_ROWS));
+  const { data: rows } = (mine.favorites.size || key !== 'favorites') && (!only || only.length)
     ? await query.order('created_at', { ascending: false }).limit(HISTORY_ROWS) : { data: [] };
-  const picked = pickLooks(rows, { key, perTab: MAX_PER_TAB_HISTORY, tabs: OCCASION_TABS.map((t) => t.label), unique: true, ...mine, ...(climate ? { climate } : {}),
+  const picked = pickLooks(rows, { key, perTab: only ? HISTORY_ROWS : MAX_PER_TAB_HISTORY, tabs: OCCASION_TABS.map((t) => t.label), unique: true, ...mine, ...(climate ? { climate } : {}),
     offset: Number.isFinite(profile?.warmth_offset) ? profile.warmth_offset : 0 });
   const entries = await Promise.all(OCCASION_TABS.map(async (t) => [t.label, { looks: await signLooks(sb, picked[t.label], mine.favorites, mine.worn), making: false }]));
   return { tabs: Object.fromEntries(entries) };
