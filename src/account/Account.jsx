@@ -143,9 +143,9 @@ export function Wardrobe({ data }) {
                   <img src={g.image} alt={g.description} style={{ objectPosition: g.position, '--origin': g.position }} loading="lazy" />
                 </button>
               ) : <div className="acc-card-img"><Icon name={c.icon} size={32} /></div>}
-              {/* Figma 306:4775: the looks made with it (446:7190), then Remove. */}
+              {/* Figma 306:4775: "See outfits" (the looks made with it, 446:7190), then Remove. */}
               <div className="acc-card-actions">
-                <Link href={`/wardrobe/${c.key}/${encodeURIComponent(g.key)}`} prefetch className="ds-button is-tiny is-secondary acc-card-action">See matching outfits</Link>
+                <Link href={`/wardrobe/${c.key}/${encodeURIComponent(g.key)}`} prefetch className="ds-button is-tiny is-secondary acc-card-action">See outfits</Link>
                 <button type="button" className="ds-button is-tiny is-tertiary is-danger acc-card-action" onClick={() => setAsking(g)}>Remove</button>
               </div>
             </li>
