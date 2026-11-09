@@ -11,6 +11,7 @@ import Link from 'next/link';
 import { Icon } from '../ui/Icon.jsx';
 import { useRouter } from 'next/navigation';
 import { slideBack, useSlideIn } from '../ui/slide.js';
+import { goUp } from '../ui/nav.js';
 import { MobileMenu, Modal, Pager, ToastView, TopNav } from '../ui/kit.jsx';
 import { installTip } from './install-tip.js';
 import { Logo } from '../ui/Logo.jsx';
@@ -435,7 +436,7 @@ export default function DailyMirror({
   return (
     <div ref={rootRef} className={`mirror${garment ? ' is-garment' : ''}${(note || (problem && count > 0) || (!note && count <= 1 && more > 0)) ? ' has-note' : ''}`}>
       {garment ? (
-        <TopNav title={garment.title} icon={garment.icon} onBack={() => slideBack(rootRef.current, () => router.push(garment.back))} className="mirror-garment-nav" />
+        <TopNav title={garment.title} icon={garment.icon} onBack={() => slideBack(rootRef.current, () => goUp(router, garment.back))} className="mirror-garment-nav" />
       ) : (
         <header className="mirror-header">
           <Logo className="mirror-logo" />

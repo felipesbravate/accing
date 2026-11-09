@@ -1,6 +1,7 @@
 import '../src/ui/theme.css';
 import { cookies } from 'next/headers';
 import Splash from '../src/mirror/Splash.jsx';
+import NavTrail from '../src/ui/NavTrail.jsx';
 import { splashScript } from '../src/mirror/splash-script.js';
 import { knownName } from '../src/server/login-steps.js';
 
@@ -34,6 +35,7 @@ export default async function RootLayout({ children }) {
       </head>
       <body>
         <Splash name={name} />
+        <NavTrail />
         {children}
       </body>
     </html>

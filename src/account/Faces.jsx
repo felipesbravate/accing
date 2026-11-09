@@ -11,6 +11,7 @@ import { FACE_ANGLES } from '../lib/photo-advice.js';
 import { useCamera, useLighting, Viewfinder } from '../onboarding/Camera.jsx';
 import { Angles, CaptureBar, Notice } from '../onboarding/Onboarding.jsx';
 import { Screen, api, apiUpload } from './Account.jsx';
+import { goUp } from '../ui/nav.js';
 import '../onboarding/onboarding.css';
 
 const ORDER = ['left', 'front', 'right']; // how the three are shown (Left, Front, Right); taken front, left, right
@@ -59,8 +60,8 @@ export default function Faces({ initial }) {
     if (r.error) { setProblem(r.error); return; }
     setStep('waiting');
   };
-  const discard = async () => { setAsking(false); await api({ action: 'faces-discard' }); router.push('/settings'); };
-  const cancel = () => (Object.values(state.fresh || {}).some(Boolean) ? setAsking(true) : router.push('/settings'));
+  const discard = async () => { setAsking(false); await api({ action: 'faces-discard' }); goUp(router, '/settings'); };
+  const cancel = () => (Object.values(state.fresh || {}).some(Boolean) ? setAsking(true) : goUp(router, '/settings'));
 
   if (step === 'capture') {
     const a = FACE_ANGLES[angle];
@@ -131,8 +132,8 @@ export default function Faces({ initial }) {
           </div>
         )}
         {problem && <p className="acc-problem" role="alert">{problem}</p>}
-        <Modal open={Boolean(saved)} title="New photos saved" description="Your outfits will now be shown using your new photos." onClose={() => router.push('/settings')}>
-            <button type="button" className="ds-button is-large" onClick={() => router.push('/settings')}>Done</button>
+        <Modal open={Boolean(saved)} title="New photos saved" description="Your outfits will now be shown using your new photos." onClose={() => goUp(router, '/settings')}>
+            <button type="button" className="ds-button is-large" onClick={() => goUp(router, '/settings')}>Done</button>
           </Modal>
       </Screen>
     );

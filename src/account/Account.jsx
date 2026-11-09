@@ -6,6 +6,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { slideBack, useSlideIn } from '../ui/slide.js';
+import { goUp } from '../ui/nav.js';
 import { useRouter } from 'next/navigation';
 import { Icon } from '../ui/Icon.jsx';
 import { Logo } from '../ui/Logo.jsx';
@@ -35,7 +36,8 @@ export function Screen({ title, subtitle = null, icon = null, back = '/', right 
   const router = useRouter();
   const el = useRef(null);
   useSlideIn(el);
-  const onBack = () => slideBack(el.current, () => (window.history.length > 1 ? router.back() : router.push(back)));
+  // Up to the parent screen (src/ui/nav.js): back() only when it is the page before, else it replaces this one.
+  const onBack = () => slideBack(el.current, () => goUp(router, back));
   return (
     <div ref={el} className={('acc-screen ' + className).trim()}>
       <TopNav title={title} subtitle={subtitle} icon={icon} onBack={onBack} right={right} className="acc-nav" />
@@ -256,7 +258,7 @@ export function Password({ reset = false }) {
     if (r.error) setErr(r); else setDone(true);
   };
   const ready = (reset || f.current) && f.next && f.confirm;
-  const leave = () => router.push(reset ? '/' : '/settings');
+  const leave = () => goUp(router, reset ? '/' : '/settings');
   const fields = (
     <>
       <div className="acc-fields">
@@ -329,7 +331,7 @@ export function Email({ current, verified = false }) {
     return (
       <Screen title="Verify your new email" back="/settings"
         footer={<>
-          <button type="button" className="ds-button is-large acc-wide" onClick={() => router.push('/settings')}>Done</button>
+          <button type="button" className="ds-button is-large acc-wide" onClick={() => goUp(router, '/settings')}>Done</button>
           <button type="button" className="ds-button is-large is-tertiary acc-wide" disabled={wait > 0} onClick={resend}>{wait > 0 ? `Resend email (${fmt(wait)})` : 'Resend email'}</button>
         </>}>
         <div className="acc-form">
@@ -362,8 +364,8 @@ export function Email({ current, verified = false }) {
         {err && !err.field && <Problem text={err.error} />}
       </form>
       {/* After the link in the email (app/settings/email/done → ?verified=1), Figma 402:3974. */}
-      <Modal open={justVerified} title="Email verified" description="Use your new email the next time you sign in." onClose={() => { setJustVerified(false); router.push('/settings'); }}>
-        <button type="button" className="ds-button is-large" onClick={() => { setJustVerified(false); router.push('/settings'); }}>Done</button>
+      <Modal open={justVerified} title="Email verified" description="Use your new email the next time you sign in." onClose={() => { setJustVerified(false); goUp(router, '/settings'); }}>
+        <button type="button" className="ds-button is-large" onClick={() => { setJustVerified(false); goUp(router, '/settings'); }}>Done</button>
       </Modal>
     </Screen>
   );
@@ -382,7 +384,7 @@ export function DeleteAccount() {
   return (
     <Screen title="Delete account" back="/settings"
       footer={<>
-        <button type="button" className="ds-button is-large is-secondary acc-wide" onClick={() => router.push('/settings')}>Keep my account</button>
+        <button type="button" className="ds-button is-large is-secondary acc-wide" onClick={() => goUp(router, '/settings')}>Keep my account</button>
         <button type="submit" form="acc-delete" className="ds-button is-large is-danger acc-wide" disabled={typed.trim() !== 'DELETE' || busy}>{busy ? 'Deleting…' : 'Delete account'}</button>
       </>}>
       <form id="acc-delete" className="acc-form" onSubmit={submit}>
