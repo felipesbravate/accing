@@ -31,14 +31,14 @@ export async function apiUpload(fields, blob) {
 }
 
 /** A screen with the top-nav (back + title) and a scrolling body. */
-export function Screen({ title, back = '/', right = null, children, footer = null, className = '' }) {
+export function Screen({ title, subtitle = null, icon = null, back = '/', right = null, children, footer = null, className = '' }) {
   const router = useRouter();
   const el = useRef(null);
   useSlideIn(el);
   const onBack = () => slideBack(el.current, () => (window.history.length > 1 ? router.back() : router.push(back)));
   return (
     <div ref={el} className={('acc-screen ' + className).trim()}>
-      <TopNav title={title} onBack={onBack} right={right} className="acc-nav" />
+      <TopNav title={title} subtitle={subtitle} icon={icon} onBack={onBack} right={right} className="acc-nav" />
       <main className="acc-body">{children}</main>
       {footer && <div className="acc-footer">{footer}</div>}
     </div>

@@ -7,13 +7,23 @@ import { Icon } from './Icon.jsx';
 import { dotsThatFit, pagerDots } from './pager.js';
 
 /** top-nav (178:1363): back on the left (a Secondary 48px icon-button), an optional title, an optional right action. */
-export function TopNav({ title, onBack, backLabel = 'Back', right = null, className = '' }) {
+/** top-nav (Thread 178:1363, 2026-11-09): back on the left, a centred title with an optional 20px icon before it and an
+ *  optional sub-title under it (12 regular, text/secondary), `right` on the right. */
+export function TopNav({ title, subtitle = null, icon = null, onBack, backLabel = 'Back', right = null, className = '' }) {
   return (
     <div className={('ds-top-nav ' + className).trim()}>
       <span className="ds-top-nav-side">
         {onBack && <button type="button" className="ds-icon-button is-large is-secondary" onClick={onBack} aria-label={backLabel}><Icon name="arrow-left" size={24} /></button>}
       </span>
-      {title ? <h1 className="ds-top-nav-title">{title}</h1> : <span />}
+      {title ? (
+        <div className="ds-top-nav-heading">
+          {icon && <Icon name={icon} size={20} className="ds-top-nav-icon" />}
+          <span className="ds-top-nav-text">
+            <h1 className="ds-top-nav-title">{title}</h1>
+            {subtitle && <p className="ds-top-nav-subtitle">{subtitle}</p>}
+          </span>
+        </div>
+      ) : <span />}
       <span className="ds-top-nav-side is-end">{right}</span>
     </div>
   );
