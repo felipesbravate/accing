@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { slideBack, useSlideIn } from '../ui/slide.js';
 import { goUp } from '../ui/nav.js';
+import { thumbPlacement } from '../lib/garment-box.js';
 import { useRouter } from 'next/navigation';
 import { Icon } from '../ui/Icon.jsx';
 import { Logo } from '../ui/Logo.jsx';
@@ -113,6 +114,20 @@ function Empty({ title, text }) {
   return <div className="acc-empty"><h2>{title}</h2><p>{text}</p></div>;
 }
 
+// A garment's thumbnail: its outfit photo cropped to the garment's box (src/lib/garment-box.js) once the photo's size is
+// known; until then, and for garments without a box, the category's usual place (cropFor).
+function GarmentThumb({ g }) {
+  const [place, setPlace] = useState(null);
+  const fit = (img) => {
+    if (!img || !g.box || !img.naturalWidth) return;
+    const box = img.parentElement.getBoundingClientRect();
+    setPlace(thumbPlacement({ W: img.naturalWidth, H: img.naturalHeight, cw: box.width, ch: box.height, box: g.box }));
+  };
+  const style = place ? { position: 'absolute', width: place.width, height: place.height, left: place.left, top: place.top, maxWidth: 'none', objectFit: 'fill' }
+    : { objectPosition: g.position, '--origin': g.position };
+  return <img src={g.image} alt={g.description} style={style} loading="lazy" ref={(el) => { if (el?.complete && !place) fit(el); }} onLoad={(e) => fit(e.currentTarget)} />;
+}
+
 // ── Wardrobe ──
 export function Wardrobe({ data }) {
   const [items, setItems] = useState(data.items);
@@ -140,7 +155,7 @@ export function Wardrobe({ data }) {
               {g.image ? (
                 // Tap to see the whole photo, zoomed onto the garment (PhotoViewer).
                 <button type="button" className={'acc-card-img is-button' + (g.isLook ? ' is-look' : '')} onClick={() => setOpen(g)} aria-label={`See ${g.description} bigger`}>
-                  <img src={g.image} alt={g.description} style={{ objectPosition: g.position, '--origin': g.position }} loading="lazy" />
+                  <GarmentThumb g={g} />
                 </button>
               ) : <div className="acc-card-img"><Icon name={c.icon} size={32} /></div>}
               {/* Figma 306:4775: "See outfits" (the looks made with it, 446:7190), then Remove. */}
@@ -156,7 +171,7 @@ export function Wardrobe({ data }) {
           <button type="button" className="ds-button is-large is-tertiary" onClick={() => setAsking(null)} disabled={busy}>Cancel</button>
           <button type="button" className="ds-button is-large is-danger" onClick={remove} disabled={busy}>{busy ? 'Removing…' : 'Remove'}</button>
         </Modal>
-      {open && <PhotoViewer src={open.image} alt={open.description} caption={open.description} focus={open.isLook ? null : open.position} onClose={() => setOpen(null)} />}
+      {open && <PhotoViewer src={open.image} alt={open.description} caption={open.description} box={open.box} focus={open.isLook ? null : open.position} onClose={() => setOpen(null)} />}
     </Screen>
   );
 }

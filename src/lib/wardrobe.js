@@ -88,8 +88,9 @@ export function wardrobeFrom(looks, removed = []) {
       if (!tile) continue;
       const key = garmentKey(x);
       if (gone.has(key)) continue;
-      const g = byKey.get(key) || { key, category: x.category, description: x.description, photo_id: x.photo_id || null, tile, looks: [], lookPath: null };
+      const g = byKey.get(key) || { key, category: x.category, description: x.description, photo_id: x.photo_id || null, tile, looks: [], lookPath: null, box: null };
       g.looks.push(l.id);
+      if (!g.box && Array.isArray(x.box)) g.box = x.box; // where it is in its photo (src/lib/garment-box.js)
       if (!g.lookPath && l.generated_image_path) g.lookPath = l.generated_image_path;
       byKey.set(key, g);
     }
@@ -112,9 +113,10 @@ export function wardrobeFrom(looks, removed = []) {
   return [...groups.values()].map((members) => {
     members.sort((a, b) => b.looks.length - a.looks.length);
     const top = members[0];
-    const withPhoto = members.find((m) => m.photo_id) || null;
+    // The photo shown: one where the garment's box is known, so the thumbnail can crop to it.
+    const withPhoto = members.find((m) => m.photo_id && m.box) || members.find((m) => m.photo_id) || null;
     const keys = members.map((m) => m.key).sort();
-    return { key: keys[0], keys, category: top.category, description: top.description, tile: top.tile, photo_id: withPhoto?.photo_id || null,
+    return { key: keys[0], keys, category: top.category, description: top.description, tile: top.tile, photo_id: withPhoto?.photo_id || null, box: withPhoto?.box || null,
       looks: [...new Set(members.flatMap((m) => m.looks))], lookPath: members.find((m) => m.lookPath)?.lookPath || null,
       readings: members.map((m) => ({ photo_id: m.photo_id, category: m.category, description: m.description })) };
   }).sort((a, b) => b.looks.length - a.looks.length);

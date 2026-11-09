@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { appendFileSync, existsSync } from 'node:fs';
 import { extname, join, resolve } from 'node:path';
 import { CATEGORIES, blameGarment, composeLooks, lookKey, mergeLayers, normaliseReading, sameReadGarment, weatherForGarments } from './image-test-lib.mjs';
+import { readPhoto } from './garment-reader.mjs';
 import { judgeLooks, STYLIST_MIN } from './stylist.mjs';
 import { checkFaces, checkTable, MIN_IDENTITY } from './face-check/index.mjs';
 import { confirmClaims, outfitCheck, photoCheck, poseCheck } from './face-check/look-check.mjs';
@@ -232,60 +233,7 @@ async function readIdentity(faces, model) {
   return parts.length ? parts.join('; ') + '.' : null;
 }
 
-// Step 1: read the garments in each photo with a cheap vision model (Gemini Flash-Lite).
-const READER_PROMPT = `This photo should show one person, head to toe. List every piece of clothing and footwear they are wearing.
-For each item give:
-- category: one of ${CATEGORIES.join(', ')} (outerwear = jacket, blazer, coat; top = shirt, t-shirt, sweater, blouse; bottom = trousers, jeans, skirt, shorts)
-- description: 4 to 10 words with colour, pattern, material and cut, e.g. "brown houndstooth tweed single-breasted blazer"
-- visibility: "full" if the whole item is visible, "partial" if partly hidden or cropped, "hidden" if you can barely see it
-- box: a tight box around the item as [ymin, xmin, ymax, xmax] on a 0–1000 scale of the photo (for shoes, one box around both)
-- formality: 1 lounge/beach/sport, 2 casual (t-shirt, jeans, sneakers), 3 smart casual (blouse, chinos, loafers), 4 business (tailoring, shirt dress with sleeves, pumps), 5 formal/evening (gown, strapless or sequinned dress, stilettos)
-- exposure: how much skin the item shows as worn: "low" (covered), "medium" (sleeveless, knee-length, a short slit), "high" (strapless, plunging neckline, cut-outs, sheer, mini length, open to the thigh, crop top)
-- season: "warm" if only for warm weather (sandals, linen, sleeveless, shorts), "cold" if only for cold weather (wool coat, heavy knit, lined boots), else "any"
-List items worn under or inside others too, e.g. a skirt or shorts under an open shirt dress, a t-shirt under a sheer top: each as its own item with its own box.
-Colours: name the garment's own colour (metallic gold vs silver, cream vs white), as it would look in daylight: ignore coloured room light, e.g. a beige jacket lit pink on one side and yellow on the other is beige. When unsure, use the broader word ("metallic").
-Also say whether the person is visible head to toe (full_body), how many people are in the photo (people), and which mannequin build best matches their body, female or male (figure; used only to pick a pose reference).`;
-
-const READER_SCHEMA = {
-  type: 'OBJECT',
-  properties: {
-    full_body: { type: 'BOOLEAN' },
-    people: { type: 'INTEGER' },
-    figure: { type: 'STRING', enum: ['female', 'male'] },
-    items: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
-      category: { type: 'STRING', enum: CATEGORIES },
-      description: { type: 'STRING' },
-      visibility: { type: 'STRING', enum: ['full', 'partial', 'hidden'] },
-      box: { type: 'ARRAY', items: { type: 'INTEGER' } },
-      formality: { type: 'INTEGER' },
-      exposure: { type: 'STRING', enum: ['low', 'medium', 'high'] },
-      season: { type: 'STRING', enum: ['warm', 'any', 'cold'] },
-    }, required: ['category', 'description', 'visibility', 'formality', 'exposure', 'season'] } },
-  },
-  required: ['full_body', 'people', 'items'],
-};
-
-async function readPhoto(img, index, model) {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) throw new Error('GEMINI_API_KEY is not set in .env.local (needed to read the garments)');
-  const res = await fetch(`${GEMINI_BASE}/v1beta/models/${model}:generateContent`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
-    body: JSON.stringify({
-      contents: [{ role: 'user', parts: [{ inlineData: { mimeType: img.mime, data: img.bytes.toString('base64') } }, { text: READER_PROMPT }] }],
-      generationConfig: { responseMimeType: 'application/json', responseSchema: READER_SCHEMA, temperature: 0 },
-    }),
-  });
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(`Reading ${img.file} failed (${model}, ${res.status}): ${json.error?.message || 'no details'}. Try --reader-model=gemini-3.5-flash-lite`);
-  const text = json.candidates?.[0]?.content?.parts?.map((p) => p.text).filter(Boolean).join('') || '{}';
-  let parsed;
-  try { parsed = JSON.parse(text); } catch { throw new Error(`Could not understand the reading of ${img.file}: ${text.slice(0, 200)}`); }
-  const u = json.usageMetadata || {};
-  const cost = ((u.promptTokenCount || 0) * 0.25 + (u.candidatesTokenCount || 0) * 1.5) / 1e6; // gemini-3.1-flash-lite list price
-  return { fullBody: parsed.full_body !== false, people: parsed.people ?? 1, figure: parsed.figure, items: mergeLayers(normaliseReading(parsed, index)), cost };
-}
-
+// Step 1: read the garments in each photo with a cheap vision model (Gemini Flash-Lite): scripts/garment-reader.mjs.
 async function readWardrobe(images, model) {
   const readings = await Promise.all(images.map((img, i) => readPhoto(img, i, model)));
   readings.forEach((r, i) => {
@@ -1003,7 +951,7 @@ PHOTO
     if (!opts.jsonOut) return;
     const spentNow = [...rows, ...rejected, ...prepRows].reduce((t, r) => t + (r.cost || 0), 0);
     const okPrep = prepRows.filter((r) => !r.reasons.length && r.identity != null).sort((a, b) => b.identity - a.identity);
-    const item = (x) => ({ description: x.description, category: x.category, photo: x.photo, ...(x.formality ? { formality: x.formality } : {}), ...(x.exposure ? { exposure: x.exposure } : {}), ...(x.season ? { season: x.season } : {}) });
+    const item = (x) => ({ description: x.description, category: x.category, photo: x.photo, ...(x.formality ? { formality: x.formality } : {}), ...(x.exposure ? { exposure: x.exposure } : {}), ...(x.season ? { season: x.season } : {}), ...(x.box ? { box: x.box } : {}) });
     const summary = {
       stage, dir: out, spent: spentNow, occasion: opts.occasion,
       prep: prepRows.map((r) => ({ file: r.file, identity: r.identity, ok: !r.reasons.length, reasons: r.reasons, cost: r.cost || 0, best: okPrep[0]?.file === r.file })),
@@ -1069,7 +1017,7 @@ PHOTO
         const ready = (r) => { r.readySeconds = (performance.now() - t0) / 1000; r.shownSeconds = shownAt ?? r.readySeconds; rows.push(r); };
         // For the worker: a look that passed its checks is announced at once, so it can be uploaded and shown while the
         // next one is made (one line per look: @@LOOK {n, file, items}).
-        const announce = (r) => { if (opts.jsonOut) console.log('@@LOOK ' + JSON.stringify({ n: look.n, file: join(out, r.file), ...(r.cutout ? { cutout: join(out, r.cutout) } : {}), items: look.items.map((x) => ({ description: x.description, category: x.category, photo: x.photo, ...(x.formality ? { formality: x.formality } : {}), ...(x.exposure ? { exposure: x.exposure } : {}), ...(x.season ? { season: x.season } : {}) })) })); }; // tags too: the season filters read them
+        const announce = (r) => { if (opts.jsonOut) console.log('@@LOOK ' + JSON.stringify({ n: look.n, file: join(out, r.file), ...(r.cutout ? { cutout: join(out, r.cutout) } : {}), items: look.items.map((x) => ({ description: x.description, category: x.category, photo: x.photo, ...(x.formality ? { formality: x.formality } : {}), ...(x.exposure ? { exposure: x.exposure } : {}), ...(x.season ? { season: x.season } : {}), ...(x.box ? { box: x.box } : {}) })) })); }; // tags too: the season filters read them; the box crops the Wardrobe's thumbnails (2026-11-09)
         for (let attempt = 1; attempt <= opts.anchorTries; attempt++) {
           const r = await generate(m, look, run, name(m, look, run), edit.images, edit.prompt, edit.label, { ...opts, faceCount: 1 }, lockToBase);
           r.attempt = attempt;

@@ -1,16 +1,16 @@
 'use client';
 // A photo full screen (wardrobe garments, 2026-11-06; no Figma frame: the look viewer's layout, 253:8207). It opens
-// zoomed onto the garment (`focus`: its part of the photo, as CSS object-position "center 72%"); pinch or double tap
+// fitted to the garment's `box`, or else zoomed onto `focus` (its part of the photo, as CSS object-position "center 72%"); pinch or double tap
 // to zoom, drag to look around, × or Escape or the phone's back gesture to close. Zoom maths: src/mirror/zoom.js.
 import { useEffect, useLayoutEffect, useRef } from 'react';
 import { Icon } from './Icon.jsx';
 import { useNoEdgeSwipe } from './edge-swipe.js';
-import { clampView, focusOf, pinch, toggleZoom } from '../mirror/zoom.js';
+import { clampView, focusOf, pinch, toggleZoom, viewForBox } from '../mirror/zoom.js';
 
 const DOUBLE_TAP_MS = 300;
 const OPEN_SCALE = 2; // how close it opens on the garment
 
-export function PhotoViewer({ src, alt, caption = null, focus = null, onClose }) {
+export function PhotoViewer({ src, alt, caption = null, box = null, focus = null, onClose }) {
   const dialog = useRef(null), stage = useRef(null), frame = useRef(null), img = useRef(null);
   useNoEdgeSwipe(stage);
   const view = useRef({ s: 1, x: 0, y: 0 });
@@ -19,6 +19,14 @@ export function PhotoViewer({ src, alt, caption = null, focus = null, onClose })
   const lastTap = useRef({ t: 0, x: 0, y: 0 });
 
   const size = () => ({ w: frame.current?.clientWidth || 1, h: frame.current?.clientHeight || 1 });
+  // The photo as drawn at scale 1 (whole, in the frame), so a zoomed photo can't be dragged past its own edges.
+  const drawn = () => {
+    const { w, h } = size(), el = img.current;
+    if (!el?.naturalWidth) return { w, h, dw: w, dh: h };
+    const r = el.naturalWidth / el.naturalHeight;
+    return { w, h, dw: Math.min(w, h * r), dh: Math.min(h, w / r) };
+  };
+  const fit = (v) => { const d = drawn(); return clampView(v, d.w, d.h, d.dw, d.dh); };
   const apply = (v, animate = false) => {
     view.current = v;
     const el = img.current; if (!el) return;
@@ -31,12 +39,14 @@ export function PhotoViewer({ src, alt, caption = null, focus = null, onClose })
   };
   // Open on the garment: its part of the photo in the middle of the screen. The photo is drawn whole (contain), so the
   // garment's height is measured on the photo as drawn, once its size is known.
+  // With the garment's box (src/lib/garment-box.js) it opens fitted to it: shoes fill the screen as a coat would.
   const openOnGarment = () => {
-    const at = focusOf(focus), el = img.current;
-    if (at == null || !el?.naturalWidth) return;
-    const { w, h } = size();
-    const drawn = Math.min(h, (w * el.naturalHeight) / el.naturalWidth);
-    apply(clampView({ s: OPEN_SCALE, x: 0, y: (0.5 - at) * drawn * OPEN_SCALE }, w, h));
+    if (!img.current?.naturalWidth) return;
+    const { w, h, dw, dh } = drawn();
+    if (box) { apply(fit(viewForBox({ w, h, dw, dh, box }))); return; }
+    const at = focusOf(focus);
+    if (at == null) return;
+    apply(fit({ s: OPEN_SCALE, x: 0, y: (0.5 - at) * dh * OPEN_SCALE }));
   };
   useLayoutEffect(() => { if (img.current?.complete) openOnGarment(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -74,7 +84,7 @@ export function PhotoViewer({ src, alt, caption = null, focus = null, onClose })
     } else if (g.kind === 'pan') {
       const dx = pts[0].x - g.from.x, dy = pts[0].y - g.from.y;
       if (Math.hypot(dx, dy) > 6) g.moved = true;
-      if (g.view.s > 1) { const { w, h } = size(); apply(clampView({ ...g.view, x: g.view.x + dx, y: g.view.y + dy }, w, h)); }
+      if (g.view.s > 1) { apply(fit({ ...g.view, x: g.view.x + dx, y: g.view.y + dy })); }
     }
   };
   const onPointerUp = (e) => {
@@ -82,15 +92,14 @@ export function PhotoViewer({ src, alt, caption = null, focus = null, onClose })
     pointers.current.delete(e.pointerId);
     if (pointers.current.size) { begin(); return; }
     gesture.current = null;
-    const { w, h } = size();
     if (g?.kind === 'pan' && !g.moved && at) { // two quick taps: zoom in on that point, or back out to the whole photo
       const now = performance.now(), last = lastTap.current;
       if (now - last.t < DOUBLE_TAP_MS && Math.hypot(at.x - last.x, at.y - last.y) < 30) {
-        apply(clampView(toggleZoom(view.current, at), w, h), true); lastTap.current = { t: 0, x: 0, y: 0 }; return;
+        apply(fit(toggleZoom(view.current, at)), true); lastTap.current = { t: 0, x: 0, y: 0 }; return;
       }
       lastTap.current = { t: now, ...at };
     }
-    apply(clampView(view.current, w, h), true);
+    apply(fit(view.current), true);
   };
 
   return (

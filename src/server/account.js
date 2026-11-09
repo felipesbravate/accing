@@ -5,6 +5,7 @@ import { authClient } from './auth.js';
 import { localDay } from './looks.js';
 import { suggestLooks } from '../mirror/suggest.js';
 import { lookKeys } from '../mirror/seasons.js';
+import { validBox } from '../lib/garment-box.js';
 import { hiddenIn } from '../lib/hide-scope.js';
 import { OCCASION_TABS, tabFor } from '../mirror/occasions.js';
 import { WARDROBE_CATEGORIES, changedAgo, cropFor, garmentKey, wardrobeCounts, wardrobeFrom } from '../lib/wardrobe.js';
@@ -78,8 +79,9 @@ export async function wardrobe(userId, tile) {
     category: cat,
     items: items.map((g) => {
       const photo = photoUrls.get(pathOf.get(g.photo_id));
+      // The garment's box on its photo when known (src/lib/garment-box.js), else the category's usual place.
       return { key: g.key, description: g.description, looks: g.looks.length, image: photo || lookUrls.get(g.lookPath) || null,
-        isLook: !photo, position: cropFor(g.category) };
+        isLook: !photo, position: cropFor(g.category), box: photo && validBox(g.box) ? g.box : null };
     }),
   };
 }

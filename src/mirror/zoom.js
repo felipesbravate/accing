@@ -7,10 +7,11 @@ export const DOUBLE_TAP_SCALE = 2.5;
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
-/** Keeps the zoomed image covering the screen: no panning past its edges; at scale 1 it is centred. */
-export function clampView(v, w, h) {
+/** Keeps the zoomed image covering the screen: no panning past its edges; at scale 1 it is centred. `dw`×`dh`: the
+ *  image as drawn at scale 1 when smaller than the w×h screen (a photo shown whole, PhotoViewer). */
+export function clampView(v, w, h, dw = w, dh = h) {
   const s = clamp(v.s, MIN_SCALE, MAX_SCALE);
-  const mx = ((s - 1) * w) / 2, my = ((s - 1) * h) / 2;
+  const mx = Math.max(0, (s * dw - w) / 2), my = Math.max(0, (s * dh - h) / 2);
   return { s, x: clamp(v.x, -mx, mx) + 0, y: clamp(v.y, -my, my) + 0 }; // + 0 turns -0 into 0
 }
 
@@ -33,4 +34,14 @@ export function toggleZoom(v, at) {
 export function focusOf(position) {
   const m = /(\d+(?:\.\d+)?)%\s*$/.exec(String(position || ''));
   return m ? Math.min(1, Math.max(0, +m[1] / 100)) : null;
+}
+
+/** The viewer opened on a garment's box: the photo drawn whole (dw×dh, centred in a w×h frame), zoomed so the box with
+ *  a margin fills the frame, its middle in the middle. → { s, x, y } (clamped later by clampView). */
+export function viewForBox({ w, h, dw, dh, box, margin = 0.15, max = 4 }) {
+  const [y0, x0, y1, x1] = box.map((n) => n / 1000);
+  const bw = (x1 - x0) * dw * (1 + 2 * margin), bh = (y1 - y0) * dh * (1 + 2 * margin);
+  const s = Math.min(max, Math.max(1, Math.min(w / bw, h / bh)));
+  const cx = ((x0 + x1) / 2 - 0.5) * dw, cy = ((y0 + y1) / 2 - 0.5) * dh; // from the photo's middle
+  return { s, x: -cx * s, y: -cy * s };
 }
