@@ -2,7 +2,7 @@
 // scripts/image-test-lib.mjs occasionProfile). Pure, shared by the server and the browser; tested.
 export const OCCASION_TABS = [
   { label: 'Casual', occasion: 'a relaxed casual day' },
-  { label: 'Office day', short: 'Office', occasion: 'an office day' }, // "Office" in the desktop menu (Figma 226:2161)
+  { label: 'Work', occasion: 'an office day' }, // "Work" everywhere since 2026-11-10 (was "Office day"; the occasion text the image model gets is unchanged)
   { label: 'Dinner', occasion: 'dinner out' },
   { label: 'Party', occasion: 'a party' },
 ];
@@ -38,7 +38,7 @@ export { tabFor } from '../lib/hide-scope.js';
 /** Today's default tab: office on weekdays, casual at weekends (the worker's morning default, in the same time zone). */
 export function defaultTab(date = new Date(), timeZone = 'Europe/Madrid') {
   const day = new Intl.DateTimeFormat('en-GB', { weekday: 'short', timeZone }).format(date);
-  return ['Sat', 'Sun'].includes(day) ? 'Casual' : 'Office day';
+  return ['Sat', 'Sun'].includes(day) ? 'Casual' : 'Work';
 }
 
 /** The day's sky from the weather text ("…, rain likely" / "…, snow" / "…, cloudy"), for the weather icon:

@@ -3,7 +3,7 @@ import { WARDROBE_CATEGORIES } from '../lib/wardrobe.js';
 
 export const SAMPLE_PROFILE = {
   name: 'Juliana Vasconi', email: 'preview@accing.local', avatar: null,
-  stats: [{ label: 'All outfits', count: 56 }, { label: 'Casual', count: 12 }, { label: 'Office', count: 25 }, { label: 'Dinner', count: 13 }, { label: 'Party', count: 6 }, { label: 'Favorites', count: 28, heart: true }],
+  stats: [{ label: 'All outfits', count: 56 }, { label: 'Casual', count: 12 }, { label: 'Work', count: 25 }, { label: 'Dinner', count: 13 }, { label: 'Party', count: 6 }, { label: 'Favorites', count: 28, heart: true }],
   tiles: WARDROBE_CATEGORIES.map((c) => ({ ...c, count: 12 })),
 };
 const SAMPLES = ['look-1', 'look-2', 'look-4', 'look-5', 'look-8'];

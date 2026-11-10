@@ -1,5 +1,5 @@
 // Why a look is (or isn't) under Summer / Mid-season / Winter, for one account. Read-only.
-//   node --env-file=.env.local scripts/season-why.mjs you@example.com [tab]     (tab: Casual, Office day, Dinner, Party)
+//   node --env-file=.env.local scripts/season-why.mjs you@example.com [tab]     (tab: Casual, Work, Dinner, Party)
 // Prints the climate and warmth offset the app uses, then each look: its insulation (clo) and, per season, how many of
 // the season's 5 typical days it suits (it needs CALIBRATION.share of them). Needs SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.
 import { createClient } from '@supabase/supabase-js';

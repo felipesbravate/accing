@@ -12,7 +12,7 @@ test('tabs map to the worker\'s occasion rules and back', () => {
 });
 
 test('default tab, temperature and local midnight', () => {
-  assert.equal(defaultTab(new Date('2026-10-30T09:00:00Z')), 'Office day');
+  assert.equal(defaultTab(new Date('2026-10-30T09:00:00Z')), 'Work');
   assert.equal(defaultTab(new Date('2026-10-31T09:00:00Z')), 'Casual');
   assert.equal(temperatureOf('19°C high, 17°C low'), '19º');
   assert.equal(temperatureOf(null), null);
@@ -47,7 +47,7 @@ test('All outfits takes the occasion tabs in turn, once per garment combination'
   const l = (id, combo = id) => ({ id, combo });
   const tabs = {
     Casual: { looks: [l('c1'), l('c2', 'same'), l('c3')], making: false },
-    'Office day': { looks: [l('o1'), l('o2', 'same')], making: true },
+    'Work': { looks: [l('o1'), l('o2', 'same')], making: true },
     Dinner: { looks: [], making: false, failed: 'Out of credit' },
     Party: { looks: [l('p1')], making: false },
   };

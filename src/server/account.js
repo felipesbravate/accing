@@ -57,7 +57,7 @@ export async function profile(userId, email) {
   return {
     name: u.full_name || '', email: email || u.email || '', avatar,
     // "All outfits" first (2026-11-06, like the mirror's menu): every visible look, whatever its occasion.
-    stats: [{ label: 'All outfits', count: visible.length }, ...OCCASION_TABS.map((t) => ({ label: t.label === 'Office day' ? 'Office' : t.label, count: counts[t.label] })), { label: 'Favorites', count: favorites || 0, heart: true }],
+    stats: [{ label: 'All outfits', count: visible.length }, ...OCCASION_TABS.map((t) => ({ label: t.label, count: counts[t.label] })), { label: 'Favorites', count: favorites || 0, heart: true }],
     tiles: WARDROBE_CATEGORIES.map((c) => ({ ...c, count: tiles[c.key] })),
   };
 }

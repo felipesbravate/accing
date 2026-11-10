@@ -4,7 +4,7 @@ import { authClient } from './auth.js';
 import { dailyLimit } from '../lib/plans.js';
 import { conditionOf, OCCASION_TABS, startOfToday, tabFor, temperatureOf } from '../mirror/occasions.js';
 import { comboKey, descKey, lookKeys, pickLooks } from '../mirror/seasons.js';
-import { scopeOf, scopedKey } from '../lib/hide-scope.js';
+import { currentCombo, scopeOf, scopedEverywhere, scopedKey } from '../lib/hide-scope.js';
 import { jobFailureText } from '../lib/job-errors.js';
 import { climateFor, rememberLocation } from './location.js';
 import { seenKey, suggestLooks } from '../mirror/suggest.js';
@@ -23,7 +23,7 @@ async function marks(sb, userId) {
     sb.from('hidden_combinations').select('combo, outfit_id').eq('user_id', userId),
     sb.from('look_views').select('combo').eq('user_id', userId).eq('last_worn', localDay()), // none before migration 011
   ]);
-  const hidden = new Set((hid.data || []).map((r) => r.combo));
+  const hidden = new Set((hid.data || []).map((r) => currentCombo(r.combo))); // tabs renamed since are read by their new name
   // Hides from before both keys were stored (2026-11-01): add the wording key of the look each was hidden from, so a
   // duplicate photo of the same garments stays hidden too.
   // A hide for one occasion only (src/lib/hide-scope.js) adds the wording key for that occasion only.
@@ -192,7 +192,7 @@ export async function markLook(userId, outfitId, action, { reason = null, filter
   const { error } = action === 'hide'
     ? await sb.from('hidden_combinations').upsert(keys.map((k) => ({ user_id: userId, combo: k, outfit_id: look.id })), { onConflict: 'user_id,combo', ignoreDuplicates: true })
     : await sb.from('hidden_combinations').delete().eq('user_id', userId)
-      .in('combo', [...keys, ...OCCASION_TABS.flatMap((t) => keys.map((k) => scopedKey(t.label, k)))]); // every scope
+      .in('combo', [...keys, ...scopedEverywhere(keys, OCCASION_TABS.map((t) => t.label))]); // every scope, old tab names too
   return error ? { error: error.message } : { ok: true, combo };
 }
 

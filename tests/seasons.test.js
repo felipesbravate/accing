@@ -16,12 +16,12 @@ test('looks are grouped per tab, newest job first, cut-outs only, capped', () =>
   const row = (id, job, n, occasion, season = 'any', ext = 'webp') => ({ id, job_id: job, look_n: n, occasion, items: season === 'cold' ? [{ category: 'outerwear', description: 'wool coat', season }, { category: 'top', description: 'knit sweater' }, { category: 'bottom', description: 'jeans' }] : look(season), generated_image_path: `u/looks/${job}/look${n}.${ext}` });
   const rows = [row('a2', 'j2', 2, 'an office day'), row('a1', 'j2', 1, 'an office day'), row('b1', 'j1', 1, 'an office day', 'cold'),
     row('c1', 'j1', 2, 'dinner out'), row('d1', 'j0', 1, 'a party', 'any', 'png')];
-  const tabs = ['Casual', 'Office day', 'Dinner', 'Party'];
+  const tabs = ['Casual', 'Work', 'Dinner', 'Party'];
   const all = pickLooks(rows, { key: 'all', perTab: 2, tabs });
-  assert.deepEqual(all['Office day'].map((r) => r.id), ['a1', 'a2']);
+  assert.deepEqual(all['Work'].map((r) => r.id), ['a1', 'a2']);
   assert.deepEqual(all.Dinner.map((r) => r.id), ['c1']);
   assert.deepEqual(all.Party, [], 'flat PNGs are not shown');
-  assert.deepEqual(pickLooks(rows, { key: 'summer', perTab: 5, tabs })['Office day'].map((r) => r.id), ['a1', 'a2']);
+  assert.deepEqual(pickLooks(rows, { key: 'summer', perTab: 5, tabs })['Work'].map((r) => r.id), ['a1', 'a2']);
 });
 
 test('a look can be made to wear a given outfit photo (testers: see a new outfit now)', () => {
@@ -56,13 +56,13 @@ test('occasions where nothing from the new photo fits get no looks (strict)', ()
 test('hidden garment combinations stay hidden, in any order, and Favorites keeps only hearted looks', () => {
   const row = (id, job, n, descs) => ({ id, job_id: job, look_n: n, occasion: 'an office day', items: descs.map((description) => ({ description })), generated_image_path: `u/${job}/look${n}.webp` });
   const rows = [row('a', 'j1', 1, ['White tee', 'Black jeans']), row('b', 'j1', 2, ['Red dress']), row('c', 'j0', 1, ['black jeans', 'white tee']), row('d', 'j0', 2, [])];
-  const tabs = ['Office day'];
+  const tabs = ['Work'];
   assert.equal(comboKey(rows[0].items), comboKey(rows[2].items), 'same garments, any order or case');
   assert.equal(comboKey([], 'd'), 'look:d', 'a look without garment names is its own key');
   const hidden = new Set([comboKey(rows[0].items)]);
-  assert.deepEqual(pickLooks(rows, { key: 'all', tabs, hidden })['Office day'].map((r) => r.id), ['b', 'd']);
-  assert.deepEqual(pickLooks(rows, { key: 'all', tabs, hidden: new Set(['look:d']) })['Office day'].map((r) => r.id), ['a', 'b', 'c']);
-  assert.deepEqual(pickLooks(rows, { key: 'favorites', tabs, favorites: new Set(['b', 'c']) })['Office day'].map((r) => r.id), ['b', 'c']);
+  assert.deepEqual(pickLooks(rows, { key: 'all', tabs, hidden })['Work'].map((r) => r.id), ['b', 'd']);
+  assert.deepEqual(pickLooks(rows, { key: 'all', tabs, hidden: new Set(['look:d']) })['Work'].map((r) => r.id), ['a', 'b', 'c']);
+  assert.deepEqual(pickLooks(rows, { key: 'favorites', tabs, favorites: new Set(['b', 'c']) })['Work'].map((r) => r.id), ['b', 'c']);
   assert.equal(seasonKey('Favorites'), 'favorites');
 });
 
@@ -98,8 +98,8 @@ test('every look is shown once per garment combination, newest first; failures g
   const it = (pid) => [{ description: 'x', category: 'top', photo_id: pid }];
   const row = (id, job, n, pid) => ({ id, job_id: job, look_n: n, occasion: 'an office day', items: it(pid), generated_image_path: `u/${id}.webp` });
   const rows = [row('new', 'j2', 1, 'p1'), row('other', 'j2', 2, 'p2'), row('old', 'j1', 1, 'p1')];
-  const out = pickLooks(rows, { tabs: ['Office day'], perTab: 40, unique: true });
-  assert.deepEqual(out['Office day'].map((r) => r.id), ['new', 'other']);
+  const out = pickLooks(rows, { tabs: ['Work'], perTab: 40, unique: true });
+  assert.deepEqual(out['Work'].map((r) => r.id), ['new', 'other']);
   assert.match(jobFailureText('Reading photo-07.jpg failed (gemini, 402): Your prepayment credits are depleted.'), /out of credit/);
   assert.equal(jobFailureText(null), null);
 });
