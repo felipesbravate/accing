@@ -92,3 +92,9 @@ test('wardrobeFrom: two sweaters in one photo stay two, even when a look used on
   assert.equal(g.filter((x) => x.tile === 'sweaters').length, 2);
   assert.deepEqual(g.find((x) => /cardigan/.test(x.description)).looks, []);
 });
+test('wardrobeCategory: a zip-up hoodie or open cardigan is a sweater, a jacket stays a jacket', () => {
+  assert.equal(wardrobeCategory({ category: 'outerwear', description: 'light grey zip-up hoodie with a hood and pockets' }), 'sweaters');
+  assert.equal(wardrobeCategory({ category: 'outerwear', description: 'beige chunky knit cardigan' }), 'sweaters');
+  assert.equal(wardrobeCategory({ category: 'outerwear', description: 'black hooded rain jacket' }), 'jackets');
+  assert.equal(wardrobeCategory({ category: 'outerwear', description: 'navy puffer with hood' }), 'coats');
+});

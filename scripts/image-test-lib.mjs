@@ -167,13 +167,18 @@ export function composeLooks(wardrobe, { count = 1, seed = 1, occasion = '', wea
     const withIt = candidates.filter((c) => c.chosen.some((x) => x.photo === mustPhoto));
     if (withIt.length) candidates.splice(0, candidates.length, ...withIt); else mustMissed = true;
   }
+  // Garments no look has worn yet (from the combinations already made, `avoid`: "<photo>/<category> + …") go first
+  // among equally good looks, so every garment read gets its turn (2026-11-12: a grey zip-up hoodie, read on 11-10 and
+  // 11-11, was in no look two days later).
+  const worn = new Set([...(avoid || [])].filter((k) => !String(k).startsWith('desc:')).flatMap((k) => String(k).split(' + ')));
+  for (const c of candidates) c.unworn = worn.size ? c.chosen.filter((x) => GARMENTS.includes(x.category) && !worn.has(`${x.photo}/${x.category}`)).length : 0;
   const looks = [], used = new Map();
   while (looks.length < count && candidates.length) {
     // Repeating a main garment (top, bottom, dress, outerwear) counts 3 times as much as repeating shoes: on 2026-10-28
     // four of six office looks were the same shirt dress with different shoes.
     const reuse = (c) => c.chosen.reduce((n, x) => n + (used.get(x.key) || 0) * (x.category === 'shoes' ? 1 : 3), 0);
     // Fit to the occasion and variety weigh the same: a better-fitting look does not repeat the same garments 4 times.
-    candidates.sort((a, b) => (a.fit + reuse(a) - b.fit - reuse(b)) || (b.fresh - a.fresh) || (b.full - a.full) || (a.tie - b.tie));
+    candidates.sort((a, b) => (a.fit + reuse(a) - b.fit - reuse(b)) || (b.unworn - a.unworn) || (b.fresh - a.fresh) || (b.full - a.full) || (a.tie - b.tie));
     const pick = candidates.shift();
     pick.chosen.forEach((x) => used.set(x.key, (used.get(x.key) || 0) + 1));
     const out = pick.chosen.map(({ key, seenIn, ...x }) => x);

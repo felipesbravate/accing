@@ -34,7 +34,8 @@ export function wardrobeCategory(x) {
       return 'pants';
     case 'dress': return 'dresses';
     case 'outerwear':
-      if (/cardigan/.test(d)) return 'sweaters';
+      // Knitwear and sweatshirts worn open are still sweaters: a zip-up hoodie was filed under Jackets (2026-11-12).
+      if (/cardigan|hood|sweatshirt|fleece|knit|jumper|sweater/.test(d) && !/jacket|coat|parka|anorak|windbreaker|shell|puffer|bomber/.test(d)) return 'sweaters';
       if (/coat|parka|puffer|trench|overcoat|duffle|peacoat/.test(d)) return 'coats';
       return 'jackets';
     case 'shoes':

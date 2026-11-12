@@ -102,3 +102,14 @@ test('looks from the real readings are all different and all new', () => {
   assert.ok(looks.every((l) => l.newCombination), looks.map(names).join('\n'));
   looks.forEach((l) => console.log('   ', names(l)));
 });
+
+test('composeLooks puts garments no look has worn yet first (2026-11-12)', () => {
+  const w = [item(0, 'top', 'white t-shirt'), item(0, 'bottom', 'black jeans'), item(1, 'outerwear', 'grey zip-up hoodie', 'partial'),
+    item(1, 'bottom', 'navy shorts'), item(2, 'shoes', 'white sneakers'), item(3, 'top', 'black t-shirt')];
+  // Every garment but the hoodie has been worn; black tee + shorts is still a new combination, but wears nothing new.
+  const avoid = new Set(['0/bottom + 0/top + 2/shoes', '0/top + 1/bottom + 2/shoes', '0/bottom + 2/shoes + 3/top']);
+  for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+    const [first] = composeLooks(w, { count: 1, seed, avoid, weather: '18°C' });
+    assert.ok(first.items.some((x) => x.description === 'grey zip-up hoodie'), `seed ${seed}`);
+  }
+});
