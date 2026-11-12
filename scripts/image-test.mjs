@@ -438,6 +438,8 @@ async function callOpenAI(m, images, prompt, label, opts) {
   };
 }
 
+// A garment as the worker gets it (summary, @@LOOK lines): tags for the season filters, the box for the Wardrobe's crops.
+const itemOut = (x) => ({ description: x.description, category: x.category, photo: x.photo, ...(x.formality ? { formality: x.formality } : {}), ...(x.exposure ? { exposure: x.exposure } : {}), ...(x.season ? { season: x.season } : {}), ...(x.box ? { box: x.box } : {}) });
 const fmt = (x, d = 3) => (x == null ? '–' : typeof x === 'number' ? x.toFixed(d) : String(x));
 
 async function main() {
@@ -517,12 +519,15 @@ async function main() {
   }
   for (const [i, occasion] of tries.entries()) {
     try { looks = await composeFor(occasion); } catch (e) { if (i === tries.length - 1) throw e; console.log(`No look for "${occasion}": ${e.message}`); continue; }
+    // A new outfit photo (--must-strict) that suits none of this occasion goes on to the next one (--occasions): its
+    // looks are made where it fits, never silently dropped (Felipe's sweater on Work, 2026-11-09).
+    if (looks.mustMissed && opts.mustStrict && i < tries.length - 1) { console.log(`Nothing from ${opts.mustPhoto} suits "${occasion}"; trying "${tries[i + 1]}".`); continue; }
     if (looks.length || looks.mustMissed || i === tries.length - 1) { opts.occasion = occasion; break; }
     console.log(`Every combination for "${occasion}" is made already; trying "${tries[i + 1]}".`);
   }
   if (looks.avoided) console.log(`Left out ${looks.avoided} combination(s) already made or hidden.`);
   const writeEmpty = async (extra) => { if (opts.jsonOut) await writeFile(resolve(opts.jsonOut), JSON.stringify({ stage: 'looks', dir: null, spent: readCost, prep: [], skipped: looks.skipped || [], rejected: [], looks: [], occasion: opts.occasion, ...extra,
-    wardrobe: readings.map((r, i) => ({ photo: i, file: outfits[i].file, items: r.items.map((x) => ({ description: x.description, category: x.category, photo: x.photo })) })) }, null, 2)); };
+    wardrobe: readings.map((r, i) => ({ photo: i, file: outfits[i].file, items: r.items.map(itemOut) })) }, null, 2)); };
   if (looks.mustMissed && opts.mustStrict) {
     // The new garment doesn't suit this occasion (a hoodie for a party): no looks here.
     console.log(`Nothing from ${opts.mustPhoto} suits "${opts.occasion}" / "${opts.weather}": no looks for this occasion.`);
@@ -951,7 +956,7 @@ PHOTO
     if (!opts.jsonOut) return;
     const spentNow = [...rows, ...rejected, ...prepRows].reduce((t, r) => t + (r.cost || 0), 0);
     const okPrep = prepRows.filter((r) => !r.reasons.length && r.identity != null).sort((a, b) => b.identity - a.identity);
-    const item = (x) => ({ description: x.description, category: x.category, photo: x.photo, ...(x.formality ? { formality: x.formality } : {}), ...(x.exposure ? { exposure: x.exposure } : {}), ...(x.season ? { season: x.season } : {}), ...(x.box ? { box: x.box } : {}) });
+    const item = itemOut;
     const summary = {
       stage, dir: out, spent: spentNow, occasion: opts.occasion,
       prep: prepRows.map((r) => ({ file: r.file, identity: r.identity, ok: !r.reasons.length, reasons: r.reasons, cost: r.cost || 0, best: okPrep[0]?.file === r.file })),
@@ -1017,7 +1022,7 @@ PHOTO
         const ready = (r) => { r.readySeconds = (performance.now() - t0) / 1000; r.shownSeconds = shownAt ?? r.readySeconds; rows.push(r); };
         // For the worker: a look that passed its checks is announced at once, so it can be uploaded and shown while the
         // next one is made (one line per look: @@LOOK {n, file, items}).
-        const announce = (r) => { if (opts.jsonOut) console.log('@@LOOK ' + JSON.stringify({ n: look.n, file: join(out, r.file), ...(r.cutout ? { cutout: join(out, r.cutout) } : {}), items: look.items.map((x) => ({ description: x.description, category: x.category, photo: x.photo, ...(x.formality ? { formality: x.formality } : {}), ...(x.exposure ? { exposure: x.exposure } : {}), ...(x.season ? { season: x.season } : {}), ...(x.box ? { box: x.box } : {}) })) })); }; // tags too: the season filters read them; the box crops the Wardrobe's thumbnails (2026-11-09)
+        const announce = (r) => { if (opts.jsonOut) console.log('@@LOOK ' + JSON.stringify({ n: look.n, occasion: opts.occasion, file: join(out, r.file), ...(r.cutout ? { cutout: join(out, r.cutout) } : {}), items: look.items.map(itemOut) })); }; // tags too: the season filters read them; the box crops the Wardrobe's thumbnails (2026-11-09)
         for (let attempt = 1; attempt <= opts.anchorTries; attempt++) {
           const r = await generate(m, look, run, name(m, look, run), edit.images, edit.prompt, edit.label, { ...opts, faceCount: 1 }, lockToBase);
           r.attempt = attempt;

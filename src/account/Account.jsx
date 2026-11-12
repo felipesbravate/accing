@@ -160,13 +160,15 @@ export function Wardrobe({ data }) {
               ) : <div className="acc-card-img"><Icon name={c.icon} size={32} /></div>}
               {/* Figma 306:4775: "See outfits" (the looks made with it, 446:7190), then Remove. */}
               <div className="acc-card-actions">
-                <Link href={`/wardrobe/${c.key}/${encodeURIComponent(g.key)}`} prefetch className="ds-button is-tiny is-secondary acc-card-action">See outfits</Link>
+                {/* Read from an outfit photo but in no look yet (2026-11-12): it's in the wardrobe, its looks come later. */}
+                {g.looks ? <Link href={`/wardrobe/${c.key}/${encodeURIComponent(g.key)}`} prefetch className="ds-button is-tiny is-secondary acc-card-action">See outfits</Link>
+                  : <button type="button" className="ds-button is-tiny is-secondary acc-card-action" disabled>No outfits yet</button>}
                 <button type="button" className="ds-button is-tiny is-tertiary is-danger acc-card-action" onClick={() => setAsking(g)}>Remove</button>
               </div>
             </li>
           ))}
         </ul>
-      ) : <Empty title="Nothing here yet" text="Garments appear once a look has been made with them." />}
+      ) : <Empty title="Nothing here yet" text="Garments appear here once your outfit photos are read." />}
       <Modal open={Boolean(asking)} title={`Remove this ${c.one}?`} description="This permanently removes the item and all its looks, including favorites." onClose={() => !busy && setAsking(null)}>
           <button type="button" className="ds-button is-large is-tertiary" onClick={() => setAsking(null)} disabled={busy}>Cancel</button>
           <button type="button" className="ds-button is-large is-danger" onClick={remove} disabled={busy}>{busy ? 'Removing…' : 'Remove'}</button>

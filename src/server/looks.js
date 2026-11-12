@@ -6,6 +6,7 @@ import { conditionOf, OCCASION_TABS, startOfToday, tabFor, temperatureOf } from 
 import { comboKey, descKey, lookKeys, pickLooks } from '../mirror/seasons.js';
 import { currentCombo, scopeOf, scopedEverywhere, scopedKey } from '../lib/hide-scope.js';
 import { jobFailureText } from '../lib/job-errors.js';
+import { newOutfitOutcome } from '../lib/new-outfit.js';
 import { climateFor, rememberLocation } from './location.js';
 import { seenKey, suggestLooks } from '../mirror/suggest.js';
 
@@ -79,7 +80,7 @@ export async function todaysLooks(userId) {
   const [{ data: rows }, { data: jobs }, { data: profile }, { count: outfitPhotos }, mine] = await Promise.all([
     sb.from('outfits').select('id, job_id, look_n, generated_image_path, items, occasion, weather, created_at')
       .eq('user_id', userId).eq('status', 'ready').order('created_at', { ascending: false }).limit(ALL_ROWS),
-    sb.from('generation_jobs').select('id, status, payload, error_message, created_at').eq('user_id', userId).eq('job_type', 'make_looks')
+    sb.from('generation_jobs').select('id, status, payload, result, error_message, created_at').eq('user_id', userId).eq('job_type', 'make_looks')
       .gte('created_at', since).order('created_at', { ascending: false }),
     sb.from('users').select('*').eq('id', userId).single(), // '*': works before and after migration 005
     sb.from('wardrobe_photos').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('is_active', true),
@@ -101,6 +102,9 @@ export async function todaysLooks(userId) {
     if (latest.has(t)) continue;
     latest.add(t);
     if (j.status === 'failed') tabs[t].failed = jobFailureText(j.error_message);
+    // A new outfit photo's looks (include_path): made for another tab because nothing from it suited this one, or
+    // none at all. The mirror says which instead of going quiet (Felipe's sweater, 2026-11-09).
+    else if (j.status === 'completed' && j.payload?.include_path) tabs[t].newOutfit = newOutfitOutcome(j.result, t);
   }
   return { tabs, temperature: temperatureOf(weather), condition: conditionOf(weather), hasBase: Boolean(profile?.base_path), later: Boolean(profile?.onboarding_later_at), jobsToday: (jobs || []).length, outfitPhotos: outfitPhotos || 0 };
 }

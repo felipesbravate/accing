@@ -39,6 +39,7 @@ const ext = (p) => (/\.(jpe?g|png|webp)$/i.exec(p)?.[0] || '.jpg').toLowerCase()
 // The app's occasion tabs (src/mirror/occasions.js), in the order the daily look tries them.
 export const MORNING_LOOKS = 3;
 export const MORNING_OCCASIONS = ['an office day', 'a relaxed casual day', 'dinner out', 'a party'];
+export const NEW_PHOTO_FALLBACKS = ['a relaxed casual day', 'dinner out', 'a party', 'an office day'];
 
 export function pipelineArgs(job, person, jsonOut, preparedFile = null, cutoutCache = null, mustPhoto = null, avoidFile = null, { warmthOffset = 0, styles = [], removeFile = null, remakeFile = null } = {}) {
   const p = job.payload || {};
@@ -58,7 +59,9 @@ export function pipelineArgs(job, person, jsonOut, preparedFile = null, cutoutCa
   const looks = morning ? MORNING_LOOKS : Math.max(1, Math.min(6, parseInt(p.looks, 10) || 3));
   const clean = (s, d) => (typeof s === 'string' && s.trim() ? s.trim().slice(0, 80) : d);
   const occasion = clean(p.occasion, 'an ordinary day');
-  const others = morning ? MORNING_OCCASIONS.filter((o) => o !== occasion) : [];
+  // A new outfit photo (strict): if nothing from it suits the open tab, the other tabs in turn, casual first (2026-11-12).
+  const newPhoto = Boolean(mustPhoto && p.strict);
+  const others = morning ? MORNING_OCCASIONS.filter((o) => o !== occasion) : newPhoto ? NEW_PHOTO_FALLBACKS.filter((o) => o !== occasion) : [];
   return [...base, `--looks=${looks}`, `--occasion=${occasion}`, ...(others.length ? [`--occasions=${others.join('|')}`] : []), `--weather=${clean(p.weather, 'mild')}`,
     ...(p.seed ? [`--seed=${parseInt(p.seed, 10) || 1}`] : []), ...(preparedFile ? [`--prepared=${preparedFile}`] : []),
     ...(mustPhoto ? [`--must-photo=${mustPhoto}`, ...(p.strict ? ['--must-strict'] : [])] : []),

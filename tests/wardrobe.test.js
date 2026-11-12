@@ -67,3 +67,28 @@ test('garmentSimilarity: shades are not hues, but light ≠ dark', async () => {
   assert.equal(garmentSimilarity('light green and dark blue color-blocked zip-up windbreaker', 'light green and dark blue color-blocked zip-up windbreaker'), 1);
   assert.equal(garmentSimilarity('black hoodie', 'red hoodie'), 0);
 });
+test('wardrobeFrom: garments read from a photo join the wardrobe before any look uses them (2026-11-12)', () => {
+  const looks = [{ id: 'a', items: [{ photo_id: 'p1', category: 'top', description: 'light pink crew neck sweatshirt' }, { photo_id: 'p1', category: 'bottom', description: 'black jeans' }] }];
+  const photos = [
+    // p1 read again, worded a little differently: the same two garments.
+    { id: 'p1', items: [{ category: 'top', description: 'pink crewneck cotton sweatshirt', box: [100, 200, 500, 800] }, { category: 'bottom', description: 'black slim jeans' }] },
+    // p2: a sweater no look has used yet.
+    { id: 'p2', items: [{ category: 'top', description: 'grey cable knit wool sweater', box: [120, 180, 520, 820] }, { category: 'accessory', description: 'watch' }] },
+  ];
+  const g = wardrobeFrom(looks, [], photos);
+  assert.equal(g.length, 3);
+  const sweater = g.find((x) => x.photo_id === 'p2');
+  assert.equal(sweater.tile, 'sweaters');
+  assert.deepEqual(sweater.looks, []);
+  assert.deepEqual(sweater.box, [120, 180, 520, 820]);
+  assert.deepEqual(g.find((x) => x.photo_id === 'p1' && x.tile === 'sweaters').looks, ['a']);
+  // Removed: same photo and kind, alike wording, is gone too.
+  assert.equal(wardrobeFrom(looks, [{ photo_id: 'p2', category: 'top', description: 'grey cable-knit wool sweater' }], photos).length, 2);
+});
+test('wardrobeFrom: two sweaters in one photo stay two, even when a look used one of them', () => {
+  const looks = [{ id: 'a', items: [{ photo_id: 'p1', category: 'top', description: 'navy wool crew neck sweater' }] }];
+  const photos = [{ id: 'p1', items: [{ category: 'top', description: 'navy wool crewneck sweater' }, { category: 'outerwear', description: 'beige chunky knit cardigan' }] }];
+  const g = wardrobeFrom(looks, [], photos);
+  assert.equal(g.filter((x) => x.tile === 'sweaters').length, 2);
+  assert.deepEqual(g.find((x) => /cardigan/.test(x.description)).looks, []);
+});

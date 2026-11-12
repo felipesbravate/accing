@@ -85,3 +85,14 @@ test('the forecast names snow, rain and cloud from the WMO weather code', async 
   assert.equal(weatherText({ temperature_2m_max: [15], weather_code: [3], precipitation_probability_max: [30] }), '15°C high, a chance of rain, cloudy');
   assert.equal(weatherText({ temperature_2m_max: [24], weather_code: [0] }), '24°C high');
 });
+
+test('a new outfit photo that suits none of the open tab tries the other tabs, casual first (2026-11-12)', () => {
+  const a = pipelineArgs({ job_type: 'make_looks', payload: { kind: 'on-demand', occasion: 'an office day', strict: true } }, 'p', 'x', null, null, 'photo-01.jpg');
+  assert.ok(a.includes('--must-strict'));
+  assert.ok(a.includes('--occasions=a relaxed casual day|dinner out|a party'));
+  // Not strict, or no photo: no fallbacks.
+  assert.ok(!pipelineArgs({ job_type: 'make_looks', payload: { kind: 'on-demand', occasion: 'a party' } }, 'p', 'x').some((x) => x.startsWith('--occasions=')));
+  // An early look keeps the occasion it was made for.
+  const [row] = outfitRows({ user_id: 'u', id: 'j', payload: { occasion: 'an office day' } }, { occasion: 'a relaxed casual day', looks: [{ n: 1, status: 'ready', items: [] }] }, {}, []);
+  assert.equal(row.occasion, 'a relaxed casual day');
+});

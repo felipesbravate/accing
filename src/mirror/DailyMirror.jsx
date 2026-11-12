@@ -6,6 +6,7 @@
 // Under the front look: hide · heart · worn, then the pager (Figma "Favorite, hide, and choose", 191:1372). Hiding takes
 // the look's garment combination out of the mirror for good, with Undo; hearted looks come back under the "Favorites"
 // filter; "worn" marks the look as worn today. The same three, plus share, run down the full-screen viewer (253:8207).
+import { newOutfitToast } from '../lib/new-outfit.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Icon } from '../ui/Icon.jsx';
@@ -278,8 +279,13 @@ export default function DailyMirror({
     if (t?.making && !t.looks.some((l) => !awaiting.known.has(l.id))) return;
     setAwaiting(null);
     // Done without a new look: say why (out of credit, nothing suited the occasion…), not just the old looks again.
-    if (!t?.making && t?.failed) setToast({ id: Date.now(), type: 'negative', message: `Couldn’t make looks with your new outfit. ${t.failed}`, action: 'Try again', onAction: () => { setToast(null); ask(awaiting.tab); } });
-  }, [data, awaiting]);
+    if (!t?.making && t?.failed) { setToast({ id: Date.now(), type: 'negative', message: `Couldn’t make looks with your new outfit. ${t.failed}`, action: 'Try again', onAction: () => { setToast(null); ask(awaiting.tab); } }); return; }
+    // Made for another tab (nothing from it suited this one), or none at all (src/lib/new-outfit.js).
+    const said = !t?.making && newOutfitToast(t?.newOutfit, awaiting.tab);
+    if (!said) return;
+    const onAction = said.see ? () => { setToast(null); setOccasion(said.see); } : said.retry ? () => { setToast(null); ask(awaiting.tab); } : undefined;
+    setToast({ id: Date.now(), type: said.type, message: said.message, ...(onAction ? { action: said.see ? 'See looks' : 'Try again', onAction } : {}) });
+  }, [data, awaiting]); // eslint-disable-line react-hooks/exhaustive-deps
   // Toasts leave after 8 s; a new one replaces the last.
   useEffect(() => {
     if (!toast) return undefined;

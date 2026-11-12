@@ -26,6 +26,14 @@ async function readyLooks(sb, userId) {
     .order('created_at', { ascending: false }).limit(2000);
   return (data || []).filter((r) => r.generated_image_path?.endsWith('.webp'));
 }
+/** The active outfit photos with what the garment reader found in them (wardrobe_photos.items, migration 013):
+ *  [{ id, path, items }]. Before the migration, the photos without readings. */
+async function outfitPhotos(sb, userId) {
+  const q = (cols) => sb.from('wardrobe_photos').select(cols).eq('user_id', userId).eq('is_active', true);
+  let { data, error } = await q('id, path, items');
+  if (error && /items/.test(error.message)) ({ data } = await q('id, path'));
+  return data || [];
+}
 async function hiddenKeys(sb, userId) {
   const { data } = await sb.from('hidden_combinations').select('combo').eq('user_id', userId);
   return new Set((data || []).map((h) => h.combo));
@@ -47,12 +55,12 @@ export async function avatarUrl(userId) {
 /** Profile (268:11591): who, the looks per occasion and favourites, the wardrobe tiles. */
 export async function profile(userId, email) {
   const sb = await authClient();
-  const [u, looks, hidden, { count: favorites }] = await Promise.all([me(sb, userId), readyLooks(sb, userId), hiddenKeys(sb, userId),
-    sb.from('favorites').select('outfit_id', { count: 'exact', head: true }).eq('user_id', userId)]);
+  const [u, looks, hidden, { count: favorites }, photos] = await Promise.all([me(sb, userId), readyLooks(sb, userId), hiddenKeys(sb, userId),
+    sb.from('favorites').select('outfit_id', { count: 'exact', head: true }).eq('user_id', userId), outfitPhotos(sb, userId)]);
   const visible = looks.filter((r) => !hiddenIn(lookKeys(r.items, r.id), tabFor(r.occasion), hidden));
   const counts = Object.fromEntries(OCCASION_TABS.map((t) => [t.label, 0]));
   for (const r of visible) { const t = tabFor(r.occasion); if (t in counts) counts[t] += 1; }
-  const tiles = wardrobeCounts(wardrobeFrom(looks, u.removed_garments));
+  const tiles = wardrobeCounts(wardrobeFrom(looks, u.removed_garments, photos));
   const avatar = u.avatar_path ? (await signed(sb, 'wardrobe', [u.avatar_path])).get(u.avatar_path) || null : null;
   return {
     name: u.full_name || '', email: email || u.email || '', avatar,
@@ -67,10 +75,10 @@ export async function wardrobe(userId, tile) {
   const cat = WARDROBE_CATEGORIES.find((c) => c.key === tile);
   if (!cat) return null;
   const sb = await authClient();
-  const [u, looks, { data: photos }] = await Promise.all([me(sb, userId), readyLooks(sb, userId),
+  const [u, looks, photos, { data: all }] = await Promise.all([me(sb, userId), readyLooks(sb, userId), outfitPhotos(sb, userId),
     sb.from('wardrobe_photos').select('id, path').eq('user_id', userId)]);
-  const pathOf = new Map((photos || []).map((p) => [p.id, p.path]));
-  const items = wardrobeFrom(looks, u.removed_garments).filter((g) => g.tile === tile);
+  const pathOf = new Map((all || []).map((p) => [p.id, p.path]));
+  const items = wardrobeFrom(looks, u.removed_garments, photos).filter((g) => g.tile === tile);
   // The garment's own outfit photo when known; else (looks from before photo ids, or a photo since deleted) a look
   // made with it, on white.
   const [photoUrls, lookUrls] = await Promise.all([signed(sb, 'wardrobe', items.map((g) => pathOf.get(g.photo_id))),
@@ -90,8 +98,8 @@ export async function wardrobe(userId, tile) {
  *  ids }, or null. The same grouping as the Wardrobe page, so its count and this list agree. */
 export async function garmentLooks(userId, key) {
   const sb = await authClient();
-  const [u, looks] = await Promise.all([me(sb, userId), readyLooks(sb, userId)]);
-  const g = wardrobeFrom(looks, u.removed_garments).find((x) => x.key === key || x.keys.includes(key));
+  const [u, looks, photos] = await Promise.all([me(sb, userId), readyLooks(sb, userId), outfitPhotos(sb, userId)]);
+  const g = wardrobeFrom(looks, u.removed_garments, photos).find((x) => x.key === key || x.keys.includes(key));
   return g ? { key: g.key, description: g.description, tile: g.tile, ids: g.looks } : null;
 }
 
@@ -99,14 +107,15 @@ export async function garmentLooks(userId, key) {
  *  it again (users.removed_garments, migration 012). */
 export async function removeGarment(userId, key) {
   const sb = await authClient();
-  const [u, looks] = await Promise.all([me(sb, userId), readyLooks(sb, userId)]);
-  const g = wardrobeFrom(looks, u.removed_garments).find((x) => x.key === key);
+  const [u, looks, photos] = await Promise.all([me(sb, userId), readyLooks(sb, userId), outfitPhotos(sb, userId)]);
+  const g = wardrobeFrom(looks, u.removed_garments, photos).find((x) => x.key === key);
   if (!g) return { error: 'That item is already gone' };
   // Every reading of it (its wordings and photos), so none of them comes back.
   const removed = [...(Array.isArray(u.removed_garments) ? u.removed_garments : []), ...g.readings];
   const { error } = await sb.from('users').update({ removed_garments: removed }).eq('id', userId);
   if (error) return { error: /removed_garments/.test(error.message) ? 'Run migration 012 first' : error.message };
   const gone = looks.filter((l) => g.looks.includes(l.id));
+  if (!gone.length) return { ok: true }; // read from a photo, in no look yet
   const { error: e2 } = await sb.from('outfits').delete().eq('user_id', userId).in('id', gone.map((l) => l.id));
   if (e2) return { error: e2.message };
   await sb.storage.from('outfits').remove(gone.map((l) => l.generated_image_path)).catch(() => {});

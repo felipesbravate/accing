@@ -140,7 +140,9 @@ async function runJob(job) {
     const early = new Map(), pending = [];
     const onLook = (l) => pending.push((async () => {
       const path = await saveLook(job, l.n, l.file, l.cutout);
-      const [row] = outfitRows(job, { looks: [{ n: l.n, status: 'ready', items: l.items, cost: 0 }] }, { [l.n]: path }, photoIds);
+      // l.occasion: the one it was made for, which can be a fallback (morning: the next occasion; a new photo that
+      // didn't suit the open tab: another tab), so it lands in the right tab.
+      const [row] = outfitRows(job, { occasion: l.occasion, looks: [{ n: l.n, status: 'ready', items: l.items, cost: 0 }] }, { [l.n]: path }, photoIds);
       const { error } = await db.from('outfits').insert(row);
       if (error) throw new Error(error.message);
       early.set(l.n, path); log(`look ${l.n} shown`);
@@ -149,6 +151,7 @@ async function runJob(job) {
     await Promise.all(pending);
     for (const name of await readdir(cutouts)) if (!known.has(name)) await upload('outfits', `${cutoutPrefix}/${name}`, await readFile(join(cutouts, name))).catch((e) => log('cut-out not kept:', e.message));
     const summary = JSON.parse(await readFile(jsonOut, 'utf8'));
+    await saveReadings(summary, files);
     const uploaded = {};
     if (job.job_type === 'prepare_base') {
       for (const r of summary.prep.filter((x) => x.ok)) uploaded[r.file] = await upload('outfits', `${job.user_id}/base/${job.id}/${r.file}`, await readFile(join(summary.dir, r.file)));
@@ -176,7 +179,7 @@ async function runJob(job) {
     for (const l of summary.looks.filter((x) => x.status === 'ready')) uploaded[l.n] = early.get(l.n) || await saveLook(job, l.n, join(summary.dir, l.file), l.cutout && join(summary.dir, l.cutout));
     const rows = outfitRows(job, summary, uploaded, photoIds);
     // Looks already listed get their final cost and identity; dropped, refused and late ones are added now.
-    for (const r of rows.filter((x) => early.has(x.look_n))) await db.from('outfits').update({ cost: r.cost, validation_confidence: r.validation_confidence }).eq('job_id', job.id).eq('look_n', r.look_n);
+    for (const r of rows.filter((x) => early.has(x.look_n))) await db.from('outfits').update({ cost: r.cost, validation_confidence: r.validation_confidence, occasion: r.occasion }).eq('job_id', job.id).eq('look_n', r.look_n);
     const rest = rows.filter((x) => !early.has(x.look_n));
     if (rest.length) { const { error } = await db.from('outfits').insert(rest); if (error) throw new Error(error.message); }
     // Evidence for dropped looks (every try, the garment close-ups, what the checker said), so a wrong drop can be
@@ -199,13 +202,30 @@ async function runJob(job) {
       const photo = files.filter((f) => f.photoId)[l.items.find((i) => l.retake.includes(i.description.split(',')[0]))?.photo ?? -1];
       if (photo) await db.from('wardrobe_photos').update({ retake_hint: l.retake }).eq('id', photo.photoId);
     }
-    return { result: { ready: rows.filter((r) => r.status === 'ready').length, asked: rows.length, ...(summary.mustMissed ? { notForThisOccasion: true } : {}), ...(summary.allMade ? { allMade: true } : {}), ...(debug ? { debug } : {}) }, cost: summary.spent };
+    return { result: { ready: rows.filter((r) => r.status === 'ready').length, asked: rows.length, ...(summary.mustMissed ? { notForThisOccasion: true } : {}), ...(summary.allMade ? { allMade: true } : {}),
+      // Made for another occasion than asked (the app says where the new outfit's looks went).
+      ...(summary.occasion && summary.occasion !== job.payload?.occasion ? { occasion: summary.occasion } : {}), ...(debug ? { debug } : {}) }, cost: summary.spent };
   } finally {
     await rm(inputs, { recursive: true, force: true });
     await rm(tmp, { recursive: true, force: true });
     // The pipeline's own results folder for this person (image-test/results/<stamp>-job-…).
     const results = join(ROOT, 'image-test', 'results');
     for (const d of await readdir(results).catch(() => [])) if (d.endsWith(person)) await rm(join(results, d), { recursive: true, force: true });
+  }
+}
+
+/** What the garment reader found in each outfit photo, kept on the photo (wardrobe_photos.items, migration 013) so the
+ *  Wardrobe lists every garment, also those no look has used yet. The pipeline's photo i is files' i-th outfit photo.
+ *  Best effort: before migration 013 (no column) it just logs. */
+async function saveReadings(summary, files) {
+  const photos = files.filter((f) => f.photoId);
+  const now = new Date().toISOString();
+  for (const w of summary.wardrobe || []) {
+    const photo = photos.find((f) => f.as === w.file) || photos[w.photo];
+    if (!photo || !Array.isArray(w.items)) continue;
+    const items = w.items.map(({ photo: _, ...x }) => x);
+    const { error } = await db.from('wardrobe_photos').update({ items, read_at: now }).eq('id', photo.photoId);
+    if (error) { log('photo readings not kept:', error.message); return; }
   }
 }
 

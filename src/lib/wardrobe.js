@@ -1,7 +1,8 @@
 // The Wardrobe (Figma "Mobile - Profile" 268:11591, "Mobile - Wardrobe" 306:4775): every garment the reader found in
 // the person's outfit photos, sorted into the 12 categories of the Profile tiles. Pure; tested in tests/wardrobe.test.js.
-// A garment is known only through the looks made with it (outfits.items: category, description, photo_id), so the
-// wardrobe is the garments of their looks, one per garment (same photo, same kind, same wording).
+// A garment is known through the looks made with it (outfits.items: category, description, photo_id) and, since
+// 2026-11-12, through the reading of its outfit photo (wardrobe_photos.items, migration 013), so a garment no look
+// uses yet (a sweater that suited none of the day's looks) is still in the wardrobe. One entry per real garment.
 
 export const WARDROBE_CATEGORIES = [
   { key: 't-shirts', label: 'T-shirts', one: 'T-shirt', icon: 't-shirt' },
@@ -74,39 +75,72 @@ export function garmentSimilarity(a, b) {
 }
 const SAME = 0.6; // "black t-shirt" vs "black t-shirt with graphic print" (0.5) stay two garments
 
+/** Is a photo reading ({ photo_id, category, description }) one of the removed garments? The photo is read again on
+ *  each run and the wording can move a little, so: same photo and kind, and the same or alike wording. */
+function removedReading(x, removed) {
+  return (removed || []).some((r) => r && r.photo_id === x.photo_id && r.category === x.category
+    && (norm(r.description) === norm(x.description) || garmentSimilarity(r.description, x.description) >= SAME));
+}
+
 /** Looks ({ id, items, created_at, image_path }) → garments, one per real garment: [{ key, keys, category,
  *  description, photo_id, tile, looks: [outfit ids], lookPath }], most-used first. Readings are the same garment when
  *  they are in the same tile and either come from the same photo (and never appear together in one look) or are
  *  worded alike (60% of their words, same colours). Removed readings ([{ photo_id, category, description }]) are left
- *  out. `lookPath`: a look made with it, for a picture when no photo is known. */
-export function wardrobeFrom(looks, removed = []) {
+ *  out. `lookPath`: a look made with it, for a picture when no photo is known. `photos` ([{ id, items }]): the readings
+ *  of the outfit photos (wardrobe_photos.items); their garments join the wardrobe even with no look yet. */
+export function wardrobeFrom(looks, removed = [], photos = []) {
   const gone = new Set((removed || []).map(garmentKey));
   const byKey = new Map();
-  for (const l of looks || []) {
-    for (const x of l.items || []) {
-      const tile = wardrobeCategory(x);
-      if (!tile) continue;
-      const key = garmentKey(x);
-      if (gone.has(key)) continue;
-      const g = byKey.get(key) || { key, category: x.category, description: x.description, photo_id: x.photo_id || null, tile, looks: [], lookPath: null, box: null };
-      g.looks.push(l.id);
-      if (!g.box && Array.isArray(x.box)) g.box = x.box; // where it is in its photo (src/lib/garment-box.js)
-      if (!g.lookPath && l.generated_image_path) g.lookPath = l.generated_image_path;
-      byKey.set(key, g);
+  // `seen`: the looks and photo readings a reading is in. Two readings seen together are two different garments.
+  const add = (x, seenIn, look = null) => {
+    const tile = wardrobeCategory(x);
+    if (!tile) return;
+    const key = garmentKey(x);
+    if (gone.has(key)) return;
+    const g = byKey.get(key) || { key, category: x.category, description: x.description, photo_id: x.photo_id || null, tile, looks: [], seen: [], lookPath: null, box: null };
+    if (look) g.looks.push(look.id);
+    g.seen.push(seenIn);
+    if (!g.box && Array.isArray(x.box)) g.box = x.box; // where it is in its photo (src/lib/garment-box.js)
+    if (!g.lookPath && look?.generated_image_path) g.lookPath = look.generated_image_path;
+    byKey.set(key, g);
+  };
+  for (const l of looks || []) for (const x of l.items || []) add(x, l.id, l);
+  for (const p of photos || []) {
+    if (!p?.id || !Array.isArray(p.items)) continue;
+    for (const it of p.items) {
+      const x = { category: it?.category, description: it?.description, photo_id: p.id, ...(Array.isArray(it?.box) ? { box: it.box } : {}) };
+      if (!x.description || removedReading(x, removed)) continue;
+      add(x, `photo:${p.id}`);
     }
   }
   const raw = [...byKey.values()];
   // Union-find over the readings.
   const parent = raw.map((_, i) => i);
   const find = (i) => (parent[i] === i ? i : (parent[i] = find(parent[i])));
-  const together = (a, b) => a.looks.some((id) => b.looks.includes(id));
+  const together = (a, b) => a.seen.some((id) => b.seen.includes(id));
+  // A reading only from a photo (no look yet) joins a garment from the same photo one to one, the most alike first:
+  // a photo with a sweater and a cardigan (both Sweaters) must not fold both into the one garment a look used.
+  const photoOnly = (g) => !g.looks.length;
+  const pairs = [];
   for (let i = 0; i < raw.length; i += 1) {
     for (let j = i + 1; j < raw.length; j += 1) {
       const a = raw[i], b = raw[j];
       if (a.tile !== b.tile || together(a, b)) continue;
+      const sim = garmentSimilarity(a.description, b.description);
       const samePhoto = a.photo_id && a.photo_id === b.photo_id;
-      if (samePhoto || garmentSimilarity(a.description, b.description) >= SAME) parent[find(i)] = find(j);
+      if (sim >= SAME || (samePhoto && !photoOnly(a) && !photoOnly(b))) parent[find(i)] = find(j);
+      else if (samePhoto) pairs.push({ i, j, sim });
     }
+  }
+  const matched = new Set();
+  for (const { i, j } of pairs.sort((x, y) => y.sim - x.sim)) {
+    const r = photoOnly(raw[i]) ? i : j, o = r === i ? j : i;
+    if (matched.has(r) || find(r) === find(o)) continue;
+    if (raw.some((m, k) => find(k) === find(o) && together(m, raw[r]))) continue; // its garment is already in that photo's reading
+    // A garment a look already uses takes one photo reading; a photo reading another.
+    if (!photoOnly(raw[o]) && matched.has(`look:${find(o)}`)) continue;
+    matched.add(r); if (!photoOnly(raw[o])) matched.add(`look:${find(o)}`); else matched.add(o);
+    parent[find(r)] = find(o);
   }
   const groups = new Map();
   raw.forEach((g, i) => { const r = find(i); groups.set(r, [...(groups.get(r) || []), g]); });
