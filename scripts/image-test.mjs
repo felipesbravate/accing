@@ -115,7 +115,11 @@ function args() {
   return out;
 }
 
-const MAX_PHOTOS = 10;
+// Outfit photos per run. Without a base photo every outfit photo goes to the image model, which takes few images; with
+// one (--prepared, the app's worker) a look gets only its own garments' close-ups, so the whole wardrobe can be read
+// and combined: 10 left most of a 32-photo wardrobe out of every run (Felipe, 2026-11-12).
+const MAX_PHOTOS = 10, MAX_PHOTOS_WITH_BASE = 60;
+const BODY_CARD_PHOTOS = 10; // the newest: enough to see the build, and the card's request stays small
 const HOUSE_POSE = 'relaxed standing pose: body turned about 15 degrees so their left shoulder is slightly closer to the camera, head turned back to face the camera, chin level, eyes looking into the lens; weight on the back (right) leg, front (left) knee slightly relaxed, feet about hip-width apart; both arms hanging loosely at the sides, elbows very slightly bent, hands open and relaxed beside the thighs, never in pockets; shoulders relaxed and level';
 // Women: Felipe's own mannequins (2026-10-28), described to match them. Flat: a relaxed contrapposto (weight on the
 // right leg, left knee soft, foot turned out). Heels: the left leg crossed in front. Keep words and images in step.
@@ -170,7 +174,6 @@ async function loadInputs() {
   const base = baseFile ? { ...(await load(baseFile)), label: 'base photo' } : null;
   const outfitFiles = files.filter((f) => !faces.some((x) => x.file === f) && f !== baseFile);
   if (!outfitFiles.length) throw new Error('Add head-to-toe photos of the same person in different outfits to image-test/inputs (any file names)');
-  if (outfitFiles.length > MAX_PHOTOS) throw new Error(`Use at most ${MAX_PHOTOS} outfit photos (found ${outfitFiles.length})`);
   const outfits = [];
   for (const f of outfitFiles) outfits.push(await load(f));
   return { faces, outfits, base, images: [...faces, ...outfits] };
@@ -235,7 +238,11 @@ async function readIdentity(faces, model) {
 
 // Step 1: read the garments in each photo with a cheap vision model (Gemini Flash-Lite): scripts/garment-reader.mjs.
 async function readWardrobe(images, model) {
-  const readings = await Promise.all(images.map((img, i) => readPhoto(img, i, model)));
+  // Eight at a time, each tried twice: a whole wardrobe (dozens of photos) all at once risks the reader's rate limit,
+  // and one failed reading would fail the run.
+  const readings = new Array(images.length);
+  const once = (img, i) => readPhoto(img, i, model).catch(async (e) => { await new Promise((r) => setTimeout(r, 2000)); return readPhoto(img, i, model).catch(() => { throw e; }); });
+  for (let i = 0; i < images.length; i += 8) await Promise.all(images.slice(i, i + 8).map((img, k) => once(img, i + k).then((r) => { readings[i + k] = r; })));
   readings.forEach((r, i) => {
     if (!r.fullBody) console.warn(`Note: ${images[i].file} does not look head to toe.`);
     if (r.people !== 1) console.warn(`Note: ${images[i].file} seems to show ${r.people} people.`);
@@ -445,6 +452,8 @@ const fmt = (x, d = 3) => (x == null ? '–' : typeof x === 'number' ? x.toFixed
 async function main() {
   const opts = args();
   const { faces, outfits, base: photoBase, images } = await loadInputs();
+  const maxPhotos = opts.prepared ? MAX_PHOTOS_WITH_BASE : MAX_PHOTOS;
+  if (outfits.length > maxPhotos) throw new Error(`Use at most ${maxPhotos} outfit photos (found ${outfits.length})`);
   let base = photoBase;
   console.log(`Faces: ${faces.map((x) => x.file).join(', ')}`);
   const resized = images.filter((x) => x.resized);
@@ -454,7 +463,7 @@ async function main() {
   console.log(`Reading the garments in ${outfits.length} outfit photo(s) with ${opts.reader}…`);
   const [{ readings, wardrobe, cost: readCost }, identityCard, bodyRead] = await Promise.all([readWardrobe(outfits, opts.reader),
     readIdentity(faces, opts.reader).catch((e) => { console.log(`(identity card skipped: ${e.message})`); return null; }),
-    opts.bodyCard ? readBody(outfits, opts.reader).catch((e) => { console.log(`(body card skipped: ${e.message})`); return null; }) : null]);
+    opts.bodyCard ? readBody(outfits.slice(-BODY_CARD_PHOTOS), opts.reader).catch((e) => { console.log(`(body card skipped: ${e.message})`); return null; }) : null]);
   const bodyOwn = existsSync(join(INPUTS, 'body.txt')) ? (await readFile(join(INPUTS, 'body.txt'), 'utf8')).trim() : null;
   opts.bodyText = [bodyRead, bodyOwn ? `Stated by the person: ${bodyOwn}.` : null].filter(Boolean).join(' ') || null;
   if (bodyRead) await writeFile(join(INPUTS, 'body-read.txt'), bodyRead + '\n').catch(() => {});
@@ -598,31 +607,36 @@ async function main() {
   }
   // Outfit photos are cut out onto a plain background before they are sent: clutter in mirror selfies (a red table, a
   // bed) came back as blurry ghosts in the looks (2026-10-27). The face photos are sent as they are.
+  // Only the photos these looks take garments from are cut out and cropped (a big wardrobe is read whole, but a run uses
+  // a few photos of it). Only with a base photo (--prepared): without one every photo is sent, so all are cut out; with
+  // no looks (base preparation), all of them too, as before.
+  const usedPhotos = new Set(opts.prepared ? looks.flatMap((l) => l.items.map((x) => x.photo)) : []);
+  const usedOutfits = usedPhotos.size ? outfits.filter((_, i) => usedPhotos.has(i)) : outfits;
   if (cleaner && opts.cleanRefs) {
     // Each photo is cut out once and kept (keyed by its bytes): cutting out 8 photos on every run cost ~30 s of CPU and,
     // on Fly's shared CPU, the burst budget that the looks then lacked (2026-10-30). --cutout-cache=dir sets the folder.
     const cacheDir = opts.cutoutCache ? resolve(opts.cutoutCache) : join(PREPARED_DIR, 'cutouts');
     await mkdir(cacheDir, { recursive: true });
     let reused = 0;
-    for (const o of outfits) {
+    for (const o of usedOutfits) {
       const file = join(cacheDir, createHash('sha1').update(o.bytes).update(opts.background).update('isnet-1').digest('hex').slice(0, 16) + '.png');
       if (existsSync(file)) { o.bytes = await readFile(file); o.mime = 'image/png'; reused++; continue; }
       try { o.bytes = (await cleanBackground(cleaner, o.bytes, { background: opts.background })).bytes; o.mime = 'image/png'; await writeFile(file, o.bytes); }
       catch (e) { console.log(`(could not cut out ${o.file}: ${e.message})`); }
     }
-    console.log(`Cut out ${outfits.length - reused} outfit photo(s) onto a plain background${reused ? ` (${reused} reused from earlier runs)` : ''}.`);
+    console.log(`Cut out ${usedOutfits.length - reused} outfit photo(s) onto a plain background${reused ? ` (${reused} reused from earlier runs)` : ''}.`);
   }
   // Garment close-ups for edits (base and anchor mode): one small image per garment instead of whole outfit photos.
   if (opts.garmentCrops) {
     let n = 0;
     for (const x of wardrobe) {
-      if (!x.box) continue;
+      if (!x.box || (usedPhotos.size && !usedPhotos.has(x.photo))) continue;
       try { x.crop = await garmentCrop(outfits[x.photo], x); n++; await writeFile(join(out, `garment-${x.photo + 1}-${x.category}-${n}.jpg`), x.crop.bytes); }
       catch (e) { console.log(`(no close-up for ${x.description}: ${e.message})`); }
     }
     const cropOf = new Map(wardrobe.filter((x) => x.crop).map((x) => [`${x.photo}|${x.description}`, x.crop]));
     for (const l of looks) for (const x of l.items) x.crop ??= cropOf.get(`${x.photo}|${x.description}`);
-    console.log(`Garment close-ups: ${n} of ${wardrobe.length} (the rest are sent as whole photos; --no-garment-crops sends whole photos)`);
+    console.log(`Garment close-ups: ${n} of ${wardrobe.filter((x) => !usedPhotos.size || usedPhotos.has(x.photo)).length} (the rest are sent as whole photos; --no-garment-crops sends whole photos)`);
   }
   // Face fidelity: redraw the face of every first image at close-up size, and give every edited look that same face.
   let faceModel = null, reference = null;

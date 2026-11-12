@@ -116,10 +116,11 @@ async function runJob(job) {
       job.payload = { ...(job.payload || {}), occasion: job.payload?.occasion || remakeOf.occasion, weather: job.payload?.weather || remakeOf.weather };
     }
     let preparedFile = null;
-    for (const f of files) {
+    // Six at a time: a whole wardrobe (up to MAX_OUTFIT_PHOTOS photos) one by one took ~10 s.
+    for (let i = 0; i < files.length; i += 6) await Promise.all(files.slice(i, i + 6).map(async (f) => {
       const bytes = await download(f.bucket, f.path);
       if (f.prepared) { preparedFile = join(tmp, 'prepared.png'); await writeFile(preparedFile, bytes); } else await writeFile(join(inputs, f.as), bytes);
-    }
+    }));
     if (user.body_note) await writeFile(join(inputs, 'body.txt'), String(user.body_note).slice(0, 200) + '\n');
     log(`job ${job.id} (${job.job_type}): ${files.length} file(s) ready, running the pipeline`);
     // Cut-outs of the outfit photos are kept in Storage (outfits/<user>/cutouts/), so each photo is cut out only on the
@@ -128,7 +129,8 @@ async function runJob(job) {
     await mkdir(cutouts, { recursive: true });
     const { data: had } = await db.storage.from('outfits').list(cutoutPrefix, { limit: 1000 });
     const known = new Set((had || []).map((f) => f.name));
-    for (const name of known) await writeFile(join(cutouts, name), await download('outfits', `${cutoutPrefix}/${name}`)).catch(() => {});
+    const names = [...known];
+    for (let i = 0; i < names.length; i += 6) await Promise.all(names.slice(i, i + 6).map((name) => download('outfits', `${cutoutPrefix}/${name}`).then((b) => writeFile(join(cutouts, name), b)).catch(() => {})));
     // Morning jobs (and any job without weather): today's forecast for the person's home, and the default occasion.
     if (job.job_type === 'make_looks') {
       const p = job.payload = { ...(job.payload || {}) };

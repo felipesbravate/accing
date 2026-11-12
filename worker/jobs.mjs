@@ -9,7 +9,7 @@ export function ownPath(userId, path) {
 }
 
 /** The files the pipeline needs, as { bucket, path, as } (as = file name in the person's input folder). */
-export const MAX_OUTFIT_PHOTOS = 10; // scripts/image-test.mjs MAX_PHOTOS
+export const MAX_OUTFIT_PHOTOS = 60; // scripts/image-test.mjs MAX_PHOTOS_WITH_BASE: every photo of a real wardrobe (was 10 until 2026-11-12)
 
 export function inputsFor(user, photos, { prepared = false, mustPath = null } = {}) {
   const need = [
@@ -20,7 +20,7 @@ export function inputsFor(user, photos, { prepared = false, mustPath = null } = 
     if (!ownPath(user.id, user[col])) throw new Error(`Missing ${col.replace(/_path$/, '').replace(/_/g, ' ')} photo`);
     files.push({ bucket: 'wardrobe', path: user[col], as: name + ext(user[col]) });
   }
-  // The pipeline reads at most 10 outfit photos: the newest ones, always including the one a job must show.
+  // The pipeline reads at most MAX_OUTFIT_PHOTOS outfit photos: the newest ones, always including the one a job must show.
   const own = photos.filter((p) => ownPath(user.id, p.path));
   const must = own.find((p) => p.path === mustPath);
   const outfits = own.length <= MAX_OUTFIT_PHOTOS ? own

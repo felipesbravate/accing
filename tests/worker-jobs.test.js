@@ -63,12 +63,14 @@ test('morning weather and occasion', async () => {
   assert.equal(weatherProfile('19°C high, 12°C low, rain likely').wet, true);
 });
 
-test('a job can ask every look to wear one outfit photo; at most 10 photos, that one always in', async () => {
+test('a job can ask every look to wear one outfit photo; at most 60 photos, that one always in', async () => {
   const { inputsFor, pipelineArgs } = await import('../worker/jobs.mjs');
   const user = { id: 'u', face_front_path: 'u/f.jpg', face_left_path: 'u/l.jpg', face_right_path: 'u/r.jpg', base_source_path: 'u/b.jpg' };
-  const photos = Array.from({ length: 12 }, (_, i) => ({ id: `p${i}`, path: `u/photos/${i}.jpg` }));
+  const photos = Array.from({ length: 64 }, (_, i) => ({ id: `p${i}`, path: `u/photos/${i}.jpg` }));
   const files = inputsFor(user, photos, { mustPath: 'u/photos/0.jpg' }).filter((f) => f.photoId);
-  assert.equal(files.length, 10);
+  assert.equal(files.length, 60);
+  // A 32-photo wardrobe is read whole (2026-11-12: 10 left 22 photos out of every run).
+  assert.equal(inputsFor(user, photos.slice(0, 32)).filter((f) => f.photoId).length, 32);
   assert.equal(files[0].path, 'u/photos/0.jpg');
   assert.ok(pipelineArgs({ job_type: 'make_looks', payload: {} }, 'p', 'x', null, null, 'photo-01.jpg').includes('--must-photo=photo-01.jpg'));
   const { planFeatures, dailyLimit } = await import('../src/lib/plans.js');
